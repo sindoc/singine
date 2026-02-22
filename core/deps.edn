@@ -1,0 +1,30 @@
+{:paths ["src" "resources" "classes"]
+ :deps  {org.clojure/clojure       {:mvn/version "1.12.0"}
+         org.clojure/data.json     {:mvn/version "2.5.1"}
+         org.clojure/tools.logging {:mvn/version "1.3.0"}
+         org.xerial/sqlite-jdbc    {:mvn/version "3.45.3.0"}}
+ :aliases
+ {:run  {:main-opts ["-m" "singine.core.engine"]}
+  :test {:extra-paths ["test"]
+         :extra-deps  {io.github.cognitect-labs/test-runner
+                       {:git/tag "v0.5.1"
+                        :git/sha "dfb30dd"}}
+         :main-opts   ["-m" "cognitect.test-runner"]
+         :exec-fn     cognitect.test-runner.api/test}
+  :repl {:extra-paths ["test"]
+         :main-opts   ["-e" "(require,'singine.consciousness.markov)"
+                       "-r"]}
+  ;; Compile Java sources into classes/ (must run: clojure -M:javac first).
+  ;; The classes/ dir is on :paths so it is always on the classpath.
+  :javac {:main-opts ["-e"
+                      "(let [src (java.io.File. \"java\")
+                             out (doto (java.io.File. \"classes\") .mkdirs)
+                             files (filter #(.endsWith (.getName %) \".java\")
+                                           (file-seq src))
+                             paths (map #(.getAbsolutePath %) files)
+                             args  (into-array String (concat [\"-d\" (.getAbsolutePath out)] paths))]
+                         (println (str \"Compiling \" (count paths) \" Java source files...\"))
+                         (let [rc (com.sun.tools.javac.Main/compile args)]
+                           (println (if (zero? rc) \"Done.\" (str \"javac exit: \" rc)))))"
+                      ]}}}
+

@@ -1,0 +1,193 @@
+# singine.rnc — RelaxNG Compact Grammar for Singine XML documents
+# URN: urn:singine:schema:rnc:1.0
+# Mirrors singine.dtd; the .rnc is the authoritative schema.
+# Convert to .rng: rnv -c singine.rnc  or  trang singine.rnc singine.rng
+# Validate:        rnv singine.rnc doc.xml  or  xmllint --relaxng singine.rng doc.xml
+#
+# Tim Bray principle: attributes carry data, elements carry structure.
+# All optional groups use '?' — no default content models.
+
+namespace sg   = "urn:singine:1.0"
+namespace snap = "urn:singine:snap"
+namespace edge = "urn:singine:sinedge"
+namespace lang = "urn:singine:lang"
+namespace db   = "urn:singine:docbook"
+
+default namespace = "urn:singine:1.0"
+
+# ── root ────────────────────────────────────────────────────────────────────
+
+start = element singine-repo {
+  attribute version        { text },
+  attribute generated-at   { text },
+  attribute cell           { text }?,
+  attribute generator      { text }?,
+  attribute urn            { text }?,
+  attribute git-remote     { text }?,
+
+  repo-info,
+  lang-registry,
+  namespace-decl+,
+  asset-type*,
+  cell*,
+  snap-pipeline?,
+  sinedge-config?,
+  query-layer?,
+  naming-conventions?,
+  iceberg-layers?,
+  kafka-topics?,
+  db-dialects?
+}
+
+# ── repo-info ────────────────────────────────────────────────────────────────
+
+repo-info = element repo-info {
+  attribute dir-name    { text },
+  attribute readme-path { text }?,
+  element title       { text },
+  element readme      { text }?,
+  element description { text }?
+}
+
+# ── lang-registry ─────────────────────────────────────────────────────────────
+
+lang-registry = element lang-registry {
+  element lang {
+    attribute id          { xsd:ID },
+    attribute token       { text },
+    attribute runtime     { text },
+    attribute handler-ns  { text }?,
+    attribute xml-pi      { text }?,
+    attribute description { text }?
+  }+
+}
+
+# ── namespace-decl ────────────────────────────────────────────────────────────
+
+namespace-decl = element namespace-decl {
+  attribute prefix      { text },
+  attribute urn         { text },
+  attribute url         { text }?,
+  attribute description { text }?
+}
+
+# ── cell ─────────────────────────────────────────────────────────────────────
+
+cell = element cell {
+  attribute path   { text },
+  attribute opcode { text }?,
+  element cell-meta {
+    attribute meta-path { text },
+    element readme { text }?
+  },
+  cell*
+}
+
+# ── asset-type ────────────────────────────────────────────────────────────────
+
+asset-type = element asset-type {
+  attribute opcode          { xsd:token { pattern = "[A-Z]{4}" } },
+  attribute name            { text },
+  attribute handler         { text },
+  attribute command         { text }?,
+  attribute kafka-topic     { text }?,
+  attribute collibra-domain { text }?,
+  attribute status          { "active" | "draft" | "deprecated" }?,
+  attribute description     { text }?,
+  attribute urn             { text }?
+}
+
+# ── snap-pipeline ─────────────────────────────────────────────────────────────
+
+snap-pipeline = element snap-pipeline {
+  attribute opcode { text }?,
+  attribute urn    { text }?,
+  element snap-stage {
+    attribute order       { xsd:positiveInteger },
+    attribute name        { text },
+    attribute handler     { text },
+    attribute input-type  { text },
+    attribute output-type { text },
+    attribute description { text }?
+  }+
+}
+
+# ── sinedge-config ────────────────────────────────────────────────────────────
+
+sinedge-config = element sinedge-config {
+  attribute install-root { text }?,
+  attribute urn          { text }?,
+  element sinedge-module {
+    attribute name        { text },
+    attribute role        { text },
+    attribute handler-ns  { text },
+    attribute description { text }?
+  }+
+}
+
+# ── query-layer ───────────────────────────────────────────────────────────────
+
+query-layer = element query-layer {
+  element query-strategy {
+    attribute id          { xsd:ID },
+    attribute strategy    { text },
+    attribute handler     { text }?,
+    attribute description { text }?
+  }+
+}
+
+# ── governed-lambda ───────────────────────────────────────────────────────────
+
+governed-lambda = element governed-lambda {
+  attribute args     { text },
+  attribute governed { "true" | "false" }?,
+  attribute opcode   { text }?,
+  element lambda-auth {
+    element lambda-agent    { attribute ref      { text } },
+    element lambda-activity { attribute type     { text },
+                              attribute proto    { text }? }
+  },
+  element lambda-body { text }
+}
+
+# ── naming-conventions ────────────────────────────────────────────────────────
+
+naming-conventions = element naming-conventions {
+  element pattern {
+    attribute name        { text },
+    attribute regex       { text }?,
+    attribute value       { text }?,
+    attribute default     { text }?,
+    attribute location    { text }?,
+    attribute description { text }?
+  }+
+}
+
+# ── iceberg / kafka / db ──────────────────────────────────────────────────────
+
+iceberg-layers = element iceberg-layers {
+  element layer {
+    attribute name         { text },
+    attribute topic-prefix { text },
+    attribute format       { "ORC" | "Parquet" | "Avro" },
+    attribute description  { text }?
+  }+
+}
+
+kafka-topics = element kafka-topics {
+  element topic {
+    attribute name        { text },
+    attribute partitions  { xsd:positiveInteger },
+    attribute replication { xsd:positiveInteger }
+  }+
+}
+
+db-dialects = element db-dialects {
+  attribute default { text }?,
+  element dialect {
+    attribute name        { text },
+    attribute driver      { text },
+    attribute handler     { text },
+    attribute description { text }?
+  }+
+}

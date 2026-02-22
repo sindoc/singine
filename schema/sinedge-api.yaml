@@ -1,0 +1,368 @@
+openapi: "3.1.0"
+info:
+  title: sinedge API
+  version: "0.1.0"
+  description: |
+    sinedge-agent / sinedge-engine structured backend API.
+    This is the ONLY backend interface. Users interact via SPARQL and MCP.
+    All operations are governed lambdas: (cons auth λ(t)).
+    Exceptions surface as RFC 7807 Problem Details — never raw JVM traces.
+  contact:
+    url: https://github.com/sindoc/singine
+  license:
+    name: GPL-3.0
+    url: https://www.gnu.org/licenses/gpl-3.0.html
+
+servers:
+  - url: https://singine.local/sinedge/v1
+    description: Local sinedge engine (Docker / ~/.local/opt/singine/sinedge)
+  - url: http://localhost:8080/sinedge/v1
+    description: Development server
+
+# ── security: governed lambda auth ───────────────────────────────────────────
+security:
+  - governedLambda: []
+
+components:
+  securitySchemes:
+    governedLambda:
+      type: apiKey
+      in: header
+      name: X-Singine-Auth-Token
+      description: |
+        Runtime-evaluated auth token. Corresponds to the token-fn in
+        singine.pos.lambda/Auth. Token is evaluated as P(authorised|agent,activity,t).
+        θ=0.5 by default. Governed=true required for all write operations.
+
+  schemas:
+    # ── governed lambda envelope ──────────────────────────────────────────
+    GovernedRequest:
+      type: object
+      required: [agent, activity, governed]
+      properties:
+        agent:
+          type: string
+          description: Agent URN (e.g. urn:sindoc:singine:a.c.cn.async)
+        activity:
+          type: string
+          description: Activity type (anonymous-function, read, write, connect)
+        governed:
+          type: boolean
+          default: true
+        args:
+          type: array
+          items:
+            type: string
+          description: Lambda arg list (e.g. [f, e, f, d, g])
+
+    # ── snap-process request ──────────────────────────────────────────────
+    SnapRequest:
+      allOf:
+        - $ref: '#/components/schemas/GovernedRequest'
+        - type: object
+          required: [input]
+          properties:
+            input:
+              type: object
+              required: [type]
+              properties:
+                type:
+                  type: string
+                  enum: [file, stream, base64, url]
+                data:
+                  type: string
+                  description: Base64-encoded bytes or URL
+                filename:
+                  type: string
+
+    # ── snap-process result ───────────────────────────────────────────────
+    SnapResult:
+      type: object
+      properties:
+        urn:
+          type: string
+          description: MCP URN of the processed document
+        stages:
+          type: array
+          items:
+            $ref: '#/components/schemas/StageResult'
+        ascii-index:
+          type: array
+          items:
+            $ref: '#/components/schemas/CharEntry'
+        unicode-index:
+          type: array
+          items:
+            $ref: '#/components/schemas/CharEntry'
+        sparql-query:
+          type: string
+          description: Auto-generated SPARQL for querying this document
+
+    StageResult:
+      type: object
+      properties:
+        stage:
+          type: string
+          enum: [ingest, preprocess, ocr, extract, index, triple, nl-query, dispatch]
+        status:
+          type: string
+          enum: [ok, stub, denied, error]
+        output-type:
+          type: string
+        time:
+          $ref: '#/components/schemas/SingineTime'
+
+    # ── char entry (ASCII + Unicode index) ───────────────────────────────
+    CharEntry:
+      type: object
+      required: [code, char, urn]
+      properties:
+        code:
+          type: integer
+          description: Unicode code point
+        char:
+          type: string
+          description: The character itself
+        block:
+          type: string
+        lang:
+          type: string
+          description: ISO 639 primary language
+        country:
+          type: string
+          description: ISO 3166 primary country
+        tz:
+          type: string
+          description: IANA timezone
+        date:
+          type: string
+          format: date
+          description: Relative calendar date (epoch + scale)
+        speakers:
+          type: integer
+          description: Nash payoff — speaker count for this script
+        rest:
+          type: object
+          additionalProperties: true
+          description: Arbitrary JSON enrichment from API calls
+        urn:
+          type: string
+          description: "MCP address: urn:singine:snap:char/<code-point>"
+
+    # ── NL query ──────────────────────────────────────────────────────────
+    NLQueryRequest:
+      allOf:
+        - $ref: '#/components/schemas/GovernedRequest'
+        - type: object
+          required: [query]
+          properties:
+            query:
+              type: string
+              description: Natural language query
+            strategy:
+              type: string
+              enum: [nl-to-sparql, cosine, sparql, mcp]
+              default: nl-to-sparql
+
+    NLQueryResult:
+      type: object
+      properties:
+        nl-input:
+          type: string
+        sparql:
+          type: string
+        strategy:
+          type: string
+        sparql-result:
+          type: object
+        mcp-resources:
+          type: array
+          items:
+            type: object
+            properties:
+              urn:
+                type: string
+              data:
+                type: object
+
+    # ── time ──────────────────────────────────────────────────────────────
+    SingineTime:
+      type: object
+      properties:
+        iso:
+          type: string
+          format: date-time
+        tz:
+          type: string
+        decade:
+          type: string
+          example: "2020s"
+        path:
+          type: string
+          example: "today/2020s/2026/02/21"
+
+    # ── RFC 7807 error ────────────────────────────────────────────────────
+    Problem:
+      type: object
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+          format: uri
+          default: "urn:singine:error:generic"
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        stage:
+          type: string
+          description: Pipeline stage where the error occurred
+        opcode:
+          type: string
+
+# ── paths ─────────────────────────────────────────────────────────────────────
+paths:
+
+  /snap:
+    post:
+      operationId: snapProcess
+      summary: Process a snapshot (screenshot / image / video frame / PDF)
+      description: |
+        Full 8-stage pipeline: ingest → preprocess → OCR → extract →
+        index (every char combination) → RDF triples → NL→SPARQL → dispatch.
+        Returns char index, RDF summary, and an auto-generated SPARQL query.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SnapRequest'
+      responses:
+        '200':
+          description: Pipeline complete
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SnapResult'
+            application/rdf+xml:
+              schema:
+                type: string
+        '403':
+          description: Auth denied (governed=true, token invalid)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '500':
+          description: JVM-level error (wrapped as Problem, never raw stacktrace)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /query:
+    post:
+      operationId: nlQuery
+      summary: Natural language → SPARQL → MCP result
+      description: |
+        The primary user-facing endpoint. Translates NL to SPARQL,
+        executes against Jena TDB2, and returns MCP-addressable resources.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NLQueryRequest'
+      responses:
+        '200':
+          description: Query result with MCP resources
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NLQueryResult'
+            application/sparql-results+json:
+              schema:
+                type: object
+
+  /query/sparql:
+    post:
+      operationId: sparqlQuery
+      summary: Raw SPARQL query (advanced users only)
+      requestBody:
+        required: true
+        content:
+          application/sparql-query:
+            schema:
+              type: string
+      responses:
+        '200':
+          description: SPARQL result bindings
+          content:
+            application/sparql-results+json:
+              schema:
+                type: object
+
+  /char/{code-point}:
+    get:
+      operationId: charContext
+      summary: Get full context for a Unicode code point
+      description: |
+        Returns the CharEntry for a code point: block, lang, country, tz,
+        relative-date, speakers, MCP URN. The result is a governed lambda
+        output — auth is checked even for read operations.
+      parameters:
+        - name: code-point
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Unicode code point (decimal)
+      responses:
+        '200':
+          description: Character context
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CharEntry'
+            application/rdf+xml:
+              schema:
+                type: string
+
+  /engine/status:
+    get:
+      operationId: engineStatus
+      summary: sinedge-engine status
+      responses:
+        '200':
+          description: Engine running state
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  engine:    { type: string }
+                  urn:       { type: string }
+                  install:   { type: string }
+                  opcodes:   { type: array, items: { type: string } }
+                  status:    { type: string }
+
+  /lang/dispatch:
+    post:
+      operationId: langDispatch
+      summary: Dispatch a document through the #lang router
+      requestBody:
+        required: true
+        content:
+          text/plain:
+            schema:
+              type: string
+              description: Full document content (first line must be #lang <token>)
+      responses:
+        '200':
+          description: Dispatch result per lang token
+          content:
+            application/json:
+              schema:
+                type: object

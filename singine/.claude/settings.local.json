@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:productresources.collibra.com)",
+      "WebFetch(domain:medium.com)",
+      "WebFetch(domain:www.collibra.com)",
+      "Bash(ls:*)",
+      "Bash(python3:*)",
+      "Bash(source:*)",
+      "Bash(python -m singine:*)",
+      "Bash(wc:*)",
+      "Bash(grep:*)",
+      "Bash(find:*)",
+      "Bash(java -version:*)",
+      "Bash(postconf:*)",
+      "WebFetch(domain:plugins-doc.logseq.com)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:logseq.github.io)",
+      "WebFetch(domain:fossies.org)",
+      "WebFetch(domain:gist.github.com)",
+      "Bash(curl:*)",
+      "Bash(lsof:*)",
+      "Bash(op:*)",
+      "Bash(brew list:*)",
+      "Bash(brew install:*)",
+      "Bash(node:*)"
+    ]
+  }
+}

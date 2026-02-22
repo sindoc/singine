@@ -1,0 +1,30 @@
+# Clojure
+core/classes/
+.clj-kondo/.cache/
+.lsp/
+.cpcache/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# Java
+*.class
+
+# Editors
+.DS_Store
+*.swp
+*~
+
+# Secrets
+.env
+*.pem
+*.key
+
+# Tmp
+today/
+*.x

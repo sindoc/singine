@@ -1,0 +1,469 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE singine-repo SYSTEM "urn:singine:dtd:1.0">
+<!--
+  root.xml — Singine Platform Source of Truth
+  Location : .meta/0-stem/0-cell/root.xml
+  Generated: singine.meta.root/regenerate!
+  Schema   : schema/singine.dtd  (DTD)
+             schema/singine.rnc  (RelaxNG compact)
+             schema/singine.xsd  (XSD — derived)
+
+  DocBook mapping
+  ───────────────
+    <singine-repo>   ≡ <book>
+    <repo-info>      ≡ <bookinfo> / <info>
+    <cell>           ≡ <chapter>
+    <asset-type>     ≡ <section> with structured metadata
+    <snap-pipeline>  ≡ <appendix> (processing architecture)
+
+  Tim Bray genx principle: as few element types as possible,
+  attributes carry data, elements carry structure.
+  All XML is generated via singine.meta.root/emit-xml —
+  a minimal genx-style emitter over javax.xml.stream.XMLStreamWriter.
+  Exceptions surface at JVM level; Racket/Clojure see only clean values.
+
+  Do not hand-edit. Run: singine meta regenerate
+-->
+<singine-repo
+    xmlns="urn:singine:1.0"
+    xmlns:snap="urn:singine:snap"
+    xmlns:edge="urn:singine:sinedge"
+    xmlns:lang="urn:singine:lang"
+    xmlns:db="urn:singine:docbook"
+    version="0.4.0"
+    generated-at="2026-02-21T00:00:00Z"
+    cell=".meta/0-stem/0-cell"
+    generator="singine.meta.root/regenerate!"
+    urn="urn:sindoc:singine"
+    git-remote="https://github.com/sindoc/singine">
+
+  <!-- ── repo-info: parent directory name + .meta/ README ──────────────── -->
+  <repo-info dir-name="singine" readme-path=".meta/sindoc.sindoc">
+    <title>singine</title>
+    <readme><![CDATA[
+#lang sindoc
+#version 1.0
+#namespace singine.meta.sindoc
+
+Singine is a multi-layer platform for admin document processing.
+Clojure at the centre. RDF triples as the interoperability layer.
+Collibra metamodel compatibility.
+Edge-capable: sinedge-agent + sinedge-engine installed at ~/.local/opt/singine/sinedge/
+    ]]></readme>
+    <description>
+      Multi-layer platform: OCR pipeline, RDF triple store, SPARQL + NL queries,
+      Kafka event streaming, sinedge edge agents, snap-process vision pipeline.
+    </description>
+  </repo-info>
+
+  <!-- ── lang-registry: #lang dispatch table ───────────────────────────── -->
+  <!--
+    Rule: if the first line of a file is #lang <token>, route to this runtime.
+    Multiple tokens (#lang a, b, c, singine) → multi runtime, all evaluated.
+    The whole document is always translatable to XML via this root.xml.
+    Processing instruction form: <?lang racket?> preserved verbatim in XML.
+  -->
+  <lang-registry>
+    <lang id="lang-racket"
+          token="racket"
+          runtime="racket"
+          handler-ns="singine.lang.racket"
+          xml-pi="lang racket"
+          description="#lang racket — full Racket runtime via subprocess or GraalVM"/>
+
+    <lang id="lang-singine"
+          token="sindoc"
+          runtime="clojure"
+          handler-ns="singine.lang.singine"
+          xml-pi="lang singine"
+          description="#lang sindoc — native Singine document runtime"/>
+
+    <lang id="lang-xml"
+          token="xml"
+          runtime="javax.xml"
+          handler-ns="singine.lang.xml"
+          xml-pi="lang xml"
+          description="#lang xml — document is already XML; validate against singine.dtd"/>
+
+    <lang id="lang-multi"
+          token="multi"
+          runtime="multi"
+          handler-ns="singine.lang.multi"
+          xml-pi="lang multi"
+          description="#lang a, b, c, singine — evaluate each lang in order, collect results"/>
+
+    <lang id="lang-clojure"
+          token="clojure"
+          runtime="clojure"
+          handler-ns="singine.lang.clojure"
+          xml-pi="lang clojure"
+          description="#lang clojure — Clojure expression evaluated on JVM"/>
+
+    <lang id="lang-sparql"
+          token="sparql"
+          runtime="jena-arq"
+          handler-ns="singine.lang.sparql"
+          xml-pi="lang sparql"
+          description="#lang sparql — SPARQL query executed against Jena triple store"/>
+
+    <!-- Identity variants idv1–idv5 (BSD identity stack) -->
+    <lang id="lang-idv1" token="idv1" runtime="process-builder"
+          handler-ns="singine.pos.identity"
+          xml-pi="lang idv1"
+          description="#lang idv1 — Kerberos 5 (MIT/Heimdal, BSD-native)"/>
+    <lang id="lang-idv2" token="idv2" runtime="process-builder"
+          handler-ns="singine.pos.identity"
+          xml-pi="lang idv2"
+          description="#lang idv2 — OpenLDAP (ldapsearch, slapd.conf)"/>
+    <lang id="lang-idv3" token="idv3" runtime="jdk-http-client"
+          handler-ns="singine.pos.identity"
+          xml-pi="lang idv3"
+          description="#lang idv3 — OpenID Connect (OIDC, JDK HttpClient)"/>
+    <lang id="lang-idv4" token="idv4" runtime="xml"
+          handler-ns="singine.pos.identity"
+          xml-pi="lang idv4"
+          description="#lang idv4 — SAML 2.0 (Oracle/Sun lineage, XML assertions)"/>
+    <lang id="lang-idv5" token="idv5" runtime="process-builder"
+          handler-ns="singine.pos.identity"
+          xml-pi="lang idv5"
+          description="#lang idv5 — PAM + NSS (BSD-native, /etc/passwd, /etc/nsswitch.conf)"/>
+  </lang-registry>
+
+  <!-- ── namespace declarations ────────────────────────────────────────── -->
+  <namespace-decl prefix="singine"  urn="urn:singine:1.0"
+                  url="https://github.com/sindoc/singine"
+                  description="Root Singine namespace"/>
+  <namespace-decl prefix="snap"     urn="urn:singine:snap"
+                  description="Snapshot / vision processing pipeline"/>
+  <namespace-decl prefix="edge"     urn="urn:singine:sinedge"
+                  description="sinedge-agent / sinedge-engine edge capability"/>
+  <namespace-decl prefix="lang"     urn="urn:singine:lang"
+                  description="#lang dispatch registry"/>
+  <namespace-decl prefix="db"       urn="urn:singine:docbook"
+                  description="DocBook mapping layer (repo=book, cell=chapter)"/>
+  <namespace-decl prefix="pos"      urn="urn:singine:pos"
+                  description="Personal Operating System governed lambda layer"/>
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       ASSET TYPES — every implemented feature, 4-letter opcode
+       ═══════════════════════════════════════════════════════════════════ -->
+
+  <asset-type opcode="STRT" name="CoreStart"
+              command="singine core start"
+              kafka-topic="singine.inbound.request"
+              handler="singine.cli.dispatch/handle-core-start"
+              collibra-domain="singine.Core" status="active"
+              urn="urn:singine:asset:STRT"
+              description="Start the singine engine. Reports internet connectivity."/>
+
+  <asset-type opcode="RDAY" name="RunToday"
+              command="singine run today"
+              kafka-topic="singine.inbound.request"
+              handler="singine.cli.dispatch/handle-run-today"
+              collibra-domain="singine.Runtime" status="active"
+              urn="urn:singine:asset:RDAY"
+              description="Today's digest: weather, city context, Wikipedia events, momentum."/>
+
+  <asset-type opcode="CHKX" name="ExtensionCheck"
+              command="singine check ext"
+              kafka-topic="singine.inbound.request"
+              handler="singine.os.runner/check-extension"
+              collibra-domain="singine.OS" status="active"
+              urn="urn:singine:asset:CHKX"
+              description="Run 12 OS probes to check if a file extension conflicts with system tooling."/>
+
+  <asset-type opcode="WTHR" name="WeatherReport"
+              command="singine weather"
+              kafka-topic="singine.inbound.request"
+              handler="singine.city.weather/fetch-all"
+              collibra-domain="singine.City" status="active"
+              urn="urn:singine:asset:WTHR"
+              description="Current weather for all configured cities with local times."/>
+
+  <asset-type opcode="CITY" name="CityContext"
+              command="singine city"
+              kafka-topic="singine.inbound.request"
+              handler="singine.city.context/full-context"
+              collibra-domain="singine.City" status="active"
+              urn="urn:singine:asset:CITY"
+              description="Full context for a city: weather, timezone, Wikipedia events."/>
+
+  <asset-type opcode="WIFI" name="NetworkControl"
+              command="singine wifi"
+              kafka-topic="singine.inbound.request"
+              handler="singine.net.wifi/wifi!"
+              collibra-domain="singine.Net" status="active"
+              urn="urn:singine:asset:WIFI"
+              description="Toggle wifi on or off via nmcli/rfkill."/>
+
+  <asset-type opcode="MMTM" name="MomentumSnapshot"
+              command="singine momentum"
+              kafka-topic="singine.inbound.request"
+              handler="singine.momentum.kernel/momentum"
+              collibra-domain="singine.Meta" status="active"
+              urn="urn:singine:asset:MMTM"
+              description="Entropy momentum (d(entropy)/dt) per .meta/-bearing cell."/>
+
+  <asset-type opcode="NLPR" name="NLRequest"
+              command="singine run"
+              kafka-topic="singine.inbound.request"
+              handler="singine.input.nlp/dispatch"
+              collibra-domain="singine.Input" status="active"
+              urn="urn:singine:asset:NLPR"
+              description="Execute .md/.sindoc/.sin/.skh as a natural language request."/>
+
+  <asset-type opcode="GITS" name="GitOperation"
+              command="singine git"
+              kafka-topic="singine.inbound.request"
+              handler="singine.cli.dispatch/handle-git"
+              collibra-domain="singine.VCS" status="active"
+              urn="urn:singine:asset:GITS"
+              description="Git passthrough. All git commands forwarded unchanged."/>
+
+  <asset-type opcode="MREG" name="MetaRegenerate"
+              command="singine meta regenerate"
+              kafka-topic="singine.inbound.request"
+              handler="singine.meta.root/regenerate!"
+              collibra-domain="singine.Meta" status="active"
+              urn="urn:singine:asset:MREG"
+              description="Regenerate root.xml from .sin/.skh/.x source files."/>
+
+  <!-- NEW: sinedge + snap + lang -->
+  <asset-type opcode="SNAP" name="SnapProcess"
+              command="singine snap"
+              kafka-topic="singine.inbound.snap"
+              handler="singine.sinedge.snap/process!"
+              collibra-domain="singine.Snap" status="active"
+              urn="urn:singine:asset:SNAP"
+              description="Process snapshot (screenshot/image/video): OCR, index, RDF, NL→SPARQL→API."/>
+
+  <asset-type opcode="SNGE" name="SinedgeEngine"
+              command="singine edge engine"
+              kafka-topic="singine.inbound.request"
+              handler="singine.sinedge.engine/start!"
+              collibra-domain="singine.Edge" status="active"
+              urn="urn:singine:asset:SNGE"
+              description="Start sinedge-engine: governed lambda executor at ~/.local/opt/singine/sinedge/."/>
+
+  <asset-type opcode="SNAG" name="SinedgeAgent"
+              command="singine edge agent"
+              kafka-topic="singine.inbound.request"
+              handler="singine.sinedge.agent/start!"
+              collibra-domain="singine.Edge" status="active"
+              urn="urn:singine:asset:SNAG"
+              description="Start sinedge-agent: NL→SPARQL→MCP interface for edge queries."/>
+
+  <asset-type opcode="LANG" name="LangDispatch"
+              command="singine lang"
+              kafka-topic="singine.inbound.request"
+              handler="singine.lang.dispatch/route!"
+              collibra-domain="singine.Lang" status="active"
+              urn="urn:singine:asset:LANG"
+              description="#lang dispatcher: racket/singine/xml/multi — route to correct runtime."/>
+
+  <!-- ── POS opcodes: BLKP CATC MCEL GITP IDNT ──────────────────────────── -->
+  <asset-type opcode="BLKP" name="BlockProcessor"
+              command="singine pos blkp"
+              kafka-topic="singine.pos.blocks"
+              handler="singine.pos.block-processor/process-blocks!"
+              collibra-domain="singine.POS" status="active"
+              urn="urn:singine:asset:BLKP"
+              description="Block processor: getUrl(convert2(unicode)) per .sindoc block → JSON + XML + ZIP."/>
+
+  <asset-type opcode="CATC" name="CategoryC"
+              command="singine pos catc"
+              kafka-topic="singine.pos.category"
+              handler="singine.pos.category/activate!"
+              collibra-domain="singine.POS" status="active"
+              urn="urn:singine:asset:CATC"
+              description="Category C: objects + subjects → PredicateFactory predicates. Dim = distinct Unicode blocks."/>
+
+  <asset-type opcode="MCEL" name="MetaCell"
+              command="singine pos mcel"
+              kafka-topic="singine.meta.cell"
+              handler="singine.meta.cell/wire-cwd!"
+              collibra-domain="singine.Meta" status="active"
+              urn="urn:singine:asset:MCEL"
+              description="Meta cell wiring: .meta/cell.sindoc + manifest.json + root-ref.txt in CWD."/>
+
+  <asset-type opcode="GITP" name="GitPush"
+              command="singine pos gitp"
+              kafka-topic="singine.vcs.push"
+              handler="singine.pos.git-op/push-algorithm!"
+              collibra-domain="singine.VCS" status="active"
+              urn="urn:singine:asset:GITP"
+              description="Git algorithm deploy: cherry-pick from algorithm-registry, commit, push to GitHub/Bitbucket."/>
+
+  <asset-type opcode="IDNT" name="Identity"
+              command="singine pos idnt"
+              kafka-topic="singine.pos.identity"
+              handler="singine.pos.identity/authenticate!"
+              collibra-domain="singine.POS" status="active"
+              urn="urn:singine:asset:IDNT"
+              description="Identity dispatcher: Kerberos(idv1), OpenLDAP(idv2), OIDC(idv3), SAML(idv4), PAM/NSS(idv5)."/>
+
+  <asset-type opcode="FORM" name="FormEmitter"
+              command="singine pos form"
+              kafka-topic="singine.pos.form"
+              handler="singine.pos.form/emit-form!"
+              collibra-domain="singine.POS" status="active"
+              urn="urn:singine:asset:FORM"
+              description="Form emitter: governed form via policy p + template t. Wraps contact record in p:policy + t:template + london-triple."/>
+
+  <asset-type opcode="LOCP" name="LocationProbe"
+              command="singine pos locp"
+              kafka-topic="singine.pos.location"
+              handler="singine.pos.location/probe!"
+              collibra-domain="singine.POS" status="active"
+              urn="urn:singine:asset:LOCP"
+              description="Location probe: IATA/postal→URN, SOAP 1.2 request, RelaxNG+Schematron+SODA+NannyML metadata deduction."/>
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       SNAP PIPELINE — vision → text → index → RDF → NL → SPARQL → API
+       ═══════════════════════════════════════════════════════════════════ -->
+  <snap-pipeline opcode="SNAP" urn="urn:singine:snap:pipeline">
+    <snap-stage order="1" name="ingest"
+                handler="singine.sinedge.snap/ingest!"
+                input-type="file|stream|base64"
+                output-type="bytes"
+                description="Receive screenshot, image, video frame, PDF, or email attachment."/>
+    <snap-stage order="2" name="preprocess"
+                handler="singine.sinedge.snap/preprocess!"
+                input-type="bytes"
+                output-type="image/png"
+                description="JavaCV: deskew, denoise, binarise, rescale to 300 DPI."/>
+    <snap-stage order="3" name="ocr"
+                handler="singine.sinedge.snap/ocr!"
+                input-type="image/png"
+                output-type="text/plain"
+                description="Tess4J/Tesseract: image → raw text."/>
+    <snap-stage order="4" name="extract"
+                handler="singine.sinedge.snap/extract!"
+                input-type="text/plain"
+                output-type="application/x-tika-parsed"
+                description="Apache Tika: text + Dublin Core metadata. Every char combination indexed."/>
+    <snap-stage order="5" name="index"
+                handler="singine.sinedge.snap/index!"
+                input-type="application/x-tika-parsed"
+                output-type="lucene/index"
+                description="Lucene: full-text index. Every n-gram and char sequence stored."/>
+    <snap-stage order="6" name="triple"
+                handler="singine.sinedge.snap/triple!"
+                input-type="application/x-tika-parsed"
+                output-type="application/rdf+xml"
+                description="Jena: generate RDF triples. Entities resolved via Union-Find."/>
+    <snap-stage order="7" name="nl-query"
+                handler="singine.sinedge.agent/nl-to-sparql"
+                input-type="text/natural-language"
+                output-type="application/sparql-query"
+                description="NL → SPARQL via LLM. This is the only layer user-visible besides MCP."/>
+    <snap-stage order="8" name="dispatch"
+                handler="singine.sinedge.agent/sparql-to-api"
+                input-type="application/sparql-query"
+                output-type="application/json"
+                description="SPARQL → OpenAPI backend call. Spec at schema/sinedge-api.yaml."/>
+  </snap-pipeline>
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       SINEDGE CONFIG
+       ═══════════════════════════════════════════════════════════════════ -->
+  <sinedge-config install-root="~/.local/opt/singine/sinedge"
+                  urn="urn:singine:sinedge">
+    <sinedge-module name="sinedge-agent"
+                    role="nl-sparql-mcp-gateway"
+                    handler-ns="singine.sinedge.agent"
+                    description="Natural language → SPARQL → MCP interface. User-facing."/>
+    <sinedge-module name="sinedge-engine"
+                    role="governed-lambda-executor"
+                    handler-ns="singine.sinedge.engine"
+                    description="Executes governed lambdas (cons auth λ(t)). Backend only."/>
+  </sinedge-config>
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       QUERY LAYER — SPARQL + MCP only (user-visible)
+       ═══════════════════════════════════════════════════════════════════ -->
+  <query-layer>
+    <query-strategy id="qs-sparql"
+                    strategy="sparql"
+                    handler="singine.sinedge.agent/run-sparql"
+                    description="Structured SPARQL: date, sender, type, amount. Jena ARQ."/>
+    <query-strategy id="qs-nl"
+                    strategy="nl-to-sparql"
+                    handler="singine.sinedge.agent/nl-to-sparql"
+                    description="Natural language → SPARQL via LLM. Entry point for user queries."/>
+    <query-strategy id="qs-cosine"
+                    strategy="cosine"
+                    handler="singine.sinedge.agent/cosine-search"
+                    description="Semantic search via DJL embeddings + cosine similarity."/>
+    <query-strategy id="qs-mcp"
+                    strategy="mcp"
+                    handler="singine.sinedge.agent/mcp-dispatch"
+                    description="MCP resource identification. All resources are URN/URL addressable."/>
+  </query-layer>
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       NAMING CONVENTIONS (unchanged)
+       ═══════════════════════════════════════════════════════════════════ -->
+  <naming-conventions>
+    <pattern name="private-ext"  regex="\.[a-z]{3}$"  default=".sin"
+             description="Private/encrypted file extension (3 lowercase letters)"/>
+    <pattern name="personal-ext" regex="\.[a-z]{2,4}$" default=".skh"
+             description="Personal file extension (user initials)"/>
+    <pattern name="temp-ext"     value=".x"  location="~/tmp"
+             description="Ephemeral. Never version-controlled."/>
+    <pattern name="public-ext"   value=".sindoc"
+             description="Canonical public structured document format."/>
+    <pattern name="opcode"       regex="[A-Z]{4}"
+             description="Collibra-compatible 4-letter asset type code."/>
+    <pattern name="cell-dir"     regex="(^|/)\.meta($|/)"
+             description="A cell is any directory containing a .meta/ subdirectory."/>
+    <pattern name="momentum-file" value=".meta/momentum.sindoc"
+             description="Entropy epoch log. Machine-written, not committed."/>
+  </naming-conventions>
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       ICEBERG / KAFKA / DB (unchanged structure, extended topics)
+       ═══════════════════════════════════════════════════════════════════ -->
+  <iceberg-layers>
+    <layer name="raw"      topic-prefix="singine.raw."      format="ORC"
+           description="Unprocessed input bytes"/>
+    <layer name="base"     topic-prefix="singine.base."     format="ORC"
+           description="Parsed sindoc XML, schema-validated"/>
+    <layer name="enriched" topic-prefix="singine.enriched." format="ORC"
+           description="Enriched with city, Wikipedia, Wikidata"/>
+    <layer name="public"   topic-prefix="singine.public."   format="Parquet"
+           description="Final SOAP/XML response ready for consumption"/>
+  </iceberg-layers>
+
+  <kafka-topics>
+    <topic name="singine.inbound.request"    partitions="1" replication="1"/>
+    <topic name="singine.inbound.snap"       partitions="1" replication="1"/>
+    <topic name="singine.outbound.response"  partitions="1" replication="1"/>
+    <topic name="singine.raw.input"          partitions="1" replication="1"/>
+    <topic name="singine.base.parsed"        partitions="1" replication="1"/>
+    <topic name="singine.enriched.context"   partitions="1" replication="1"/>
+    <topic name="singine.public.response"    partitions="1" replication="1"/>
+    <topic name="singine.events.activity"    partitions="1" replication="1"/>
+    <topic name="singine.snap.ocr"           partitions="1" replication="1"/>
+    <topic name="singine.snap.triples"       partitions="1" replication="1"/>
+    <topic name="singine.pos.blocks"         partitions="1" replication="1"/>
+    <topic name="singine.pos.category"       partitions="1" replication="1"/>
+    <topic name="singine.meta.cell"          partitions="1" replication="1"/>
+    <topic name="singine.vcs.push"           partitions="1" replication="1"/>
+    <topic name="singine.pos.identity"       partitions="1" replication="1"/>
+    <topic name="singine.pos.form"           partitions="1" replication="1"/>
+    <topic name="singine.pos.location"       partitions="1" replication="1"/>
+    <topic name="singine.events.release"     partitions="1" replication="1"/>
+    <topic name="singine.hf.publish"         partitions="1" replication="1"/>
+  </kafka-topics>
+
+  <db-dialects default="sqlite">
+    <dialect name="sqlite" driver="org.xerial.sqlite-jdbc"
+             handler="singine.db.dialect/translate-ddl"
+             description="SQLite: local development"/>
+    <dialect name="hive"   driver="org.apache.hive.jdbc.HiveDriver"
+             handler="singine.db.dialect/translate-ddl"
+             description="Apache Hive: production backend"/>
+  </db-dialects>
+
+</singine-repo>

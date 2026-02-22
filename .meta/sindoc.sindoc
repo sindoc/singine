@@ -1,0 +1,81 @@
+#lang sindoc
+#version 1.0
+#namespace singine.meta.sindoc
+
+This is the self-describing grammar of the .sindoc document format.
+A .sindoc file is a structured document interleaving prose with XML fragments.
+
+The grammar is read by the Java parser at startup.
+Each @rule below defines one production of the grammar.
+
+@rule lang-declaration
+  pattern: #lang <identifier>
+  xml-element: lang
+  xml-attribute: name
+  position: first-line-only
+  required: false
+
+@rule version-declaration
+  pattern: #version <semver>
+  xml-element: version
+  xml-attribute: value
+  position: header
+  required: false
+
+@rule namespace-declaration
+  pattern: #namespace <dotted-identifier>
+  xml-element: namespace
+  xml-attribute: uri
+  position: header
+  required: false
+
+@rule directive
+  pattern: #<identifier>
+  xml-element: directive
+  xml-attribute: name
+  position: any
+
+@rule annotation
+  pattern: @<identifier>
+  xml-element: annotation
+  xml-attribute: name
+  position: any
+
+@rule separator
+  pattern: --\n
+  xml-element: separator
+  position: any
+
+@rule timestamp
+  pattern: <timestamp/>
+  xml-element: timestamp
+  content: iso8601
+  position: after-separator
+
+@rule close
+  pattern: </>
+  xml-element: close
+  position: after-separator
+
+@rule prose-line
+  pattern: [any line not matching above rules]
+  xml-element: line
+  xml-attribute: n
+  position: any
+
+@rule section
+  compose: separator (timestamp | close) separator?
+  xml-element: section
+  xml-attribute: type
+
+@rule document
+  compose: header? body section*
+  xml-element: document
+  xml-attribute: lang
+  xml-attribute: version
+  xml-attribute: namespace
+
+--
+<timestamp/>
+--
+</>

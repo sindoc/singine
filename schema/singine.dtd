@@ -1,0 +1,489 @@
+<!-- singine.dtd
+     Singine Platform Document Type Definition
+     URN:  urn:singine:dtd:1.0
+     URL:  https://github.com/sindoc/singine/schema/singine.dtd
+
+     Design principles
+     ─────────────────
+     · Every git repository is a <singine-repo> — the DocBook equivalent
+       of <book>. One repo = one document.
+     · Every .meta/-bearing directory is a <cell>.
+     · Every implemented feature is an <asset-type> with a 4-letter opcode.
+     · #lang directives are preserved as processing instructions: <?lang racket?>
+     · The #lang dispatch table is a <lang-registry> inside <singine-repo>.
+     · snap-process input (screenshot, image, video frame) is a <snapshot>.
+     · NL → SPARQL translation is declared as a <query> with @strategy="nl".
+     · Auth tokens are <governed-lambda> elements — never inline data.
+
+     Namespace strategy (URN → URI → URL all interchangeable in singine)
+     ────────────────────────────────────────────────────────────────────
+       urn:singine:           root namespace
+       urn:singine:meta:      .meta/ hierarchy
+       urn:singine:sinedge:   sinedge-agent / sinedge-engine
+       urn:singine:snap:      snapshot processing pipeline
+       urn:singine:lang:      #lang dispatch registry
+       urn:singine:docbook:   DocBook mapping layer
+-->
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     TOP-LEVEL: singine-repo  (≡ DocBook <book>)
+     One per git repository. root.xml is its serialisation.
+     ═══════════════════════════════════════════════════════════════════ -->
+
+<!ELEMENT singine-repo (
+    repo-info,
+    lang-registry,
+    namespace-decl+,
+    asset-type*,
+    cell*,
+    snap-pipeline?,
+    sinedge-config?,
+    query-layer?,
+    pos-category?,
+    meta-cell-registry?,
+    form?,
+    locp?,
+    naming-conventions?,
+    iceberg-layers?,
+    kafka-topics?,
+    db-dialects?
+)>
+<!ATTLIST singine-repo
+    xmlns       CDATA   #FIXED   "urn:singine:1.0"
+    version     CDATA   #REQUIRED
+    generated-at CDATA  #REQUIRED
+    cell        CDATA   #IMPLIED
+    generator   CDATA   #IMPLIED
+    urn         CDATA   #IMPLIED
+    git-remote  CDATA   #IMPLIED
+>
+
+<!-- ── repo-info: maps the parent directory name + README ── -->
+<!ELEMENT repo-info (title, readme?, description?)>
+<!ATTLIST repo-info
+    dir-name    CDATA   #REQUIRED
+    readme-path CDATA   #IMPLIED
+>
+<!ELEMENT title   (#PCDATA)>
+<!ELEMENT readme  (#PCDATA)>
+<!ELEMENT description (#PCDATA)>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     LANG REGISTRY  — #lang dispatch table
+     Each <lang> maps a #lang token to its runtime handler.
+     ═══════════════════════════════════════════════════════════════════ -->
+
+<!ELEMENT lang-registry (lang+)>
+<!ELEMENT lang EMPTY>
+<!ATTLIST lang
+    id          ID      #REQUIRED
+    token       CDATA   #REQUIRED
+    runtime     CDATA   #REQUIRED
+    handler-ns  CDATA   #IMPLIED
+    description CDATA   #IMPLIED
+    xml-pi      CDATA   #IMPLIED
+>
+<!-- Examples:
+       token="racket"  runtime="racket"   handler-ns="singine.lang.racket"
+       token="singine" runtime="clojure"  handler-ns="singine.lang.singine"
+       token="xml"     runtime="javax.xml" handler-ns="singine.lang.xml"
+       token="a,b,c"   runtime="multi"    handler-ns="singine.lang.multi"
+-->
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     NAMESPACE DECLARATIONS  (URN / URI / URL interchangeable)
+     ═══════════════════════════════════════════════════════════════════ -->
+
+<!ELEMENT namespace-decl EMPTY>
+<!ATTLIST namespace-decl
+    prefix      CDATA   #REQUIRED
+    urn         CDATA   #REQUIRED
+    url         CDATA   #IMPLIED
+    description CDATA   #IMPLIED
+>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     CELL  — any directory with a .meta/ subdirectory
+     ═══════════════════════════════════════════════════════════════════ -->
+
+<!ELEMENT cell (cell-meta, cell*)>
+<!ATTLIST cell
+    path        CDATA   #REQUIRED
+    opcode      CDATA   #IMPLIED
+>
+<!ELEMENT cell-meta (readme?)>
+<!ATTLIST cell-meta
+    meta-path   CDATA   #REQUIRED
+>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     ASSET TYPES  (Collibra-compatible, 4-letter opcode)
+     ═══════════════════════════════════════════════════════════════════ -->
+
+<!ELEMENT asset-type EMPTY>
+<!ATTLIST asset-type
+    opcode          CDATA   #REQUIRED
+    name            CDATA   #REQUIRED
+    command         CDATA   #IMPLIED
+    kafka-topic     CDATA   #IMPLIED
+    handler         CDATA   #REQUIRED
+    collibra-domain CDATA   #IMPLIED
+    status          CDATA   #IMPLIED
+    description     CDATA   #IMPLIED
+    urn             CDATA   #IMPLIED
+>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     SNAP PIPELINE  — snapshot / image / video frame processing
+     NL query → SPARQL → backend API call → snap-process
+     ═══════════════════════════════════════════════════════════════════ -->
+
+<!ELEMENT snap-pipeline (snap-stage+)>
+<!ATTLIST snap-pipeline
+    opcode      CDATA   #FIXED   "SNAP"
+    urn         CDATA   #FIXED   "urn:singine:snap:pipeline"
+>
+
+<!ELEMENT snap-stage EMPTY>
+<!ATTLIST snap-stage
+    order       CDATA   #REQUIRED
+    name        CDATA   #REQUIRED
+    handler     CDATA   #REQUIRED
+    input-type  CDATA   #REQUIRED
+    output-type CDATA   #REQUIRED
+    description CDATA   #IMPLIED
+>
+<!--
+  Stages (in order):
+    1. ingest     — receive file/stream (screenshot, image, video, PDF)
+    2. preprocess — JavaCV: deskew, denoise, binarise, 300 DPI
+    3. ocr        — Tess4J: image → text
+    4. extract    — Apache Tika: text + Dublin Core metadata
+    5. index      — Lucene: every character combination indexed
+    6. triple     — Jena: RDF triples from extracted entities
+    7. nl-query   — NL → SPARQL (LLM translation layer)
+    8. dispatch   — SPARQL → OpenAPI backend call
+-->
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     SINEDGE CONFIG  — sinedge-agent / sinedge-engine modules
+     Installed at ~/.local/opt/singine/sinedge/
+     ═══════════════════════════════════════════════════════════════════ -->
+
+<!ELEMENT sinedge-config (sinedge-module+)>
+<!ATTLIST sinedge-config
+    install-root CDATA  #FIXED   "~/.local/opt/singine/sinedge"
+    urn          CDATA  #FIXED   "urn:singine:sinedge"
+>
+
+<!ELEMENT sinedge-module EMPTY>
+<!ATTLIST sinedge-module
+    name        CDATA   #REQUIRED
+    role        CDATA   #REQUIRED
+    handler-ns  CDATA   #REQUIRED
+    description CDATA   #IMPLIED
+>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     QUERY LAYER  — SPARQL + MCP as the only user-visible interfaces
+     ═══════════════════════════════════════════════════════════════════ -->
+
+<!ELEMENT query-layer (query-strategy+)>
+<!ELEMENT query-strategy EMPTY>
+<!ATTLIST query-strategy
+    id          ID      #REQUIRED
+    strategy    CDATA   #REQUIRED
+    description CDATA   #IMPLIED
+    handler     CDATA   #IMPLIED
+>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     POS CATEGORY C  — objects + subjects + predicates + morphisms
+     ═══════════════════════════════════════════════════════════════════ -->
+
+<!ELEMENT pos-category (pos-objects, pos-subjects, pos-predicates)>
+<!ATTLIST pos-category
+    opcode      CDATA   #FIXED   "CATC"
+    dim         CDATA   #IMPLIED
+    topic       CDATA   #IMPLIED
+    urn         CDATA   #IMPLIED
+>
+<!ELEMENT pos-objects  (pos-object+)>
+<!ELEMENT pos-subjects (pos-subject+)>
+<!ELEMENT pos-predicates (pos-predicate+)>
+<!ELEMENT pos-object EMPTY>
+<!ATTLIST pos-object
+    opcode      CDATA   #REQUIRED
+    name        CDATA   #REQUIRED
+    kind        CDATA   #IMPLIED
+>
+<!ELEMENT pos-subject EMPTY>
+<!ATTLIST pos-subject
+    block-n     CDATA   #REQUIRED
+    topic       CDATA   #IMPLIED
+    urn         CDATA   #IMPLIED
+    is-governed (true|false) "true"
+>
+<!ELEMENT pos-predicate EMPTY>
+<!ATTLIST pos-predicate
+    name        CDATA   #REQUIRED
+    condition   CDATA   #REQUIRED
+    header      CDATA   #IMPLIED
+>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     META CELL REGISTRY  — .meta/ wiring records
+     ═══════════════════════════════════════════════════════════════════ -->
+
+<!ELEMENT meta-cell-registry (meta-cell*)>
+<!ELEMENT meta-cell EMPTY>
+<!ATTLIST meta-cell
+    dir-name    CDATA   #REQUIRED
+    exec-dir    CDATA   #REQUIRED
+    timestamp   CDATA   #IMPLIED
+    topic       CDATA   #IMPLIED
+    urn         CDATA   #IMPLIED
+    generator   CDATA   #IMPLIED
+>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     FORM  — governed form via policy p + template t
+     Opcode: FORM
+     Namespaces: p=urn:singine:pos:policy  t=urn:singine:pos:template
+                 g=urn:singine:governed    cal=urn:singine:time:calendar
+     ═══════════════════════════════════════════════════════════════════ -->
+
+<!ELEMENT form (template, policy, contact, lambda, when)>
+<!ATTLIST form
+    xmlns       CDATA   #FIXED   "urn:singine:pos:form"
+    id          CDATA   #REQUIRED
+    generated-at CDATA  #REQUIRED
+    agent       CDATA   #IMPLIED
+    opcode      CDATA   #FIXED   "FORM"
+>
+
+<!-- t:template — back-reference to source template -->
+<!ELEMENT template EMPTY>
+<!ATTLIST template
+    src         CDATA   #REQUIRED
+    version     CDATA   #IMPLIED
+    schema      CDATA   #IMPLIED
+    generator   CDATA   #IMPLIED
+>
+
+<!-- p:policy — active terms of reference from condition system -->
+<!ELEMENT policy (term+)>
+<!ATTLIST policy
+    id           CDATA   #REQUIRED
+    predicate    CDATA   #REQUIRED
+    contract-ref CDATA   #IMPLIED
+    agent        CDATA   #IMPLIED
+    activity     CDATA   #IMPLIED
+    terms-active CDATA   #IMPLIED
+>
+
+<!ELEMENT term EMPTY>
+<!ATTLIST term
+    id          CDATA   #REQUIRED
+    name        CDATA   #REQUIRED
+    satisfied   (true|false) "false"
+    at          CDATA   #IMPLIED
+>
+
+<!-- contact — payload from the source template -->
+<!ELEMENT contact (name, username, phone, module?, status?)>
+<!ELEMENT name EMPTY>
+<!ATTLIST name
+    canonical   CDATA   #REQUIRED
+    alias       CDATA   #IMPLIED
+>
+<!ELEMENT username (#PCDATA)>
+<!ATTLIST username
+    platform    CDATA   #IMPLIED
+>
+<!ELEMENT phone (#PCDATA)>
+<!ATTLIST phone
+    cc          CDATA   #IMPLIED
+    tz          CDATA   #IMPLIED
+>
+<!ELEMENT module (#PCDATA)>
+<!ELEMENT status (#PCDATA)>
+
+<!-- g:lambda — governed execution unit (auth-first) -->
+<!ELEMENT lambda (auth, body)>
+<!ATTLIST lambda
+    args        CDATA   #IMPLIED
+    governed    (true|false) "true"
+>
+<!ELEMENT auth (agent, activity, token?)>
+<!ELEMENT agent EMPTY>
+<!ATTLIST agent ref CDATA #REQUIRED>
+<!ELEMENT activity EMPTY>
+<!ATTLIST activity
+    type        CDATA   #REQUIRED
+    proto       CDATA   #IMPLIED
+>
+<!ELEMENT token EMPTY>
+<!ATTLIST token eval CDATA #IMPLIED>
+<!ELEMENT body (#PCDATA)>
+
+<!-- cal:when — triple-calendar temporal anchor -->
+<!ELEMENT when (gregorian, persian, chinese)>
+<!ATTLIST when
+    london-iso  CDATA   #IMPLIED
+    tz          CDATA   #FIXED   "Europe/London"
+>
+<!ELEMENT gregorian EMPTY>
+<!ATTLIST gregorian
+    year        CDATA   #REQUIRED
+    month       CDATA   #REQUIRED
+    day         CDATA   #REQUIRED
+    iso         CDATA   #IMPLIED
+>
+<!ELEMENT persian EMPTY>
+<!ATTLIST persian
+    year        CDATA   #REQUIRED
+    note        CDATA   #IMPLIED
+>
+<!ELEMENT chinese EMPTY>
+<!ATTLIST chinese
+    sexagenary  CDATA   #REQUIRED
+    animal      CDATA   #IMPLIED
+>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     LOCP  — Location Probe
+     Opcode: LOCP
+     Namespaces: val=urn:singine:schema:validation
+                 soda=urn:singine:soda  nml=urn:singine:nannyml
+                 cal=urn:singine:time:calendar
+     ═══════════════════════════════════════════════════════════════════ -->
+
+<!ELEMENT locp (soap-request, validation, soda-scan, nml-estimate, when)>
+<!ATTLIST locp
+    xmlns           CDATA   #FIXED   "urn:singine:pos:locp"
+    id              CDATA   #REQUIRED
+    generated-at    CDATA   #REQUIRED
+    opcode          CDATA   #FIXED   "LOCP"
+    location        CDATA   #REQUIRED
+    location-urn    CDATA   #REQUIRED
+    subject         CDATA   #IMPLIED
+>
+
+<!ELEMENT soap-request (#PCDATA)>
+<!ATTLIST soap-request
+    subject     CDATA   #REQUIRED
+>
+
+<!ELEMENT validation (rnc-errors?, sch-errors?)>
+<!ATTLIST validation
+    rnc-valid   (true|false) "true"
+    sch-valid   (true|false) "true"
+>
+
+<!ELEMENT rnc-errors (error+)>
+<!ELEMENT sch-errors (error+)>
+<!ELEMENT error (#PCDATA)>
+
+<!ELEMENT soda-scan (soda-stdout)>
+<!ATTLIST soda-scan
+    ok          (true|false) "true"
+    checks      CDATA   #IMPLIED
+    passed      CDATA   #IMPLIED
+    failed      CDATA   #IMPLIED
+    config      CDATA   #IMPLIED
+>
+<!ELEMENT soda-stdout (#PCDATA)>
+
+<!ELEMENT nml-estimate (nml-stdout)>
+<!ATTLIST nml-estimate
+    ok              (true|false) "true"
+    drift-detected  (true|false) "false"
+    features        CDATA   #IMPLIED
+    config          CDATA   #IMPLIED
+>
+<!ELEMENT nml-stdout (#PCDATA)>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     GOVERNED LAMBDA  — auth-first execution unit
+     Never carries inline token data; token is always eval-at-runtime.
+     ═══════════════════════════════════════════════════════════════════ -->
+
+<!ELEMENT governed-lambda (lambda-auth, lambda-body)>
+<!ATTLIST governed-lambda
+    args        CDATA   #REQUIRED
+    governed    (true|false) "true"
+    opcode      CDATA   #IMPLIED
+>
+<!ELEMENT lambda-auth (lambda-agent, lambda-activity)>
+<!ELEMENT lambda-agent EMPTY>
+<!ATTLIST lambda-agent ref CDATA #REQUIRED>
+<!ELEMENT lambda-activity EMPTY>
+<!ATTLIST lambda-activity
+    type        CDATA   #REQUIRED
+    proto       CDATA   #IMPLIED
+>
+<!ELEMENT lambda-body (#PCDATA)>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     SYMBOL INDEX TABLES  — ASCII then Unicode
+     Every char combination must be indexed.
+     ═══════════════════════════════════════════════════════════════════ -->
+
+<!ELEMENT symbol-index (ascii-table, unicode-table)>
+<!ELEMENT ascii-table (char-entry+)>
+<!ELEMENT unicode-table (char-entry+)>
+<!ELEMENT char-entry EMPTY>
+<!ATTLIST char-entry
+    code        CDATA   #REQUIRED
+    char        CDATA   #REQUIRED
+    name        CDATA   #IMPLIED
+    block       CDATA   #IMPLIED
+    lang        CDATA   #IMPLIED
+    country     CDATA   #IMPLIED
+    tz          CDATA   #IMPLIED
+    date        CDATA   #IMPLIED
+    rest        CDATA   #IMPLIED
+>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     REMAINING ELEMENTS (unchanged from root.xml schema)
+     ═══════════════════════════════════════════════════════════════════ -->
+
+<!ELEMENT naming-conventions (pattern+)>
+<!ELEMENT pattern EMPTY>
+<!ATTLIST pattern
+    name        CDATA   #REQUIRED
+    regex       CDATA   #IMPLIED
+    value       CDATA   #IMPLIED
+    default     CDATA   #IMPLIED
+    location    CDATA   #IMPLIED
+    description CDATA   #IMPLIED
+>
+
+<!ELEMENT iceberg-layers (layer+)>
+<!ELEMENT layer EMPTY>
+<!ATTLIST layer
+    name            CDATA   #REQUIRED
+    topic-prefix    CDATA   #REQUIRED
+    format          CDATA   #REQUIRED
+    description     CDATA   #IMPLIED
+>
+
+<!ELEMENT kafka-topics (topic+)>
+<!ELEMENT topic EMPTY>
+<!ATTLIST topic
+    name        CDATA   #REQUIRED
+    partitions  CDATA   #REQUIRED
+    replication CDATA   #REQUIRED
+>
+
+<!ELEMENT db-dialects (dialect+)>
+<!ATTLIST db-dialects default CDATA #IMPLIED>
+<!ELEMENT dialect EMPTY>
+<!ATTLIST dialect
+    name        CDATA   #REQUIRED
+    driver      CDATA   #REQUIRED
+    handler     CDATA   #REQUIRED
+    description CDATA   #IMPLIED
+>

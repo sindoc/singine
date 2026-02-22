@@ -1,0 +1,65 @@
+# soda/singine.yml — SODA Core data quality scan configuration
+# URN: urn:singine:soda:config:v1
+# Topic: singine.pos.location (LOCP opcode output)
+#
+# Install: pip3 install soda-core soda-core-duckdb
+# Run:     soda scan -d singine -c soda/singine.yml
+#
+# Data source: singine SQLite (singine.db) or DuckDB in-memory
+# Phase 1: DuckDB in-memory from CSV / JSON probe results
+# Phase 2: SQLite (CodeTable) or Iceberg (ORC) backend
+
+data_source: singine
+
+checks for locp_probe_results:
+  # LOCP result set must be non-empty
+  - row_count > 0:
+      name: SCH-SODA-001 LOCP probe results non-empty
+
+  # Every result must carry a location URN
+  - missing_count(location_urn) = 0:
+      name: SCH-SODA-002 location_urn must be present
+
+  # Every location URN must match the singine URN pattern
+  - invalid_count(location_urn) = 0:
+      name: SCH-SODA-003 location_urn format valid
+      valid regex: "^urn:singine:location:[A-Z]{2}(:[A-Z0-9]+)?$"
+
+  # No duplicate request IDs in a probe batch
+  - duplicate_count(request_id) = 0:
+      name: SCH-SODA-004 no duplicate request_id
+
+  # SOAP XML must be non-null
+  - missing_count(soap_xml) = 0:
+      name: SCH-SODA-005 soap_xml present
+
+  # RelaxNG validation must pass
+  - invalid_count(rnc_valid) = 0:
+      name: SCH-SODA-006 RelaxNG validation passed
+      valid values: [true]
+
+  # At least one CDN subject per probe session
+  - missing_count(subject) = 0:
+      name: SCH-SODA-007 CDN subject must be specified
+
+checks for reference_data_iata:
+  # IATA code table reference data
+  - row_count > 0:
+      name: SCH-SODA-008 IATA code table non-empty
+  - missing_count(iata_code) = 0:
+      name: SCH-SODA-009 IATA code present
+  - missing_count(country_code) = 0:
+      name: SCH-SODA-010 country code present
+  - invalid_count(country_code) = 0:
+      name: SCH-SODA-011 country code 2-char ISO
+      valid regex: "^[A-Z]{2}$"
+
+checks for reference_data_zip2urn:
+  # Postal code → URN mapping
+  - row_count > 0:
+      name: SCH-SODA-012 zip2urn reference data non-empty
+  - missing_count(urn) = 0:
+      name: SCH-SODA-013 URN must be present
+  - invalid_count(urn) = 0:
+      name: SCH-SODA-014 URN matches singine:location pattern
+      valid regex: "^urn:singine:location:[A-Z]{2}:"

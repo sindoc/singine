@@ -1,0 +1,59 @@
+# nannyml/locp_config.yml — NannyML data drift monitoring for LOCP probes
+# URN: urn:singine:nannyml:config:locp:v1
+# Topic: singine.pos.location
+#
+# Install: pip3 install nannyml
+# Usage (from singine.pos.location/nannyml-estimate!):
+#   nannyml estimate --config nannyml/locp_config.yml
+#
+# NannyML monitors for concept drift and covariate drift in LOCP results.
+# The reference dataset is the first batch of probe results (Phase 1 seed).
+# Analysis dataset is every subsequent probe batch.
+#
+# Column mapping:
+#   timestamp        → probe_timestamp (ISO 8601)
+#   features         → location_urn, subject, soap_status, rnc_valid, sch_valid
+#   predictions      → metadata_complete (boolean — all fields resolved)
+
+problem_type: binary_classification
+
+column_mapping:
+  timestamp: probe_timestamp
+  y_pred: metadata_complete
+  y_pred_proba: metadata_confidence
+  features:
+    - location_urn
+    - subject
+    - soap_status
+    - rnc_valid
+    - sch_valid
+    - soda_passed
+    - iata_resolved
+
+reference_path: nannyml/reference/locp_reference.csv
+analysis_path:  nannyml/analysis/
+
+# Performance estimation (CBPE — Confidence-Based Performance Estimation)
+estimator:
+  type: CBPE
+  metrics:
+    - roc_auc
+    - f1
+  chunk_size: 10
+  confidence_lower_boundary: 0.80
+
+# Univariate drift detection (for each feature)
+univariate_drift:
+  chunk_size: 10
+  methods:
+    - kolmogorov_smirnov   # continuous features
+    - chi2                 # categorical features
+
+# Multivariate drift detection
+multivariate_drift:
+  chunk_size: 10
+  method: pca_reconstruction_error
+
+# Output
+results_path: nannyml/results/
+display_in_logs: true
