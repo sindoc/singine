@@ -1,6 +1,6 @@
 (ns singine.pos.tc-suite-test
   "POS test suite — tc01…tc20 + tc-id01…tc-id05 + tc-form01 + tc-locp01..02
-   + tc-auth01..tc-auth05 + tc-idpr01..tc-idpr02.
+   + tc-auth01..tc-auth05 + tc-idpr01..tc-idpr02 + tc-idnt01..tc-idnt02.
 
    Two-character ASCII IDs for the condition system.
    Mock data generated inline via gen-mock — this IS the data product demo:
@@ -699,6 +699,123 @@
       (is (instance? java.util.Map parsed) "fromJson must return a Map")
       (is (= "skh@singine.local" (.get parsed "sub")) "sub round-trips")
       (is (= "urn:singine:idp" (.get parsed "iss")) "iss round-trips"))))
+
+;; ══════════════════════════════════════════════════════════════════════════════
+;; Phase 2 — IDNT-URN-v1: 1-char / 2-char / 3-char URN lookup + Unicode filter
+;; ══════════════════════════════════════════════════════════════════════════════
+
+(deftest tc-idnt01-lookup-urn-levels
+  (testing "Level 1 — single ASCII character → urn:singine:id:l1:<char>"
+    (is (= "urn:singine:id:l1:A" (idnt/lookup-urn "A")))
+    (is (= "urn:singine:id:l1:B" (idnt/lookup-urn "B")))
+    (is (= "urn:singine:id:l1:z" (idnt/lookup-urn "z")))
+    (is (= "urn:singine:id:l1:0" (idnt/lookup-urn "0")))
+    (is (= "urn:singine:id:l1:!" (idnt/lookup-urn "!")))
+    (is (str/starts-with? (idnt/lookup-urn "A") "urn:singine:id:l1")))
+
+  (testing "Level 2 — two-char ISO 3166 country code → urn:singine:id:l2:<CC>"
+    (is (= "urn:singine:id:l2:BE" (idnt/lookup-urn "BE")))
+    (is (= "urn:singine:id:l2:GB" (idnt/lookup-urn "GB")))
+    (is (= "urn:singine:id:l2:IR" (idnt/lookup-urn "ir")))   ; upcased
+    (is (= "urn:singine:id:l2:US" (idnt/lookup-urn "US")))
+    (is (str/starts-with? (idnt/lookup-urn "NL") "urn:singine:id:l2")))
+
+  (testing "Level 3 — three-char IATA airport code → urn:singine:id:l3:<IATA>"
+    (is (= "urn:singine:id:l3:BRU" (idnt/lookup-urn "BRU")))
+    (is (= "urn:singine:id:l3:LHR" (idnt/lookup-urn "LHR")))
+    (is (= "urn:singine:id:l3:JFK" (idnt/lookup-urn "JFK")))
+    (is (= "urn:singine:id:l3:AMS" (idnt/lookup-urn "ams")))  ; upcased
+    (is (str/starts-with? (idnt/lookup-urn "CDG") "urn:singine:id:l3")))
+
+  (testing "Edge cases — nil, empty, long codes"
+    (is (= "urn:singine:id:nil"   (idnt/lookup-urn nil)))
+    (is (= "urn:singine:id:empty" (idnt/lookup-urn "")))
+    ;; 6-char code → two 3-char segments, joined with ":"
+    (let [urn6 (idnt/lookup-urn "BRULHR")]
+      (is (str/includes? urn6 "BRU"))
+      (is (str/includes? urn6 "LHR"))
+      (is (str/includes? urn6 ":"))))
+
+  (testing "Batch lookup — lookup-urn-batch returns map of code→URN"
+    (let [codes ["A" "BE" "BRU"]
+          batch (idnt/lookup-urn-batch codes)]
+      (is (map? batch))
+      (is (= 3 (count batch)))
+      (is (= "urn:singine:id:l1:A"   (get batch "A")))
+      (is (= "urn:singine:id:l2:BE"  (get batch "BE")))
+      (is (= "urn:singine:id:l3:BRU" (get batch "BRU"))))))
+
+(deftest tc-idnt02-unicode-filter-rule
+  (testing "unicode-block returns expected block names"
+    ;; Latin: A = 0x41
+    (is (= "Latin"    (idnt/unicode-block 0x41)))
+    ;; Greek: Α = 0x0391
+    (is (= "Greek"    (idnt/unicode-block 0x0391)))
+    ;; Cyrillic: А = 0x0410
+    (is (= "Cyrillic" (idnt/unicode-block 0x0410)))
+    ;; Hebrew: א = 0x05D0
+    (is (= "Hebrew"   (idnt/unicode-block 0x05D0)))
+    ;; Arabic: ا = 0x0627
+    (is (= "Arabic"   (idnt/unicode-block 0x0627)))
+    ;; CJK: 中 = 0x4E2D
+    (is (= "CJK"      (idnt/unicode-block 0x4E2D)))
+    ;; Unknown (Emoji range): should be Other
+    (is (= "Other"    (idnt/unicode-block 0x1F600))))
+
+  (testing "unicode-filter-rule — nested lambda (means of combination)"
+    ;; The outer lambda takes an allowed-blocks set and returns the inner lambda
+    (let [in-rule  (idnt/unicode-filter-rule #{"Latin" "Arabic"})
+          out-rule (idnt/unicode-filter-rule #{})]  ; empty set — all out
+      ;; Latin A (0x41) → in
+      (is (true?  (in-rule  0x41)))
+      ;; Arabic ا (0x0627) → in
+      (is (true?  (in-rule  0x0627)))
+      ;; Cyrillic А (0x0410) → not in {"Latin","Arabic"}
+      (is (false? (in-rule  0x0410)))
+      ;; Empty set → everything out
+      (is (false? (out-rule 0x41)))
+      (is (false? (out-rule 0x0627)))))
+
+  (testing "Level-u URN: Unicode char → urn:singine:id:u:<block>:<HEX>"
+    ;; Arabic char ا (U+0627) → in Arabic block → named URN
+    (let [arabic-char "\u0627"
+          urn         (idnt/lookup-urn arabic-char)]
+      (is (str/starts-with? urn "urn:singine:id:u:Arabic:"))
+      (is (str/ends-with?   urn "0627")))
+
+    ;; Emoji 😀 (U+1F600) → block=Other (out-rule) → Other URN
+    (let [emoji-str (str (Character/toChars 0x1F600))
+          ;; only check the first char (code point) if multi-char
+          urn       (idnt/lookup-urn (subs emoji-str 0 1))]
+      (is (str/starts-with? urn "urn:singine:id:")))
+
+    ;; Hebrew aleph (U+05D0)
+    (let [heb-char "\u05D0"
+          urn      (idnt/lookup-urn heb-char)]
+      (is (str/starts-with? urn "urn:singine:id:u:Hebrew:")))
+
+    ;; Cyrillic А (U+0410)
+    (let [cyr-char "\u0410"
+          urn      (idnt/lookup-urn cyr-char)]
+      (is (str/starts-with? urn "urn:singine:id:u:Cyrillic:"))))
+
+  (testing "List comprehension: filter codes by unicode-filter-rule (in-rule)"
+    ;; Classic list comprehension using the nested lambda:
+    ;; (λ codes → (filter ((unicode-filter-rule blocks) ∘ char-cp) codes))
+    (let [codes    ["A" "B" "\u0627" "\u0410" "\u1F600"]  ; mix of ASCII + Unicode
+          in?      (idnt/unicode-filter-rule idnt/unicode-in-blocks)
+          ;; Apply the inner lambda to the codepoint of the first char of each code
+          included (filter (fn [c]
+                             (when (seq c)
+                               (let [cp (int (first c))]
+                                 (if (<= cp 0x7F)
+                                   true    ; ASCII always in level-1
+                                   (in? cp)))))
+                           codes)]
+      ;; A, B are ASCII → in; Arabic U+0627 → in (Arabic block)
+      ;; Cyrillic U+0410 → in (Cyrillic block); \u1F600 is surrogate → skip
+      (is (>= (count included) 3)
+          "At least A, B, Arabic ا should pass the in-rule"))))
 
 ;; ══════════════════════════════════════════════════════════════════════════════
 ;; Bonus: gen-mock is the data product demo

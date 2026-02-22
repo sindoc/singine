@@ -559,6 +559,119 @@
      :available [:idv1 :idv2 :idv3 :idv4 :idv5
                  :idv6 :idv7 :idv8 :idv9 :idv10]}))
 
+;; ── URN lookup: 1-char / 2-char / 3-char + Unicode filter rule ───────────────
+
+;; Unicode block names recognised at level-u (the "in" rule).
+;; Level-u codepoints outside this set are filtered out (the "out" rule).
+;; Public so tests and callers can compose additional filter rules.
+(def unicode-in-blocks
+  #{"Latin" "Arabic" "Cyrillic" "CJK" "Hebrew" "Persian"
+    "Greek" "Devanagari" "Armenian" "Georgian"})
+
+(defn unicode-block
+  "Returns a symbolic block name for a Unicode code-point integer.
+   Covers the major blocks to level-u accuracy.
+   Unknown blocks return \\\"Other\\\"."
+  [cp]
+  (cond
+    ;; Basic Latin + Latin-1 supplement → Latin
+    (or (<= 0x0000 cp 0x024F)
+        (<= 0x1E00 cp 0x1EFF)) "Latin"
+    ;; Greek and Coptic
+    (<= 0x0370 cp 0x03FF)      "Greek"
+    ;; Cyrillic
+    (<= 0x0400 cp 0x04FF)      "Cyrillic"
+    ;; Armenian
+    (<= 0x0530 cp 0x058F)      "Armenian"
+    ;; Hebrew
+    (<= 0x0590 cp 0x05FF)      "Hebrew"
+    ;; Arabic (includes Farsi / Persian glyphs)
+    (or (<= 0x0600 cp 0x06FF)
+        (<= 0xFB50 cp 0xFDFF)
+        (<= 0xFE70 cp 0xFEFF)) "Arabic"
+    ;; Devanagari
+    (<= 0x0900 cp 0x097F)      "Devanagari"
+    ;; Georgian
+    (<= 0x10A0 cp 0x10FF)      "Georgian"
+    ;; CJK Unified Ideographs (core + ext A/B/C/D/E/F + compatibility)
+    (or (<= 0x3400 cp 0x4DBF)
+        (<= 0x4E00 cp 0x9FFF)
+        (<= 0xF900 cp 0xFAFF)
+        (<= 0x20000 cp 0x2A6DF)) "CJK"
+    :else "Other"))
+
+;; Nested lambda — the means of combination (SICP §1.3 / plan Section 2):
+;;   (λ block → (λ codepoint → include?))
+;;
+;; Outer lambda: given a set of allowed blocks, produces an inclusion predicate.
+;; Inner lambda: given a code-point integer, answers whether it is in an
+;;               allowed block (in-rule) or filtered out (out-rule).
+;;
+;; Usage:
+;;   (def in? ((unicode-filter-rule unicode-in-blocks) cp))
+;;
+;; The nested structure is the means of combination:
+;;   unicode-filter-rule  =  λ blocks . (λ cp . (contains? blocks (unicode-block cp)))
+(def unicode-filter-rule
+  (fn [allowed-blocks]
+    (fn [cp]
+      (contains? allowed-blocks (unicode-block cp)))))
+
+(defn- unicode-level-u-urn
+  "Maps a single character (unicode) to a level-u URN.
+   Applies the unicode-filter-rule: codepoints whose block is in
+   unicode-in-blocks get urn:singine:id:u:<block>:<hex-codepoint>;
+   all others get urn:singine:id:u:Other:<hex-codepoint> (the out-rule)."
+  [ch]
+  (let [cp    (int ch)
+        in?   ((unicode-filter-rule unicode-in-blocks) cp)
+        block (if in? (unicode-block cp) "Other")]
+    (str "urn:singine:id:u:" block ":" (format "%04X" cp))))
+
+(defn lookup-urn
+  "Maps a 1-, 2-, or 3-character code to a URN at the appropriate level.
+
+   Level mapping:
+     1-char ASCII (U+0000–U+007F)  → level 1 → urn:singine:id:l1:<char>
+     1-char non-ASCII              → level u  → urn:singine:id:u:<block>:<hex-cp>
+     2-char code                   → level 2  → urn:singine:id:l2:<cc>
+     3-char code                   → level 3  → urn:singine:id:l3:<iata>
+
+   Unicode filter rule (nested lambda, list comprehension):
+     Only codepoints in unicode-in-blocks are given a named block URN;
+     others fall into the \\\"Other\\\" bucket (the out-rule).
+
+   Codes longer than 3 characters are split into 3-char segments, each
+   individually mapped and joined with \\\":\\\".  The empty string returns
+   \\\"urn:singine:id:empty\\\"."
+  [code]
+  (cond
+    (nil? code)    "urn:singine:id:nil"
+    (= "" code)    "urn:singine:id:empty"
+    (= 1 (count code))
+    (let [ch (first code)
+          cp (int ch)]
+      (if (<= cp 0x7F)
+        ;; Level 1: basic ASCII
+        (str "urn:singine:id:l1:" code)
+        ;; Level u: Unicode character with block filter
+        (unicode-level-u-urn ch)))
+    (= 2 (count code)) (str "urn:singine:id:l2:" (str/upper-case code))
+    (= 3 (count code)) (str "urn:singine:id:l3:" (str/upper-case code))
+    ;; Longer than 3: segment into 3-char chunks, recursively map
+    :else
+    (let [segments (map #(apply str %) (partition-all 3 code))]
+      (str/join ":" (map lookup-urn segments)))))
+
+(defn lookup-urn-batch
+  "Applies lookup-urn to a collection of codes.
+   Returns a map of code → URN.
+   Uses the nested lambda (unicode-filter-rule) as the list comprehension:
+     (map (fn [code] [code (lookup-urn code)]) codes)"
+  [codes]
+  (into {}
+    (map (fn [code] [code (lookup-urn code)]) codes)))
+
 ;; ── authenticate! — governed entry point ─────────────────────────────────────
 
 (defn authenticate!
