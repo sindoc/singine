@@ -1,5 +1,6 @@
 (ns singine.pos.tc-suite-test
-  "POS test suite — tc01…tc20 + tc-id01…tc-id05 + tc-form01.
+  "POS test suite — tc01…tc20 + tc-id01…tc-id05 + tc-form01 + tc-locp01..02
+   + tc-auth01..tc-auth05 + tc-idpr01..tc-idpr02.
 
    Two-character ASCII IDs for the condition system.
    Mock data generated inline via gen-mock — this IS the data product demo:
@@ -37,6 +38,9 @@
             [singine.pos.identity    :as idnt]
             [singine.pos.form        :as form]
             [singine.pos.location    :as loc]
+            [singine.pos.idp         :as idp]
+            [singine.net.cacert      :as cacert]
+            [singine.auth.token      :as auth-tok]
             [singine.pos.lambda      :as lam]))
 
 ;; ── Mock data generator ───────────────────────────────────────────────────────
@@ -457,6 +461,244 @@
       ;; Calendars
       (is (map? (:calendars result)) "calendars must be a map")
       (is (some? (get-in result [:calendars :gregorian])) "gregorian calendar present"))))
+
+;; ══════════════════════════════════════════════════════════════════════════════
+;; Phase 8: Auth full — JVM cacert + JWT/JWS + idv6-idv10 + IDPR
+;; ══════════════════════════════════════════════════════════════════════════════
+
+(def ^:private test-auth
+  (lam/make-auth "urn:singine:test:auth" :read))
+
+;; ── tc-auth01: JVM root CA enumeration ───────────────────────────────────────
+
+(deftest tc-auth01-jvm-root-cas
+  (testing "JVM cacerts: list all trusted root CA certificates"
+    ;; Count
+    (let [n (cacert/ca-count)]
+      (is (pos? n) "JVM must have at least 1 trusted root CA")
+      (is (> n 50) (str "JVM should have > 50 trusted CAs, got " n)))
+
+    ;; Path
+    (let [path (cacert/jvm-cacerts-path)]
+      (is (string? path) "cacerts path must be a string")
+      (is (str/includes? path "cacerts") "path must contain 'cacerts'"))
+
+    ;; Entries
+    (let [cas (cacert/list-jvm-root-cas)]
+      (is (vector? cas) "list-jvm-root-cas must return a vector")
+      (let [first-ca (first cas)]
+        (is (map? first-ca) "each CA must be a map")
+        (is (contains? first-ca :alias) "CA must have :alias")
+        (is (contains? first-ca :urn) "CA must have :urn")
+        (is (contains? first-ca :subject-dn) "CA must have :subject-dn")
+        (is (contains? first-ca :sha256) "CA must have :sha256")
+        (is (contains? first-ca :key-algo) "CA must have :key-algo")
+        (is (str/starts-with? (:urn first-ca) "urn:singine:ca:")
+            "CA URN must start with urn:singine:ca:")
+        (is (= 64 (count (:sha256 first-ca)))
+            "SHA-256 fingerprint must be 64 hex chars")))))
+
+;; ── tc-auth02: HS256 JWT sign + verify ───────────────────────────────────────
+
+(deftest tc-auth02-hs256-jwt
+  (testing "JWT HS256: sign, decode, verify"
+    (let [secret "singine-test-secret-key"
+          claims {:sub "skh@singine.local"
+                  :name "Sh. Kh. Heshmati"
+                  :roles ["admin" "data-steward"]}
+          {:keys [token exp jti sid]} (auth-tok/mint-hs256-token!
+                                        secret claims 3600)]
+      ;; Token structure
+      (is (string? token) "token must be a string")
+      (is (= 3 (count (str/split token #"\.")))
+          "JWT must have 3 parts (header.payload.signature)")
+      (is (pos? exp) "exp must be positive")
+      (is (string? jti) "jti must be a string")
+      (is (uuid? (java.util.UUID/fromString jti)) "jti must be a valid UUID")
+      (is (str/starts-with? sid "urn:singine:session:")
+          "sid must start with urn:singine:session:")
+
+      ;; Decode without verification
+      (let [{:keys [ok claims header]} (auth-tok/decode-token token)]
+        (is ok "decode must succeed")
+        (is (= "HS256" (:alg header)) "header must declare HS256")
+        (is (= "JWT" (:typ header)) "header must declare JWT type")
+        (is (= "skh@singine.local" (:sub claims)) "sub must match")
+        (is (= "urn:singine:idp" (:iss claims)) "iss must be singine IdP URN"))
+
+      ;; Verify with correct secret
+      (let [{:keys [ok claims error]} (auth-tok/verify-hs256-token secret token)]
+        (is ok (str "verify must succeed, error: " error))
+        (is (= "skh@singine.local" (:sub claims)) "sub preserved after verify"))
+
+      ;; Verify with wrong secret should fail
+      (let [{:keys [ok error]} (auth-tok/verify-hs256-token "wrong-secret" token)]
+        (is (not ok) "wrong secret must fail verification")
+        (is (string? error) "error message must be a string")))))
+
+;; ── tc-auth03: idv6–idv10 dry-run variants ───────────────────────────────────
+
+(deftest tc-auth03-idv6-to-idv10-dry-run
+  (testing "Identity variants idv6-idv10 (dry-run)"
+    ;; idv6: Okta OIDC
+    (let [r (idnt/okta-token! {:dry-run true :okta-domain "dev-00000000.okta.com"})]
+      (is (true? (:ok r)) "idv6 dry-run must succeed")
+      (is (= :idv6 (:provider r)) "provider must be :idv6")
+      (is (= 6 (:dim r)) "dim must be 6")
+      (is (map? (:endpoints r)) "endpoints must be a map")
+      (is (contains? (:endpoints r) :token_endpoint) "endpoints must have token_endpoint")
+      (is (str/starts-with? (:discovery-url r) "https://") "discovery URL must be HTTPS"))
+
+    ;; idv7: Collibra LDAP
+    (let [r (idnt/collibra-ldap! {:dry-run true})]
+      (is (true? (:ok r)) "idv7 dry-run must succeed")
+      (is (= :idv7 (:provider r)) "provider must be :idv7")
+      (is (= 7 (:dim r)) "dim must be 7")
+      (is (string? (:stdout r)) "stdout must be a string")
+      (is (str/includes? (:stdout r) "collibra") "stdout must mention collibra"))
+
+    ;; idv8: Active Directory
+    (let [r (idnt/active-directory! {:dry-run true})]
+      (is (true? (:ok r)) "idv8 dry-run must succeed")
+      (is (= :idv8 (:provider r)) "provider must be :idv8")
+      (is (= 8 (:dim r)) "dim must be 8")
+      (is (str/includes? (:stdout r) "sAMAccountName") "stdout must have AD attribute"))
+
+    ;; idv9: MCP Identity
+    (let [r (idnt/mcp-identity! {:dry-run true})]
+      (is (true? (:ok r)) "idv9 dry-run must succeed")
+      (is (= :idv9 (:provider r)) "provider must be :idv9")
+      (is (= 9 (:dim r)) "dim must be 9")
+      (is (string? (:token r)) "MCP token must be a string")
+      (is (= "MCP-Bearer" (:token-type r)) "token type must be MCP-Bearer")
+      (is (vector? (:scopes r)) "scopes must be a vector"))
+
+    ;; idv10: SMTP/IMAP probe
+    (let [r (idnt/imap-probe! {:dry-run true})]
+      (is (true? (:ok r)) "idv10 dry-run must succeed")
+      (is (= :idv10 (:provider r)) "provider must be :idv10")
+      (is (= 10 (:dim r)) "dim must be 10")
+      (is (map? (:smtp r)) "smtp must be a map")
+      (is (map? (:imap r)) "imap must be a map")
+      (is (true? (:session-ready r)) "session-ready must be true in dry-run"))))
+
+;; ── tc-auth04: identity-dispatch! extended variants ──────────────────────────
+
+(deftest tc-auth04-identity-dispatch-extended
+  (testing "identity-dispatch! routes idv6-idv10 correctly"
+    (doseq [[variant expected-provider expected-dim]
+            [[:idv6 :idv6 6]
+             [:idv7 :idv7 7]
+             [:idv8 :idv8 8]
+             [:idv9 :idv9 9]
+             [:idv10 :idv10 10]]]
+      (let [r (idnt/identity-dispatch! variant {:dry-run true})]
+        (is (true? (:ok r))
+            (str variant " dispatch must succeed"))
+        (is (= expected-provider (:provider r))
+            (str variant " provider mismatch"))
+        (is (= expected-dim (:dim r))
+            (str variant " dim must be " expected-dim))
+        (is (map? (:calendars r))
+            (str variant " must include calendars"))))
+
+    ;; Unknown variant
+    (let [r (idnt/identity-dispatch! :idv99 {})]
+      (is (false? (:ok r)) "unknown variant must fail")
+      (is (string? (:error r)) "error message required")
+      (is (vector? (:available r)) "must list available variants")
+      (is (= 10 (count (:available r))) "must list all 10 variants"))))
+
+;; ── tc-auth05: IDPR opcode — discovery + CA audit ────────────────────────────
+
+(deftest tc-auth05-idpr-opcode
+  (testing "IDPR opcode: discovery document and CA audit"
+    ;; OIDC discovery document
+    (let [discovery (idp/discovery-document)]
+      (is (map? discovery) "discovery must be a map")
+      (is (contains? discovery :issuer) "must have :issuer")
+      (is (contains? discovery :authorization_endpoint) "must have :authorization_endpoint")
+      (is (contains? discovery :token_endpoint) "must have :token_endpoint")
+      (is (contains? discovery :jwks_uri) "must have :jwks_uri")
+      (is (contains? discovery :scopes_supported) "must have :scopes_supported")
+      (is (contains? (set (:scopes_supported discovery)) "file:read")
+          "scopes must include file:read")
+      (is (contains? (set (:scopes_supported discovery)) "openid")
+          "scopes must include openid")
+      (is (contains? (set (:id_token_signing_alg_values_supported discovery)) "RS256")
+          "must support RS256"))
+
+    ;; CA audit via governed idpr!
+    (let [result ((idp/idpr! test-auth :ca-report {}))]
+      (is (true? (:ok result)) "IDPR :ca-report must succeed")
+      (is (pos? (:ca-count result)) "must find at least 1 CA")
+      (is (string? (:jvm-path result)) "jvm-path must be a string")
+      (is (sequential? (:cas result)) "cas must be sequential")
+      (is (pos? (count (:cas result))) "cas must be non-empty")
+      (is (every? #(contains? % :urn) (:cas result))
+          "every CA entry must have :urn"))
+
+    ;; HS256 file-access token (no key generation needed)
+    (let [result ((idp/idp-token!
+                    test-auth
+                    {"sub" "skh@singine.local"}
+                    {:algo        :hs256
+                     :secret      "singine-idpr-test"
+                     :ttl-seconds 300
+                     :file-path   "/Users/skh/private/test.txt"
+                     :perm        :read}))]
+      (is (true? (:ok result)) "file-access token must succeed")
+      (is (string? (:token result)) "token must be a string")
+      (is (= "hs256" (:algo result)) "algo must be hs256")
+      (is (= "/Users/skh/private/test.txt" (:file-path result)) "file-path preserved")
+      (is (= "read" (:perm result)) "perm must be read")
+      (is (= "urn:singine:resource:file" (:aud result)) "aud must be file resource URN")
+
+      ;; Verify the token
+      (let [verify-result ((idp/verify-file-token!
+                             test-auth
+                             (:token result)
+                             "singine-idpr-test"
+                             {:algo :hs256}))]
+        (is (true? (:ok verify-result)) "token verification must succeed")
+        (is (= "/Users/skh/private/test.txt" (:path verify-result)) "path preserved")
+        (is (= "read" (:perm verify-result)) "perm preserved")))))
+
+;; ── tc-idpr01: IDPR opcode governed entry ────────────────────────────────────
+
+(deftest tc-idpr01-idpr-governed
+  (testing "IDPR governed entry point via idpr!"
+    ;; :discover operation
+    (let [thunk  (idp/idpr! test-auth :discover {})
+          result (thunk)]
+      (is (true? (:ok result)) ":discover must succeed")
+      (is (map? (:discovery result)) "discovery doc must be a map")
+      (is (contains? (:discovery result) :token_endpoint)
+          "discovery must have token_endpoint"))
+
+    ;; Unknown op
+    (let [thunk  (idp/idpr! test-auth :unknown-op {})
+          result (thunk)]
+      (is (false? (:ok result)) "unknown op must fail")
+      (is (string? (:error result)) "error message required"))))
+
+;; ── tc-idpr02: JwsToken JSON helpers ─────────────────────────────────────────
+
+(deftest tc-idpr02-jwstoken-json
+  (testing "JwsToken JSON serialiser/deserialiser round-trip"
+    (let [claims {"sub"  "skh@singine.local"
+                  "name" "Sh. Kh. Heshmati"
+                  "exp"  9999999999
+                  "iss"  "urn:singine:idp"}
+          json   (singine.auth.JwsToken/toJson (auth-tok/claims->java claims))
+          parsed (singine.auth.JwsToken/fromJson json)]
+      (is (string? json) "toJson must return a string")
+      (is (str/starts-with? json "{") "JSON must start with {")
+      (is (str/ends-with? json "}") "JSON must end with }")
+      (is (str/includes? json "singine:idp") "JSON must contain issuer URN")
+      (is (instance? java.util.Map parsed) "fromJson must return a Map")
+      (is (= "skh@singine.local" (.get parsed "sub")) "sub round-trips")
+      (is (= "urn:singine:idp" (.get parsed "iss")) "iss round-trips"))))
 
 ;; ══════════════════════════════════════════════════════════════════════════════
 ;; Bonus: gen-mock is the data product demo

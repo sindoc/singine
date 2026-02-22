@@ -248,6 +248,12 @@
               :handler "singine.pos.location/probe!"
               :collibra-domain "singine.POS" :status "active"
               :description "Location probe: IATA/postal→URN, SOAP 1.2 request, RelaxNG+Schematron validation, SODA scan, NannyML drift."})
+   (asset-el {:opcode "IDPR" :name "IdentityProvider"
+              :command "singine pos idpr"
+              :kafka-topic "singine.pos.idp"
+              :handler "singine.pos.idp/idpr!"
+              :collibra-domain "singine.Auth" :status "active"
+              :description "Self-hosted OIDC IdP: RSA-4096 key pair, JWT/JWS issuance (RS256/HS256), JVM cacert audit, private-network file-access tokens."})
 
    ;; extra assets (caller-supplied)
    (into [:snap-pipeline {:opcode "SNAP" :urn "urn:singine:snap:pipeline"}]
