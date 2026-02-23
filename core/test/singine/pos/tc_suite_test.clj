@@ -1,7 +1,8 @@
 (ns singine.pos.tc-suite-test
   "POS test suite — tc01…tc20 + tc-id01…tc-id05 + tc-form01 + tc-locp01..02
    + tc-auth01..tc-auth05 + tc-idpr01..tc-idpr02 + tc-idnt01..tc-idnt02
-   + tc-mime01..tc-mime07 + tc-mandate01..tc-mandate07.
+   + tc-mime01..tc-mime07 + tc-mandate01..tc-mandate07
+   + tc-mail01..tc-mail05.
 
    Two-character ASCII IDs for the condition system.
    Mock data generated inline via gen-mock — this IS the data product demo:
@@ -43,6 +44,7 @@
             [singine.net.cacert      :as cacert]
             [singine.auth.token      :as auth-tok]
             [singine.lang.mime       :as mime]
+            [singine.net.mail        :as mail]
             [singine.pos.lambda      :as lam]))
 
 ;; ── Mock data generator ───────────────────────────────────────────────────────
@@ -1016,3 +1018,81 @@
       ;; MIME routing covers all three routes
       (let [routes (set (map #(catc/mime-route (:mime-type %)) contracts))]
         (is (= #{:lookup :link :binary} routes))))))
+
+;; ══════════════════════════════════════════════════════════════════════════════
+;; tc-mail01..tc-mail05 — MAIL opcode: SMTP send + IMAP search/fetch + git-snap
+;; All tests use :dry-run true — no network connection required.
+;; ══════════════════════════════════════════════════════════════════════════════
+
+(def ^:private mail-opts
+  "Shared dry-run mail config for all tc-mail tests."
+  {:imap-host "localhost" :imap-port 993 :imap-tls true
+   :smtp-host "localhost" :smtp-port 587 :smtp-tls false
+   :user "test@localhost" :pass "test-pass"
+   :folder "INBOX" :dry-run true})
+
+;; test-auth is already defined above (via lam/make-auth) — reused here.
+
+(deftest tc-mail01-search-dry-run
+  (testing "MAIL :search — governed dry-run returns synthetic UIDs"
+    (let [thunk  (mail/search! test-auth (assoc mail-opts :search "invoice"))
+          result (thunk)]
+      (is (true? (:ok result)))
+      (is (vector? (:uids result)))
+      (is (pos? (count (:uids result))))
+      (is (= "INBOX" (:folder result)))
+      (is (= "invoice" (:search result)))
+      (is (map? (:time result))))))
+
+(deftest tc-mail02-fetch-dry-run
+  (testing "MAIL :fetch — governed dry-run returns XML mail-batch envelope"
+    (let [thunk  (mail/fetch! test-auth (assoc mail-opts :uids ["1001" "1002"]))
+          result (thunk)]
+      (is (true? (:ok result)))
+      (is (string? (:xml result)))
+      (is (str/starts-with? (:xml result) "<?xml"))
+      (is (str/includes? (:xml result) "mail-batch"))
+      (is (= 2 (:uid-count result)))
+      (is (= "application/xml" (or (:mime result) "application/xml"))))))
+
+(deftest tc-mail03-send-dry-run
+  (testing "MAIL :send — governed dry-run SMTP send returns :ok"
+    (let [opts  (assoc mail-opts
+                       :from "test@localhost"
+                       :to "recipient@localhost"
+                       :subject "Singine Test Mail"
+                       :body "This is a dry-run test message from Singine.")
+          thunk  (mail/send! test-auth opts)
+          result (thunk)]
+      (is (true? (:ok result)))
+      (is (map? (:time result))))))
+
+(deftest tc-mail04-git-snap-dry-run
+  (testing "MAIL :snap — governed dry-run produces files map + commit message"
+    (let [opts   (assoc mail-opts :search "report" :max 2 :base-dir "/tmp/singine-mail-test")
+          thunk  (mail/git-snap! test-auth opts)
+          result (thunk)]
+      (is (true? (:ok result)))
+      (is (map? (:files result)))
+      (is (string? (:commit-msg result)))
+      (is (str/starts-with? (:commit-msg result) "mail: snapshot"))
+      (is (str/includes? (:commit-msg result) "INBOX"))
+      (is (number? (:uid-count result))))))
+
+(deftest tc-mail05-mail-dispatcher
+  (testing "MAIL opcode top-level dispatcher routes :search + :fetch"
+    ;; :search dispatch
+    (let [thunk  (mail/mail! test-auth :search (assoc mail-opts :search "contract"))
+          result (thunk)]
+      (is (true? (:ok result)))
+      (is (vector? (:uids result))))
+    ;; :fetch dispatch
+    (let [thunk  (mail/mail! test-auth :fetch (assoc mail-opts :uids ["9001"]))
+          result (thunk)]
+      (is (true? (:ok result)))
+      (is (string? (:xml result))))
+    ;; unknown op
+    (let [thunk  (mail/mail! test-auth :unknown-op {})
+          result (thunk)]
+      (is (false? (:ok result)))
+      (is (string? (:error result))))))
