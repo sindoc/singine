@@ -1,6 +1,7 @@
 (ns singine.pos.tc-suite-test
   "POS test suite — tc01…tc20 + tc-id01…tc-id05 + tc-form01 + tc-locp01..02
-   + tc-auth01..tc-auth05 + tc-idpr01..tc-idpr02 + tc-idnt01..tc-idnt02.
+   + tc-auth01..tc-auth05 + tc-idpr01..tc-idpr02 + tc-idnt01..tc-idnt02
+   + tc-mime01..tc-mime07 + tc-mandate01..tc-mandate07.
 
    Two-character ASCII IDs for the condition system.
    Mock data generated inline via gen-mock — this IS the data product demo:
@@ -41,6 +42,7 @@
             [singine.pos.idp         :as idp]
             [singine.net.cacert      :as cacert]
             [singine.auth.token      :as auth-tok]
+            [singine.lang.mime       :as mime]
             [singine.pos.lambda      :as lam]))
 
 ;; ── Mock data generator ───────────────────────────────────────────────────────
@@ -816,6 +818,79 @@
       ;; Cyrillic U+0410 → in (Cyrillic block); \u1F600 is surrogate → skip
       (is (>= (count included) 3)
           "At least A, B, Arabic ا should pass the in-rule"))))
+
+;; ══════════════════════════════════════════════════════════════════════════════
+;; Sub-phase A — MIME-REG-v1: canonical MIME registry
+;; ══════════════════════════════════════════════════════════════════════════════
+
+(deftest tc-mime01-lookup
+  (testing "MIME lookup by extension — canonical types"
+    (is (= "application/rdf+xml"                (mime/lookup "rdf")))
+    (is (= "application/rdf+xml"                (mime/lookup "RDF")))  ; case-insensitive
+    (is (= "text/turtle"                        (mime/lookup "ttl")))
+    (is (= "application/json"                   (mime/lookup "json")))
+    (is (= "application/sparql-query"           (mime/lookup "sparql")))
+    (is (= "application/xml"                    (mime/lookup "xml")))
+    (is (= "application/x-parquet"             (mime/lookup "parquet")))
+    (is (= "application/zip"                    (mime/lookup "zip")))))
+
+(deftest tc-mime02-lookup-sindoc
+  (testing "Singine vendor MIME types"
+    (is (= "application/vnd.singine.sindoc+xml" (mime/lookup "sindoc")))
+    (is (= "application/vnd.singine.sindoc+xml" (mime/lookup "sin")))
+    (is (= "application/vnd.urfm+xml"           (mime/lookup "urfm")))
+    (is (= "application/atom+xml"               (mime/lookup "atom")))
+    (is (= "application/rss+xml"                (mime/lookup "rss")))))
+
+(deftest tc-mime03-route-link
+  (testing "RDF / graph content routes to :link"
+    (is (= :link (mime/route "application/rdf+xml")))
+    (is (= :link (mime/route "text/turtle")))
+    (is (= :link (mime/route "application/ld+json")))
+    (is (= :link (mime/route "application/sparql-query")))
+    (is (= :link (mime/route "application/vnd.urfm+xml")))
+    (is (= :link (mime/route "application/n-triples")))))
+
+(deftest tc-mime04-route-binary
+  (testing "Binary / archive / image content routes to :binary"
+    (is (= :binary (mime/route "application/x-parquet")))
+    (is (= :binary (mime/route "application/zip")))
+    (is (= :binary (mime/route "application/gzip")))
+    (is (= :binary (mime/route "application/pdf")))
+    (is (= :binary (mime/route "image/png")))
+    (is (= :binary (mime/route "image/jpeg")))
+    (is (= :binary (mime/route "video/mp4")))))
+
+(deftest tc-mime05-route-lookup
+  (testing "Text and application/* routes to :lookup"
+    (is (= :lookup (mime/route "application/json")))
+    (is (= :lookup (mime/route "application/xml")))
+    (is (= :lookup (mime/route "text/plain")))
+    (is (= :lookup (mime/route "text/csv")))
+    (is (= :lookup (mime/route "text/html")))
+    (is (= :lookup (mime/route "application/yaml")))
+    (is (= :lookup (mime/route "application/vnd.singine.sindoc+xml")))))
+
+(deftest tc-mime06-unambiguous
+  (testing "Known extensions are unambiguous (each maps to exactly one MIME)"
+    (is (true?  (mime/unambiguous? "xml")))
+    (is (true?  (mime/unambiguous? "json")))
+    (is (true?  (mime/unambiguous? "rdf")))
+    (is (true?  (mime/unambiguous? "sindoc")))
+    (is (false? (mime/unambiguous? "xyz")))   ; unknown
+    (is (false? (mime/unambiguous? "")))))    ; empty
+
+(deftest tc-mime07-unknown-ext
+  (testing "Unknown extensions fall back to application/octet-stream"
+    (is (= "application/octet-stream" (mime/lookup "xyz")))
+    (is (= "application/octet-stream" (mime/lookup "")))
+    (is (= "application/octet-stream" (mime/lookup nil)))
+    ;; mime-for-path convenience
+    (is (= "application/rdf+xml" (mime/mime-for-path "/some/path/file.rdf")))
+    (is (= "application/octet-stream" (mime/mime-for-path "/no-extension")))
+    ;; content-type adds charset for text/*
+    (is (= "text/plain; charset=UTF-8" (mime/content-type "text/plain")))
+    (is (= "application/json" (mime/content-type "application/json")))))
 
 ;; ══════════════════════════════════════════════════════════════════════════════
 ;; Bonus: gen-mock is the data product demo
