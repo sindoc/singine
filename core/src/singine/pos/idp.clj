@@ -48,7 +48,8 @@
             [singine.net.cacert   :as ca]
             [singine.meta.genx    :as genx]
             [clojure.java.io      :as io]
-            [clojure.string       :as str])
+            [clojure.string       :as str]
+            [clojure.data.json    :as json])
   (:import [singine.auth CertAuthority JwsToken]
            [java.security KeyPair PrivateKey PublicKey]
            [java.io StringWriter File]
@@ -354,21 +355,170 @@
              :reason (.getMessage e)
              :time   (select-keys t [:iso :path])}))))))
 
+;; ── Two-stream mandate: Hoffman legitimacy contract ──────────────────────────
+;;
+;; Principle: if two independent input streams address the same topic, the system
+;; has legitimate grounds to issue an execution mandate valid for a time window.
+;; This mirrors the Bitcoin consensus principle: majority agreement about the
+;; existence of a fact makes it canonical. The `[[t/1]]` Logseq/singine topic
+;; anchor is the canonicalised topic URI: urn:singine:topic:t/1.
+;;
+;; The mandate JWT carries:
+;;   sub      = urn:singine:mandate:<topic>
+;;   topic    = <topic-urn>
+;;   streams  = JSON array of stream URNs
+;;   perm     = "execute"
+;;   aud      = "urn:singine:execution"
+;;   exp      = now + mandate-duration-seconds
+;;
+;; Token validity = until exp OR legitimacy check fails (row-stochastic invariant
+;; in singine.consciousness.markov — external check, not encoded in JWT itself).
+
+(defn extract-topic
+  "Extract the topic URN from a manifest string.
+
+   Recognises two forms:
+     1. Logseq topic link: [[t/1]] → 'urn:singine:topic:t/1'
+     2. Explicit URN: urn:singine:topic:<suffix>
+
+   Returns the first recognised topic URN, or nil if none found."
+  [manifest-str]
+  (let [s (or manifest-str "")]
+    (or
+      ;; Form 1: [[t/<suffix>]] Logseq notation
+      (when-let [m (re-find #"\[\[t/([^\]]+)\]\]" s)]
+        (str "urn:singine:topic:t/" (second m)))
+      ;; Form 2: explicit URN
+      (when-let [m (re-find #"urn:singine:topic:[^\s\"<\]]+" s)]
+        m))))
+
+(defn streams-same-topic?
+  "Returns true if both stream content strings contain the same topic URN.
+
+   stream-a, stream-b — strings (BLKP manifest output, raw sindoc, or any text
+                         carrying a topic anchor)
+
+   The topic anchor is either [[t/1]] (Logseq notation) or
+   urn:singine:topic:... (explicit URN form).
+
+   Both streams must resolve to the same non-nil topic for this to return true."
+  [stream-a stream-b]
+  (let [topic-a (extract-topic stream-a)
+        topic-b (extract-topic stream-b)]
+    (and (some? topic-a)
+         (some? topic-b)
+         (= topic-a topic-b))))
+
+(defn topic-mandate!
+  "Governed: issue an execution mandate JWT for two streams addressing the same topic.
+
+   auth    — govern auth token
+   streams — seq of [stream-urn content-string] pairs (minimum 2 required)
+   opts    — map:
+     :mandate-duration-seconds  how long the mandate is valid (default 3600)
+     :algo                      :hs256 (default) | :rs256
+     :secret                    HMAC secret string (for :hs256)
+     :private-key               java.security.PrivateKey (for :rs256)
+
+   Returns a governed zero-arg thunk. On call:
+     {:ok               true
+      :mandate-token    JWT string
+      :topic            topic-urn
+      :streams          [stream-urn ...]
+      :mandate-duration seconds
+      :exp              epoch-seconds
+      :jti              token-id
+      :time             {:iso ... :path ...}}
+
+     OR on topic mismatch:
+     {:ok    false
+      :reason \"streams do not address the same topic — no matching topic anchor\"
+      :time   {...}}"
+  [auth streams opts]
+  (lam/govern auth
+    (fn [t]
+      (let [duration (get opts :mandate-duration-seconds 3600)
+            algo     (get opts :algo :hs256)
+            secret   (get opts :secret "singine-mandate-default-secret")
+
+            ;; Validate at least two streams provided
+            _ (when (< (count streams) 2)
+                (throw (IllegalArgumentException.
+                         "topic-mandate! requires at least 2 streams")))
+
+            ;; Extract stream URNs and content strings
+            stream-urns     (map first streams)
+            stream-contents (map second streams)
+            content-a       (first stream-contents)
+            content-b       (second stream-contents)
+
+            ;; Check that both streams share a topic
+            same?           (streams-same-topic? content-a content-b)
+            shared-topic    (when same? (extract-topic content-a))]
+
+        (if-not same?
+          {:ok     false
+           :reason "streams do not address the same topic — no matching [[t/1]] or urn:singine:topic: anchor found in both streams"
+           :time   (select-keys t [:iso :path])}
+
+          ;; Issue mandate JWT
+          (let [claims {"sub"     (str "urn:singine:mandate:" shared-topic)
+                        "topic"   shared-topic
+                        "streams" (json/write-str (vec stream-urns))
+                        "perm"    "execute"
+                        "aud"     "urn:singine:execution"}]
+            (case algo
+              :hs256
+              (let [result (tok/mint-hs256-token! secret claims duration)]
+                {:ok               true
+                 :mandate-token    (:token result)
+                 :topic            shared-topic
+                 :streams          (vec stream-urns)
+                 :mandate-duration duration
+                 :exp              (:exp result)
+                 :jti              (:jti result)
+                 :time             (select-keys t [:iso :path])})
+
+              :rs256
+              (let [pk ^PrivateKey (:private-key opts)]
+                (when-not pk
+                  (throw (IllegalArgumentException.
+                           "RS256 topic-mandate! requires :private-key in opts")))
+                (let [java-claims (tok/claims->java claims)
+                      token-str   (JwsToken/signRS256 pk java-claims (long duration))
+                      decoded     (tok/java->claims (JwsToken/decode token-str))]
+                  {:ok               true
+                   :mandate-token    token-str
+                   :topic            shared-topic
+                   :streams          (vec stream-urns)
+                   :mandate-duration duration
+                   :exp              (get decoded "exp" 0)
+                   :jti              (get decoded "jti" "")
+                   :time             (select-keys t [:iso :path])}))
+
+              ;; unknown algo
+              {:ok    false
+               :reason (str "Unknown algo: " algo ". Use :hs256 or :rs256")
+               :time  (select-keys t [:iso :path])})))))))
+
 ;; ── IDPR governed entry point ─────────────────────────────────────────────────
 
 (defn idpr!
   "Governed IDPR entry point — dispatches IdP operations.
 
    auth — govern auth token
-   op   — :discover | :keypair | :token | :verify | :file | :ca-report
+   op   — :discover | :keypair | :token | :verify | :file | :ca-report | :topic-mandate
    opts — operation-specific options
 
-   :discover → returns OIDC discovery document
-   :keypair  → generates RSA-4096 key pair
-   :token    → issues a JWT (general or file-access)
-   :verify   → verifies a JWT
-   :file     → reads a file after JWT verification
-   :ca-report → lists all JVM trusted root CAs
+   :discover      → returns OIDC discovery document
+   :keypair       → generates RSA-4096 key pair
+   :token         → issues a JWT (general or file-access)
+   :verify        → verifies a JWT
+   :file          → reads a file after JWT verification
+   :ca-report     → lists all JVM trusted root CAs
+   :topic-mandate → issues a two-stream execution mandate JWT (Hoffman legitimacy contract)
+                    opts: :streams (seq of [urn content] pairs), :mandate-duration-seconds,
+                          :algo :hs256|:rs256, :secret
 
    Returns governed result."
   [auth op opts]
@@ -394,6 +544,11 @@
                     :jvm-path (ca/jvm-cacerts-path)
                     :cas      (take 10 (ca/list-jvm-root-cas)) ; first 10 for brevity
                     :time     (select-keys t [:iso :path])}
+        :topic-mandate
+        (let [streams       (get opts :streams [])
+              mandate-opts  (dissoc opts :streams)]
+          ;; Delegate to topic-mandate! and immediately invoke the thunk
+          ((topic-mandate! auth streams mandate-opts)))
         {:ok false :error (str "Unknown op: " op
-                               ". Use :discover :keypair :token :verify :file :ca-report")
+                               ". Use :discover :keypair :token :verify :file :ca-report :topic-mandate")
          :time (select-keys t [:iso :path])}))))

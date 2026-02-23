@@ -820,6 +820,108 @@
           "At least A, B, Arabic ا should pass the in-rule"))))
 
 ;; ══════════════════════════════════════════════════════════════════════════════
+;; Sub-phase F — MANDATE-v1: two-stream topic mandate (Hoffman legitimacy contract)
+;; ══════════════════════════════════════════════════════════════════════════════
+
+(deftest tc-mandate01-extract-topic
+  (testing "extract-topic from Logseq [[t/1]] notation"
+    (is (= "urn:singine:topic:t/1"
+           (idp/extract-topic "A document about [[t/1]] in the singine platform")))
+    (is (= "urn:singine:topic:t/release"
+           (idp/extract-topic "See [[t/release]] for details")))
+    (is (nil? (idp/extract-topic "No topic here")))
+    (is (nil? (idp/extract-topic nil)))
+    (is (nil? (idp/extract-topic "")))))
+
+(deftest tc-mandate02-extract-urn
+  (testing "extract-topic from explicit urn:singine:topic: URN"
+    (is (= "urn:singine:topic:t/1"
+           (idp/extract-topic "The topic is urn:singine:topic:t/1 and more text")))
+    (is (= "urn:singine:topic:auth"
+           (idp/extract-topic "urn:singine:topic:auth is authoritative")))))
+
+(deftest tc-mandate03-same-topic
+  (testing "streams-same-topic? true when both carry the same topic"
+    (let [stream-a "BLKP output: [[t/1]] platform data lineage"
+          stream-b "CATC output: [[t/1]] entity resolution complete"]
+      (is (true? (idp/streams-same-topic? stream-a stream-b))))
+    ;; Also works with explicit URN form
+    (let [s1 "urn:singine:topic:t/1 manifest-a"
+          s2 "urn:singine:topic:t/1 manifest-b"]
+      (is (true? (idp/streams-same-topic? s1 s2))))))
+
+(deftest tc-mandate04-diff-topic
+  (testing "streams-same-topic? false when topics differ or are missing"
+    ;; One stream missing topic
+    (let [stream-a "[[t/1]] present"
+          stream-b "no topic here"]
+      (is (false? (idp/streams-same-topic? stream-a stream-b))))
+    ;; Different topics
+    (let [stream-a "[[t/1]] topic one"
+          stream-b "[[t/2]] topic two"]
+      (is (false? (idp/streams-same-topic? stream-a stream-b))))
+    ;; Both nil
+    (is (false? (idp/streams-same-topic? nil nil)))))
+
+(deftest tc-mandate05-issue-mandate
+  (testing "topic-mandate! issues a valid HS256 mandate JWT for two matching streams"
+    (let [streams [["urn:singine:stream:blkp:001"
+                    "BLKP manifest: [[t/1]] platform data governance"]
+                   ["urn:singine:stream:catc:001"
+                    "CATC output: [[t/1]] entity resolution activated"]]
+          thunk   (idp/topic-mandate!
+                    test-auth streams
+                    {:mandate-duration-seconds 1800
+                     :algo :hs256
+                     :secret "singine-mandate-test"})
+          result  (thunk)]
+      (is (true? (:ok result)) "mandate must succeed")
+      (is (string? (:mandate-token result)) "mandate-token must be a string")
+      (is (= "urn:singine:topic:t/1" (:topic result)) "topic must be t/1")
+      (is (= 2 (count (:streams result))) "both stream URNs preserved")
+      (is (= 1800 (:mandate-duration result)) "duration preserved")
+      (is (pos? (:exp result)) ":exp must be a positive epoch-second")
+      (is (string? (:jti result)) ":jti must be a string"))))
+
+(deftest tc-mandate06-mandate-via-idpr
+  (testing "IDPR :topic-mandate dispatches correctly"
+    (let [streams [["urn:singine:stream:a" "document [[t/1]] stream one"]
+                   ["urn:singine:stream:b" "document [[t/1]] stream two"]]
+          thunk   (idp/idpr! test-auth :topic-mandate
+                             {:streams  streams
+                              :mandate-duration-seconds 600
+                              :algo     :hs256
+                              :secret   "singine-idpr-mandate"})
+          result  (thunk)]
+      (is (true? (:ok result)) "IDPR :topic-mandate must succeed")
+      (is (string? (:mandate-token result)) "token must be present")
+      (is (= "urn:singine:topic:t/1" (:topic result)))
+      ;; Mismatch case — IDPR :topic-mandate returns :ok false
+      (let [bad-streams [["urn:singine:stream:x" "no topic here"]
+                         ["urn:singine:stream:y" "also no topic"]]
+            bad-result  ((idp/idpr! test-auth :topic-mandate
+                                    {:streams  bad-streams
+                                     :algo     :hs256
+                                     :secret   "singine-idpr-mandate"}))]
+        (is (false? (:ok bad-result)) "mismatched streams must fail")
+        (is (string? (:reason bad-result)) "reason must be present")))))
+
+(deftest tc-mandate07-token-exp
+  (testing ":exp in mandate is a future epoch-second"
+    (let [streams [["urn:singine:stream:t1" "[[t/1]] test stream one"]
+                   ["urn:singine:stream:t2" "[[t/1]] test stream two"]]
+          result  ((idp/topic-mandate!
+                     test-auth streams
+                     {:mandate-duration-seconds 3600
+                      :algo :hs256
+                      :secret "exp-test-secret"}))]
+      (is (true? (:ok result)))
+      (let [now-epoch (quot (System/currentTimeMillis) 1000)
+            exp       (:exp result)]
+        (is (> exp now-epoch) ":exp must be in the future")
+        (is (< exp (+ now-epoch 4000)) ":exp should be within ~3600s from now")))))
+
+;; ══════════════════════════════════════════════════════════════════════════════
 ;; Sub-phase A — MIME-REG-v1: canonical MIME registry
 ;; ══════════════════════════════════════════════════════════════════════════════
 
