@@ -1,0 +1,48 @@
+{;; singine trust inventory — version-controlled, fully transparent
+ ;; Managed by: singine cap trust export | singine cap trust register-ssh
+ ;; Principle: minimal trust — only what is absolutely needed per device.
+ ;;
+ ;; This file is the human-readable counterpart to ~/.singine/singine.jks
+ ;; Every entry here has a corresponding alias in the JVM KeyStore.
+ ;;
+ ;; Populate with: singine cap trust export
+
+ :version      "0.3.0"
+ :generated-at "2026-02-23"
+ :principle    "minimal — one SSH key pair per machine, one TLS root CA"
+
+ :entries
+ [{:alias       "singine-root-ca"
+   :type        :trusted-cert
+   :key-type    "X.509 / RSA-4096"
+   :subject     "CN=Singine Root CA, O=Singine, C=BE"
+   :fingerprint "TODO:sha256:generate-with-CertAuthority.generateKeyPair"
+   :valid-from  "2026-02-23"
+   :valid-until "2031-02-23"
+   :purpose     "TLS between singine-edge nodes (HTTPS on port 8080)"
+   :required-by ["singine-edge" "singine-mail"]
+   :devices     [:imac-vafa :singine-edge]}
+
+  {:alias       "singine-identity-attar"
+   :type        :ssh-pubkey-wrapped-x509
+   :key-type    "RSA-2048 (from ssh-rsa)"
+   :subject     "CN=attar@iMacVafa, O=singine"
+   :fingerprint "TODO:sha256:run-singine-cap-trust-register-ssh"
+   :machine     "iMacVafa"
+   :user        "attar"
+   :urn         "urn:singine:machine:imac-vafa:attar"
+   :purpose     "JWT RS256 signing + machine identity proof (primary auth)"
+   :required-by ["all-devices"]
+   :devices     [:imac-vafa :ipad-ish :iphone-ashell :android-s8]}]
+
+ ;; JVM root CAs audit (populated by: singine cap trust audit)
+ ;; Run: singine cap trust audit > ~/.singine/jvm-root-cas.edn
+ :jvm-root-cas-audit nil
+
+ ;; Active root CAs per device (populated by: singine cap trust minimal <device>)
+ :minimal-trust-per-device
+ {:imac-vafa     ["singine-root-ca" "singine-identity-attar"]
+  :ipad-ish      ["singine-identity-attar"]
+  :iphone-ashell ["singine-identity-attar"]
+  :android-s8    ["singine-identity-attar"]
+  :singine-edge  ["singine-root-ca" "singine-edge-key"]}}

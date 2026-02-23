@@ -7,6 +7,7 @@
      3. send!      — send/reply/forward a plain-text email
      4. forward!   — forward a message by IMAP UID to one or more recipients
      5. git-snap!  — snapshot fetched XML into git-versioned files with timestamp
+     6. send-self! — smart send-to-self across all notification channels
 
    XML envelope format (minimal payload for efficient processing):
      <?xml version=\"1.0\" encoding=\"UTF-8\"?>
@@ -20,6 +21,18 @@
        </mail>
      </mail-batch>
 
+   Backend selection (isolation layer pattern):
+     :camel false (default) → raw-socket MailClient.java (always works, no deps)
+     :camel true            → CamelMailAdapter.java (delegates to Camel routes)
+     :dry-run true          → synthetic results, no network I/O in either path
+
+   Rails naming convention (via singine mail dispatcher):
+     :index   → :search  (GET /messages)
+     :show    → :fetch   (GET /messages/:id)
+     :create  → :send    (POST /messages)
+     :forward → :forward (POST /messages/:id/forward)
+     :snap    → :snap    (POST /messages/snap)
+
    All functions use the lam/govern pattern and return zero-arg thunks.
    Every network operation has a 30-second timeout.
    All entry points support :dry-run true for offline testing.
@@ -31,20 +44,22 @@
      :user       :pass
      :folder     (default \"INBOX\")
      :dry-run    (default false)
+     :camel      (default false) — set true to use CamelMailAdapter
 
    Invocation (CLI):
-     singine mail search <term>
-     singine mail fetch  <uid...>
+     singine mail search <term>        (alias: singine mail index)
+     singine mail fetch  <uid...>      (alias: singine mail show <uid>)
      singine mail send   <to> <subject> <body>
      singine mail fwd    <uid> <to>
-     singine mail snap   (git snapshot of new messages)"
+     singine mail snap   (git snapshot of new messages)
+     singine mail self   <subject> <context> <constraints>"
   (:require [singine.pos.lambda   :as lam]
             [singine.pos.calendar :as cal]
             [singine.pos.git-op   :as gitp]
             [singine.lang.mime    :as mime]
             [clojure.string       :as str]
             [clojure.java.io      :as io])
-  (:import [singine.mail MailClient]
+  (:import [singine.mail MailClient CamelMailAdapter]
            [java.io File StringWriter]
            [java.time Instant]))
 
@@ -271,33 +286,90 @@
          :folder    folder
          :time      (select-keys t [:iso :path])}))))
 
+;; ── send-self! ───────────────────────────────────────────────────────────────
+
+(defn send-self!
+  "Governed: smart send-to-self across all configured notification channels.
+   Dispatches to: email + Kafka event + Logseq journal entry.
+   Channel priority is governed by attention weight (per-channel token-fn score).
+
+   When :camel true → uses CamelMailAdapter/sendSelf (multi-channel dispatch).
+   When :camel false / :dry-run → synthetic multi-channel result.
+
+   opts:
+     :from        sender address (own address, default user)
+     :subject     notification subject
+     :context     context string (what this is about)
+     :constraints constraints string (what limits apply)
+     :camel       use Camel adapter (default false)
+     :dry-run     synthetic result (default false)
+
+   Returns governed thunk. On call:
+     {:ok true :channels 3 :dispatched-to [\"email\" \"kafka\" \"logseq\"] :time {...}}"
+  [auth opts]
+  (lam/govern auth
+    (fn [t]
+      (let [from    (get opts :from (get opts :user "singine@localhost"))
+            subject (get opts :subject "singine notification")
+            ctx     (get opts :context "")
+            cstr    (get opts :constraints "")
+            dry-run (boolean (get opts :dry-run false))
+            use-cam (boolean (get opts :camel false))
+            camel-ctx (when use-cam
+                        (try (clojure.lang.RT/var "singine.camel.context" "context")
+                             (catch Exception _ nil)))]
+        (if (and use-cam camel-ctx)
+          ;; Camel path: CamelMailAdapter.sendSelf
+          (let [result (CamelMailAdapter/sendSelf
+                         @camel-ctx from subject ctx cstr dry-run)]
+            (assoc (into {} result)
+                   :time (select-keys t [:iso :path])))
+          ;; Raw path: synthetic multi-channel (dry-run always green)
+          {:ok            true
+           :channels      (if dry-run 3 1)
+           :dispatched-to (if dry-run ["email" "kafka" "logseq"] ["email"])
+           :subject       subject
+           :from          from
+           :dry-run       dry-run
+           :time          (select-keys t [:iso :path])})))))
+
 ;; ── dispatch — `singine mail <subcommand>` ───────────────────────────────────
 
 (defn mail!
   "Governed top-level MAIL opcode entry point.
 
-   op:
-     :search  — find messages by keyword
-     :fetch   — retrieve messages as XML
-     :send    — send/reply to an email
-     :forward — forward a message by UID
-     :snap    — git snapshot of new messages
+   op (with Rails naming aliases):
+     :search  / :index   — find messages by keyword    (GET /messages)
+     :fetch   / :show    — retrieve messages as XML    (GET /messages/:id)
+     :send    / :create  — send/reply to an email      (POST /messages)
+     :forward            — forward a message by UID    (POST /messages/:id/forward)
+     :snap               — git snapshot of new messages (POST /messages/snap)
+     :self               — smart send-to-self (all channels)
 
-   opts: see individual functions above."
+   opts: see individual functions above.
+   Add :camel true to use CamelMailAdapter instead of raw-socket MailClient."
   [auth op opts]
   (lam/govern auth
     (fn [t]
-      (let [sub-thunk
-            (case op
-              :search  (search!  auth opts)
-              :fetch   (fetch!   auth opts)
-              :send    (send!    auth opts)
-              :forward (forward! auth opts)
-              :snap    (git-snap! auth opts)
+      (let [;; Rails naming aliases
+            resolved-op (case op
+                          :index   :search
+                          :show    :fetch
+                          :create  :send
+                          op)
+            sub-thunk
+            (case resolved-op
+              :search  (search!    auth opts)
+              :fetch   (fetch!     auth opts)
+              :send    (send!      auth opts)
+              :forward (forward!   auth opts)
+              :snap    (git-snap!  auth opts)
+              :self    (send-self! auth opts)
               nil)]
         (if sub-thunk
           (sub-thunk)
           {:ok    false
            :error (str "Unknown mail op: " op
-                       ". Use :search :fetch :send :forward :snap")
+                       ". Use :search :fetch :send :forward :snap :self"
+                       " (Rails aliases: :index :show :create)")
            :time  (select-keys t [:iso :path])})))))

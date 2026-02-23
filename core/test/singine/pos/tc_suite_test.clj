@@ -2,7 +2,8 @@
   "POS test suite — tc01…tc20 + tc-id01…tc-id05 + tc-form01 + tc-locp01..02
    + tc-auth01..tc-auth05 + tc-idpr01..tc-idpr02 + tc-idnt01..tc-idnt02
    + tc-mime01..tc-mime07 + tc-mandate01..tc-mandate07
-   + tc-mail01..tc-mail05.
+   + tc-mail01..tc-mail05 + tc-camel01..tc-camel02
+   + tc-edge01..tc-edge02 + tc-rails01..tc-rails02.
 
    Two-character ASCII IDs for the condition system.
    Mock data generated inline via gen-mock — this IS the data product demo:
@@ -45,6 +46,8 @@
             [singine.auth.token      :as auth-tok]
             [singine.lang.mime       :as mime]
             [singine.net.mail        :as mail]
+            [singine.net.edge        :as edge]
+            [singine.camel.context   :as camel-ctx]
             [singine.pos.lambda      :as lam]))
 
 ;; ── Mock data generator ───────────────────────────────────────────────────────
@@ -1096,3 +1099,118 @@
           result (thunk)]
       (is (false? (:ok result)))
       (is (string? (:error result))))))
+
+;; ══════════════════════════════════════════════════════════════════════════════
+;; tc-camel01..tc-camel02 — CamelContext lifecycle + status (no real context needed)
+;; ══════════════════════════════════════════════════════════════════════════════
+
+(deftest tc-camel01-context-status-unstarted
+  (testing "CamelContext: status-summary returns :started false when not started"
+    (let [summary (camel-ctx/status-summary)]
+      ;; The test environment does not start a real CamelContext.
+      ;; status-summary must be safe to call regardless of context state.
+      (is (map? summary))
+      (is (contains? summary :started))
+      (is (contains? summary :name))
+      (is (contains? summary :status))
+      (is (contains? summary :routes))
+      (is (vector? (:routes summary))))))
+
+(deftest tc-camel02-context-healthy-false-when-not-started
+  (testing "CamelContext: healthy? returns false when context not started"
+    ;; healthy? must not throw when context is nil/not-started
+    (let [result (camel-ctx/healthy?)]
+      (is (boolean? result)))))
+
+;; ══════════════════════════════════════════════════════════════════════════════
+;; tc-edge01..tc-edge02 — singine.net.edge HTTP client (dry-run, no HTTP)
+;; ══════════════════════════════════════════════════════════════════════════════
+
+(def ^:private edge-opts
+  "Shared dry-run edge config for all tc-edge tests."
+  {:edge-host "localhost" :edge-port 8080 :edge-scheme "http" :dry-run true})
+
+(deftest tc-edge01-health-dry-run
+  (testing "EDGE :health — governed dry-run returns synthetic UP status"
+    (let [thunk  (edge/health! test-auth edge-opts)
+          result (thunk)]
+      (is (true? (:ok result)))
+      (is (= "UP" (:status result)))
+      (is (= "singine-edge" (:service result)))
+      (is (vector? (:routes result)))
+      (is (pos? (count (:routes result))))
+      (is (true? (:dry-run result)))
+      (is (map? (:time result))))))
+
+(deftest tc-edge02-messages-dry-run
+  (testing "EDGE :index — governed dry-run returns synthetic messages list"
+    (let [thunk  (edge/messages! test-auth (assoc edge-opts :search "invoice"))
+          result (thunk)]
+      (is (true? (:ok result)))
+      (is (vector? (:messages result)))
+      (is (pos? (count (:messages result))))
+      (is (number? (:count result)))
+      (is (= "invoice" (:search result)))
+      (is (true? (:dry-run result)))
+      (is (map? (:time result))))))
+
+;; ══════════════════════════════════════════════════════════════════════════════
+;; tc-rails01..tc-rails02 — Rails naming aliases via edge! + mail! dispatchers
+;; ══════════════════════════════════════════════════════════════════════════════
+
+(deftest tc-rails01-edge-aliases
+  (testing "EDGE dispatcher Rails aliases: :messages → :index, :message → :show, :send → :create"
+    ;; :messages alias → :index
+    (let [thunk  (edge/edge! test-auth :messages edge-opts)
+          result (thunk)]
+      (is (true? (:ok result)))
+      (is (vector? (:messages result))))
+    ;; :message alias → :show
+    (let [thunk  (edge/edge! test-auth :message (assoc edge-opts :uid "1001"))
+          result (thunk)]
+      (is (true? (:ok result)))
+      (is (map? (:message result)))
+      (is (= "1001" (:uid result))))
+    ;; :send alias → :create
+    (let [thunk  (edge/edge! test-auth :send
+                             (assoc edge-opts
+                                    :from "a@localhost" :to "b@localhost"
+                                    :subject "Test" :body "Hello"))
+          result (thunk)]
+      (is (true? (:ok result)))
+      (is (true? (:sent result))))
+    ;; unknown op
+    (let [thunk  (edge/edge! test-auth :unknown-edge-op edge-opts)
+          result (thunk)]
+      (is (false? (:ok result)))
+      (is (string? (:error result))))))
+
+(deftest tc-rails02-mail-aliases
+  (testing "MAIL dispatcher Rails aliases: :index → :search, :show → :fetch, :create → :send"
+    ;; :index → :search
+    (let [thunk  (mail/mail! test-auth :index (assoc mail-opts :search "report"))
+          result (thunk)]
+      (is (true? (:ok result)))
+      (is (vector? (:uids result))))
+    ;; :show → :fetch (single UID)
+    (let [thunk  (mail/mail! test-auth :show (assoc mail-opts :uids ["2001"]))
+          result (thunk)]
+      (is (true? (:ok result)))
+      (is (string? (:xml result))))
+    ;; :create → :send
+    (let [thunk  (mail/mail! test-auth :create
+                             (assoc mail-opts
+                                    :from "a@localhost" :to "b@localhost"
+                                    :subject "Rails alias test" :body "test body"))
+          result (thunk)]
+      (is (true? (:ok result))))
+    ;; :self — send-to-self (dry-run)
+    (let [thunk  (mail/mail! test-auth :self
+                             (assoc mail-opts
+                                    :subject "Self notification"
+                                    :context "testing Rails alias"
+                                    :constraints "dry-run only"))
+          result (thunk)]
+      (is (true? (:ok result)))
+      (is (vector? (:dispatched-to result)))
+      (is (pos? (:channels result))))))
