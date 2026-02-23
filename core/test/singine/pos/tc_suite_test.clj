@@ -3,7 +3,8 @@
    + tc-auth01..tc-auth05 + tc-idpr01..tc-idpr02 + tc-idnt01..tc-idnt02
    + tc-mime01..tc-mime07 + tc-mandate01..tc-mandate07
    + tc-mail01..tc-mail05 + tc-camel01..tc-camel02
-   + tc-edge01..tc-edge02 + tc-rails01..tc-rails02.
+   + tc-edge01..tc-edge02 + tc-rails01..tc-rails02
+   + tc-broker01..tc-broker02 + tc-trust01..tc-trust02.
 
    Two-character ASCII IDs for the condition system.
    Mock data generated inline via gen-mock — this IS the data product demo:
@@ -48,6 +49,8 @@
             [singine.net.mail        :as mail]
             [singine.net.edge        :as edge]
             [singine.camel.context   :as camel-ctx]
+            [singine.broker.core     :as broker]
+            [singine.sec.trust       :as trust]
             [singine.pos.lambda      :as lam]))
 
 ;; ── Mock data generator ───────────────────────────────────────────────────────
@@ -1214,3 +1217,65 @@
       (is (true? (:ok result)))
       (is (vector? (:dispatched-to result)))
       (is (pos? (:channels result))))))
+
+;; ══════════════════════════════════════════════════════════════════════════════
+;; tc-broker01..tc-broker02 — dual broker (Kafka + RabbitMQ) dry-run publish
+;; ══════════════════════════════════════════════════════════════════════════════
+
+(deftest tc-broker01-kafka-publish-dry-run
+  (testing "BROKER :publish :kafka — dry-run returns synthetic ACK with checksum"
+    (let [thunk  (broker/publish! test-auth
+                                  {:broker   :kafka
+                                   :topic    :inbound-email
+                                   :body     "{\"event\":\"test\",\"uid\":\"1001\"}"
+                                   :dry-run  true})
+          result (thunk)]
+      (is (true? (:ok result)))
+      (is (= :kafka (:broker result)))
+      (is (string? (:destination result)))
+      (is (str/includes? (:destination result) "singine"))
+      (is (string? (:message-id result)))
+      (is (string? (:checksum result)))
+      (is (true? (:dry-run result)))
+      (is (map? (:time result))))))
+
+(deftest tc-broker02-rabbitmq-consume-dry-run
+  (testing "BROKER :consume :rabbitmq — dry-run returns synthetic message"
+    (let [thunk  (broker/consume! test-auth
+                                  {:broker      :rabbitmq
+                                   :queue       "singine.transforms.ocr"
+                                   :timeout-ms  1000
+                                   :dry-run     true})
+          result (thunk)]
+      (is (true? (:ok result)))
+      (is (= :rabbitmq (:broker result)))
+      (is (string? (:body result)))
+      (is (string? (:message-id result)))
+      (is (string? (:checksum result)))
+      (is (true? (:dry-run result)))
+      (is (map? (:time result))))))
+
+;; ══════════════════════════════════════════════════════════════════════════════
+;; tc-trust01..tc-trust02 — trust store management (dry-run)
+;; ══════════════════════════════════════════════════════════════════════════════
+
+(deftest tc-trust01-register-ssh-pubkey-dry-run
+  (testing "TRUST :register-ssh — dry-run describes action without I/O"
+    (let [thunk  (trust/register-ssh-pubkey! test-auth {:dry-run true})
+          result (thunk)]
+      (is (true? (:ok result)))
+      (is (true? (:dry-run result)))
+      (is (string? (:alias result)))
+      (is (string? (:urn result)))
+      (is (str/includes? (:urn result) "singine:machine"))
+      (is (map? (:time result))))))
+
+(deftest tc-trust02-minimal-trust-mail-caps
+  (testing "TRUST :minimal — mail-only device needs only identity cert"
+    (let [thunk  (trust/minimal-trust! test-auth [:mail :cli :python])
+          result (thunk)]
+      (is (map? result))
+      (is (contains? result :caps))
+      (is (contains? result :required-aliases))
+      (is (contains? (set (:required-aliases result)) "singine-identity-attar"))
+      (is (map? (:time result))))))
