@@ -1,0 +1,435 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  singine-mail.xml — DocBook 5 source for the singine-mail man page
+  =================================================================
+  This is the single source of truth for all singine mail documentation.
+  From this file, the following outputs can be generated:
+
+    Man page:  xsltproc --nonet docbook-xsl/manpages/docbook.xsl singine-mail.xml
+    HTML:      xsltproc --nonet docbook-xsl/html/docbook.xsl singine-mail.xml
+    PDF/TeX:   dblatex singine-mail.xml
+    RDF/XML:   xsltproc --nonet singine-docbook2rdf.xsl singine-mail.xml
+    Singine:   singine urfm --nl "list all releases in singine-mail"
+
+  URN: urn:singine:doc:mail:man:1
+  MIME: application/docbook+xml
+  Opcode: MAIL
+  Author: Sina K. Heshmati <singine@localhost>
+-->
+<!DOCTYPE refentry PUBLIC
+  "-//OASIS//DTD DocBook XML V4.5//EN"
+  "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd">
+
+<refentry xmlns="http://docbook.org/ns/docbook"
+          xmlns:xl="http://www.w3.org/1999/xlink"
+          xmlns:xi="http://www.w3.org/2001/XInclude"
+          xmlns:s="urn:singine:include"
+          xmlns:dc="http://purl.org/dc/elements/1.1/"
+          xmlns:urfm="http://purl.org/urfm/"
+          xml:lang="en"
+          version="5.0">
+
+  <!-- ── Dublin Core metadata ─────────────────────────────────────────────── -->
+  <info>
+    <dc:title>singine-mail</dc:title>
+    <dc:creator>Sina K. Heshmati</dc:creator>
+    <dc:date>2026-02-23</dc:date>
+    <dc:format>application/docbook+xml</dc:format>
+    <dc:identifier>urn:singine:doc:mail:man:1</dc:identifier>
+    <dc:subject>SMTP send, IMAP4 search, fetch, forward, git snapshot</dc:subject>
+    <dc:description>singine mail — governed SMTP send and IMAP4 search/fetch/forward opcode</dc:description>
+    <dc:language>en</dc:language>
+    <dc:rights>Copyright 2026 Sina K. Heshmati. All rights reserved.</dc:rights>
+    <!-- URFM release metadata -->
+    <urfm:Release rdf:about="urn:singine:doc:mail:man:1">
+      <dc:format>application/docbook+xml</dc:format>
+    </urfm:Release>
+  </info>
+
+  <!-- ── refmeta (man page header) ────────────────────────────────────────── -->
+  <refmeta>
+    <refentrytitle>singine-mail</refentrytitle>
+    <manvolnum>1</manvolnum>
+    <refmiscinfo class="source">Singine Platform</refmiscinfo>
+    <refmiscinfo class="version">1.0.0</refmiscinfo>
+    <refmiscinfo class="manual">Singine User Commands</refmiscinfo>
+  </refmeta>
+
+  <!-- ── NAME ─────────────────────────────────────────────────────────────── -->
+  <refnamediv>
+    <refname>singine-mail</refname>
+    <refpurpose>
+      Governed SMTP send and IMAP4 search, fetch, forward, and git snapshot
+      for the Singine platform.
+    </refpurpose>
+  </refnamediv>
+
+  <!-- ── SYNOPSIS ──────────────────────────────────────────────────────────── -->
+  <refsynopsisdiv>
+    <title>Synopsis</title>
+    <cmdsynopsis>
+      <command>singine mail</command>
+      <group choice="req">
+        <arg choice="plain">search</arg>
+        <arg choice="plain">fetch</arg>
+        <arg choice="plain">send</arg>
+        <arg choice="plain">fwd</arg>
+        <arg choice="plain">snap</arg>
+      </group>
+      <arg rep="repeat"><replaceable>options</replaceable></arg>
+    </cmdsynopsis>
+
+    <cmdsynopsis>
+      <command>singine mail search</command>
+      <arg choice="req"><replaceable>term</replaceable></arg>
+      <arg><option>--folder</option> <replaceable>FOLDER</replaceable></arg>
+      <arg><option>--max</option> <replaceable>N</replaceable></arg>
+    </cmdsynopsis>
+
+    <cmdsynopsis>
+      <command>singine mail fetch</command>
+      <arg choice="req" rep="repeat"><replaceable>uid</replaceable></arg>
+      <arg><option>--folder</option> <replaceable>FOLDER</replaceable></arg>
+    </cmdsynopsis>
+
+    <cmdsynopsis>
+      <command>singine mail send</command>
+      <arg choice="req"><option>--to</option> <replaceable>ADDRESS</replaceable></arg>
+      <arg choice="req"><option>--subject</option> <replaceable>SUBJECT</replaceable></arg>
+      <arg choice="req"><option>--body</option> <replaceable>TEXT</replaceable></arg>
+      <arg><option>--from</option> <replaceable>ADDRESS</replaceable></arg>
+    </cmdsynopsis>
+
+    <cmdsynopsis>
+      <command>singine mail fwd</command>
+      <arg choice="req"><replaceable>uid</replaceable></arg>
+      <arg choice="req"><option>--to</option> <replaceable>ADDRESS</replaceable></arg>
+      <arg><option>--folder</option> <replaceable>FOLDER</replaceable></arg>
+    </cmdsynopsis>
+
+    <cmdsynopsis>
+      <command>singine mail snap</command>
+      <arg><option>--search</option> <replaceable>term</replaceable></arg>
+      <arg><option>--max</option> <replaceable>N</replaceable></arg>
+      <arg><option>--base-dir</option> <replaceable>PATH</replaceable></arg>
+    </cmdsynopsis>
+  </refsynopsisdiv>
+
+  <!-- ── DESCRIPTION ───────────────────────────────────────────────────────── -->
+  <refsect1>
+    <title>Description</title>
+    <para>
+      <command>singine mail</command> is the MAIL opcode of the Singine governed
+      lambda engine. It provides five subcommands for interacting with SMTP and
+      IMAP4rev1 mail servers:
+    </para>
+
+    <orderedlist>
+      <listitem>
+        <para>
+          <emphasis role="bold">search</emphasis> — find messages by keyword
+          matched against sender, subject, and body fields.
+        </para>
+      </listitem>
+      <listitem>
+        <para>
+          <emphasis role="bold">fetch</emphasis> — retrieve one or more messages
+          by IMAP UID and return them as compact XML envelopes
+          (<literal>urn:singine:mail</literal> namespace).
+        </para>
+      </listitem>
+      <listitem>
+        <para>
+          <emphasis role="bold">send</emphasis> — send a plain-text email via
+          SMTP (ESMTP AUTH LOGIN). Supports reply and forward workflows.
+        </para>
+      </listitem>
+      <listitem>
+        <para>
+          <emphasis role="bold">fwd</emphasis> — forward a message by IMAP UID
+          to one or more recipients. The subject is prefixed with
+          <literal>Fwd:</literal>.
+        </para>
+      </listitem>
+      <listitem>
+        <para>
+          <emphasis role="bold">snap</emphasis> — snapshot the mailbox into
+          git-versioned <filename>.eml.xml</filename> files under
+          <filename>mail/&lt;folder&gt;/&lt;uid&gt;.eml.xml</filename>.
+          Generates a commit message with URN-tagged UIDs and an ISO timestamp.
+        </para>
+      </listitem>
+    </orderedlist>
+
+    <para>
+      All subcommands follow the singine governed lambda pattern: they return
+      zero-arg thunks wrapping the operation. Every network operation has a
+      30-second timeout. Dry-run mode is supported for offline testing.
+    </para>
+
+    <para>
+      The underlying implementation (<classname>MailClient.java</classname>) uses
+      raw TCP sockets and the JDK 11+ standard library only — no
+      <literal>javax.mail</literal> dependency is required.
+    </para>
+  </refsect1>
+
+  <!-- ── XML ENVELOPE FORMAT ───────────────────────────────────────────────── -->
+  <refsect1>
+    <title>XML Envelope Format</title>
+    <para>
+      Fetched messages are returned as a compact XML envelope:
+    </para>
+    <programlisting language="xml"><![CDATA[<?xml version="1.0" encoding="UTF-8"?>
+<mail-batch xmlns="urn:singine:mail" count="2">
+  <mail uid="1001" folder="INBOX">
+    <from>sender@example.com</from>
+    <to>me@example.com</to>
+    <subject>Invoice #42</subject>
+    <date>Mon, 23 Feb 2026 12:00:00 +0000</date>
+    <body-preview>First 256 chars of body…</body-preview>
+  </mail>
+  <mail uid="1002" folder="INBOX">
+    …
+  </mail>
+</mail-batch>]]></programlisting>
+
+    <para>
+      Each <literal>&lt;mail&gt;</literal> element carries exactly five fields —
+      the minimum payload for efficient event-driven processing. The full body is
+      not fetched by default. Git-snap files are stored as
+      <filename>mail/INBOX/1001.eml.xml</filename>.
+    </para>
+  </refsect1>
+
+  <!-- ── OPTIONS ───────────────────────────────────────────────────────────── -->
+  <refsect1>
+    <title>Options</title>
+    <variablelist>
+      <varlistentry>
+        <term><option>--imap-host</option> <replaceable>HOST</replaceable></term>
+        <listitem><para>IMAP server hostname. Default: <literal>localhost</literal>.</para></listitem>
+      </varlistentry>
+      <varlistentry>
+        <term><option>--imap-port</option> <replaceable>PORT</replaceable></term>
+        <listitem><para>IMAP server port. Default: <literal>993</literal>.</para></listitem>
+      </varlistentry>
+      <varlistentry>
+        <term><option>--imap-tls</option></term>
+        <listitem><para>Use TLS for IMAP. Default: <literal>true</literal>.</para></listitem>
+      </varlistentry>
+      <varlistentry>
+        <term><option>--smtp-host</option> <replaceable>HOST</replaceable></term>
+        <listitem><para>SMTP server hostname. Default: <literal>localhost</literal>.</para></listitem>
+      </varlistentry>
+      <varlistentry>
+        <term><option>--smtp-port</option> <replaceable>PORT</replaceable></term>
+        <listitem><para>SMTP server port. Default: <literal>587</literal>.</para></listitem>
+      </varlistentry>
+      <varlistentry>
+        <term><option>--smtp-tls</option></term>
+        <listitem><para>Use STARTTLS for SMTP submission. Default: <literal>false</literal>.</para></listitem>
+      </varlistentry>
+      <varlistentry>
+        <term><option>--user</option> <replaceable>USER</replaceable></term>
+        <listitem><para>IMAP/SMTP username.</para></listitem>
+      </varlistentry>
+      <varlistentry>
+        <term><option>--pass</option> <replaceable>PASS</replaceable></term>
+        <listitem><para>IMAP/SMTP password.</para></listitem>
+      </varlistentry>
+      <varlistentry>
+        <term><option>--folder</option> <replaceable>FOLDER</replaceable></term>
+        <listitem><para>IMAP folder to search or fetch from. Default: <literal>INBOX</literal>.</para></listitem>
+      </varlistentry>
+      <varlistentry>
+        <term><option>--search</option> <replaceable>TERM</replaceable></term>
+        <listitem><para>Keyword to search for in sender, subject, or body.</para></listitem>
+      </varlistentry>
+      <varlistentry>
+        <term><option>--max</option> <replaceable>N</replaceable></term>
+        <listitem><para>Maximum results to return. Default: <literal>20</literal> (search), <literal>10</literal> (snap).</para></listitem>
+      </varlistentry>
+      <varlistentry>
+        <term><option>--base-dir</option> <replaceable>PATH</replaceable></term>
+        <listitem><para>Base directory for git-snap output files. Default: <literal>mail</literal>.</para></listitem>
+      </varlistentry>
+      <varlistentry>
+        <term><option>--from</option> <replaceable>ADDRESS</replaceable></term>
+        <listitem><para>Sender address for <command>send</command> and <command>fwd</command>. Defaults to <option>--user</option>.</para></listitem>
+      </varlistentry>
+      <varlistentry>
+        <term><option>--to</option> <replaceable>ADDRESS</replaceable></term>
+        <listitem><para>Recipient address for <command>send</command> and <command>fwd</command>.</para></listitem>
+      </varlistentry>
+      <varlistentry>
+        <term><option>--subject</option> <replaceable>SUBJECT</replaceable></term>
+        <listitem><para>Message subject for <command>send</command>.</para></listitem>
+      </varlistentry>
+      <varlistentry>
+        <term><option>--body</option> <replaceable>TEXT</replaceable></term>
+        <listitem><para>Plain-text message body for <command>send</command>.</para></listitem>
+      </varlistentry>
+      <varlistentry>
+        <term><option>--dry-run</option></term>
+        <listitem><para>Return synthetic results without connecting to any server. For testing.</para></listitem>
+      </varlistentry>
+    </variablelist>
+  </refsect1>
+
+  <!-- ── EXAMPLES ──────────────────────────────────────────────────────────── -->
+  <refsect1>
+    <title>Examples</title>
+
+    <refsect2>
+      <title>Search for invoices in INBOX</title>
+      <screen><![CDATA[singine mail search invoice --max 5]]></screen>
+      <para>Returns up to 5 IMAP UIDs matching <literal>invoice</literal>.</para>
+    </refsect2>
+
+    <refsect2>
+      <title>Fetch messages by UID as XML</title>
+      <screen><![CDATA[singine mail fetch 1001 1002 1003 --folder INBOX]]></screen>
+      <para>Prints the <literal>mail-batch</literal> XML envelope to stdout.</para>
+    </refsect2>
+
+    <refsect2>
+      <title>Send an email</title>
+      <screen><![CDATA[singine mail send \
+  --to recipient@example.com \
+  --subject "Singine report" \
+  --body "Please find the attached data governance report."]]></screen>
+    </refsect2>
+
+    <refsect2>
+      <title>Forward a message to another address</title>
+      <screen><![CDATA[singine mail fwd 1001 --to manager@example.com]]></screen>
+      <para>
+        Fetches message UID 1001 from INBOX, prepends
+        <literal>Fwd:</literal> to the subject, and sends to
+        <literal>manager@example.com</literal>.
+      </para>
+    </refsect2>
+
+    <refsect2>
+      <title>Git snapshot of mailbox</title>
+      <screen><![CDATA[singine mail snap --search invoice --max 10 --base-dir mail/]]></screen>
+      <para>
+        Searches for <literal>invoice</literal>, fetches matching messages,
+        writes each as <filename>mail/INBOX/&lt;uid&gt;.eml.xml</filename>,
+        and prints a ready-to-use <command>git commit</command> message:
+      </para>
+      <screen><![CDATA[mail: snapshot 3 messages from INBOX at 2026-02-23T12:00:00Z
+
+[urn:singine:mail:INBOX:1001]
+[urn:singine:mail:INBOX:1002]
+[urn:singine:mail:INBOX:1003]]]></screen>
+    </refsect2>
+
+    <refsect2>
+      <title>Dry-run test (offline)</title>
+      <screen><![CDATA[singine mail search invoice --dry-run]]></screen>
+      <para>Returns synthetic UIDs without connecting to any server.</para>
+    </refsect2>
+
+    <refsect2>
+      <title>Docker: start local mail server, then search</title>
+      <screen><![CDATA[# Start Postfix + Dovecot via Ant
+ant mail-docker-up
+
+# Wait for health check to pass, then search
+singine mail search invoice \
+  --imap-host localhost --imap-port 1143 --imap-tls false \
+  --user singine --pass singinepass]]></screen>
+    </refsect2>
+
+    <refsect2>
+      <title>Ant: compile + test</title>
+      <screen><![CDATA[cd singine/core
+ant all            # clean → compile → full test suite
+ant test-mail      # only tc-mail01..tc-mail05]]></screen>
+    </refsect2>
+  </refsect1>
+
+  <!-- ── ENVIRONMENT ───────────────────────────────────────────────────────── -->
+  <refsect1>
+    <title>Environment</title>
+    <variablelist>
+      <varlistentry>
+        <term><envar>MAIL_DOMAIN</envar></term>
+        <listitem><para>Domain name for the Docker mail server. Default: <literal>localhost</literal>.</para></listitem>
+      </varlistentry>
+      <varlistentry>
+        <term><envar>MAIL_USER</envar></term>
+        <listitem><para>Username for the Docker mail server. Default: <literal>singine</literal>.</para></listitem>
+      </varlistentry>
+      <varlistentry>
+        <term><envar>MAIL_PASS</envar></term>
+        <listitem><para>Password for the Docker mail server. Default: <literal>singinepass</literal>.</para></listitem>
+      </varlistentry>
+    </variablelist>
+  </refsect1>
+
+  <!-- ── FILES ─────────────────────────────────────────────────────────────── -->
+  <refsect1>
+    <title>Files</title>
+    <variablelist>
+      <varlistentry>
+        <term><filename>core/java/singine/mail/MailClient.java</filename></term>
+        <listitem><para>Raw-socket SMTP + IMAP4rev1 implementation. JDK 11+ stdlib only.</para></listitem>
+      </varlistentry>
+      <varlistentry>
+        <term><filename>core/src/singine/net/mail.clj</filename></term>
+        <listitem><para>Governed Clojure namespace — all five subcommands as <literal>lam/govern</literal> thunks.</para></listitem>
+      </varlistentry>
+      <varlistentry>
+        <term><filename>docker/Dockerfile.mail</filename></term>
+        <listitem><para>Docker image: Postfix + Dovecot for local dev.</para></listitem>
+      </varlistentry>
+      <varlistentry>
+        <term><filename>docker/docker-compose.mail.yml</filename></term>
+        <listitem><para>Compose file: ports 1025 (SMTP), 1587 (Submission), 1143 (IMAP), 1993 (IMAPS).</para></listitem>
+      </varlistentry>
+      <varlistentry>
+        <term><filename>core/build.xml</filename></term>
+        <listitem><para>Apache Ant build: <literal>ant all</literal>, <literal>ant test-mail</literal>, <literal>ant mail-docker-up</literal>.</para></listitem>
+      </varlistentry>
+      <varlistentry>
+        <term><filename>mail/INBOX/&lt;uid&gt;.eml.xml</filename></term>
+        <listitem><para>Git-versioned mail snapshots produced by <command>singine mail snap</command>.</para></listitem>
+      </varlistentry>
+    </variablelist>
+  </refsect1>
+
+  <!-- ── SEE ALSO ──────────────────────────────────────────────────────────── -->
+  <refsect1>
+    <title>See Also</title>
+    <para>
+      <citerefentry><refentrytitle>singine</refentrytitle><manvolnum>1</manvolnum></citerefentry>,
+      <citerefentry><refentrytitle>singine-idpr</refentrytitle><manvolnum>1</manvolnum></citerefentry>,
+      <citerefentry><refentrytitle>singine-gitp</refentrytitle><manvolnum>1</manvolnum></citerefentry>,
+      <ulink xl:href="https://datatracker.ietf.org/doc/html/rfc5321">RFC 5321 (SMTP)</ulink>,
+      <ulink xl:href="https://datatracker.ietf.org/doc/html/rfc3501">RFC 3501 (IMAP4rev1)</ulink>,
+      <ulink xl:href="urn:singine:doc:mail:man:1">urn:singine:doc:mail:man:1</ulink>
+    </para>
+  </refsect1>
+
+  <!-- ── AUTHOR ─────────────────────────────────────────────────────────────── -->
+  <refsect1>
+    <title>Author</title>
+    <para>
+      Sina K. Heshmati &lt;singine@localhost&gt;.
+      Singine platform — <ulink xl:href="https://github.com/sindoc/singine">https://github.com/sindoc/singine</ulink>.
+    </para>
+  </refsect1>
+
+  <!-- ── COPYRIGHT ─────────────────────────────────────────────────────────── -->
+  <refsect1>
+    <title>Copyright</title>
+    <para>
+      Copyright &#169; 2026 Sina K. Heshmati. All rights reserved.
+      URN: <literal>urn:singine:doc:mail:man:1</literal>.
+    </para>
+  </refsect1>
+
+</refentry>

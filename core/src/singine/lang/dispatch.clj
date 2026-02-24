@@ -92,6 +92,24 @@
       :body-length (count body)
       :pi "<?lang sparql?>"
       :note "SPARQL query → Jena ARQ → result bindings."
+      :opts opts})
+
+   "urfm"
+   (fn [body opts]
+     {:runtime :urfm
+      :handler "singine.rdf.urfm/evaluate!"
+      :body-length (count body)
+      :pi "<?lang urfm?>"
+      :note "#lang urfm — URFM RDF/XML vocabulary document. MIME: application/vnd.urfm+xml."
+      :opts opts})
+
+   "docbook"
+   (fn [body opts]
+     {:runtime :docbook
+      :handler "singine.lang.docbook/evaluate!"
+      :body-length (count body)
+      :pi "<?lang docbook?>"
+      :note "#lang docbook — DocBook 5 article with s:include + XLink. Via genx."
       :opts opts})})
 
 (defn- default-runtime [token]

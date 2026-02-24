@@ -1,0 +1,49 @@
+{;; singine machine identity registry
+ ;; Managed by: singine cap trust register-ssh
+ ;; Every machine has one SSH RSA key pair (minimal trust principle).
+ ;; URN scheme: urn:singine:machine:<hostname-slug>:<user>
+
+ :imac-vafa
+ {:hostname        "iMacVafa"
+  :user            "attar"
+  :urn             "urn:singine:machine:imac-vafa:attar"
+  :ssh-key-type    "ssh-rsa"
+  :ssh-pubkey-file "core/resources/identity/authorized_keys"
+  ;; SHA-256 fingerprint of the RSA public key (computed from authorized_keys)
+  ;; Run: ssh-keygen -lf authorized_keys -E sha256
+  :ssh-fingerprint "TODO:sha256:run-ssh-keygen-lf"
+  :registered-at   "2026-02-23"
+  :os              "macOS"
+  :arch            "x86_64"
+  :capabilities    [:mail :broker :kg :sec :render :cli :java :clojure :python]
+  :deploy-order    [:mail :broker :kg :checkin]
+  ;; Minimal trust: only these aliases needed in singine.jks for this machine
+  :required-trust  ["singine-root-ca" "singine-identity-attar"]}
+
+ ;; Template entry for iPad (iSH)
+ ;; Add your iPad SSH key here after running: ssh-keygen on iPad
+ :ipad-ish
+ {:hostname     "iPad-iSH"
+  :user         nil
+  :urn          "urn:singine:machine:ipad-ish"
+  :capabilities [:mail :cli :python]
+  :deploy-order [:mail :checkin]
+  :required-trust ["singine-identity-attar"]}
+
+ ;; Template entry for iPhone (a-Shell)
+ :iphone-ashell
+ {:hostname     "iPhone-aShell"
+  :user         nil
+  :urn          "urn:singine:machine:iphone-ashell"
+  :capabilities [:mail :cli :python]
+  :deploy-order [:mail :checkin]
+  :required-trust ["singine-identity-attar"]}
+
+ ;; Template entry for Android (Samsung S8, Termux)
+ :android-s8
+ {:hostname     "SamsungS8-Termux"
+  :user         nil
+  :urn          "urn:singine:machine:android-s8"
+  :capabilities [:mail :cli :python :git]
+  :deploy-order [:mail :checkin]
+  :required-trust ["singine-identity-attar"]}}

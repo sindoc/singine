@@ -1,0 +1,137 @@
+version: "3.9"
+
+# docker-compose.edge.yml — singine edge stack
+# Spring Boot + Apache Camel HTTP node + Postfix + Dovecot mail server
+#
+# Start:  docker compose -f docker/docker-compose.edge.yml up -d --build
+# Stop:   docker compose -f docker/docker-compose.edge.yml down
+# Logs:   docker compose -f docker/docker-compose.edge.yml logs -f
+# Or via Ant:
+#         ant edge-docker-up
+#         ant edge-docker-down
+#
+# REST API (Rails conventions):
+#   GET  http://localhost:8080/messages?search=invoice
+#   GET  http://localhost:8080/messages/1001
+#   POST http://localhost:8080/messages  (body: JSON or form)
+#   GET  http://localhost:8080/health
+#
+# Mail server (from docker-compose.mail.yml, also included here):
+#   SMTP: localhost:1587
+#   IMAP: localhost:1143
+#
+# casetrove.com style: Mulish font, Tailwind 4 CSS, Turbo Streams HTML
+
+services:
+
+  # ── singine-edge: Spring Boot + Camel HTTP node ─────────────────────────────
+  singine-edge:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.edge
+    image: singine-edge:latest
+    container_name: singine-edge
+    hostname: singine-edge
+    restart: unless-stopped
+
+    environment:
+      CAMEL_MAIL_HOST:        "singine-mail"
+      CAMEL_IMAP_PORT:        "143"
+      CAMEL_SMTP_PORT:        "587"
+      MAIL_USER:              "${MAIL_USER:-singine}"
+      MAIL_PASS:              "${MAIL_PASS:-singinepass}"
+      KAFKA_BROKERS:          "${KAFKA_BROKERS:-localhost:9092}"
+      SPRING_PROFILES_ACTIVE: "singine"
+
+    ports:
+      - "8080:8080"    # Spring Boot HTTP — GET /messages, POST /messages, GET /health
+      - "8081:8081"    # Spring Boot Actuator — /actuator/health, /actuator/metrics
+
+    volumes:
+      # Persistent data: SQLite, Lucene index, git-snap output
+      - singine-edge-data:/app/data
+      # Locale config (read-only from host)
+      - type: bind
+        source: "${HOME}/.loc"
+        target: /app/.loc
+        read_only: true
+        bind:
+          create_host_path: true
+
+    depends_on:
+      singine-mail:
+        condition: service_healthy
+
+    networks:
+      - singine-net
+
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ── singine-mail: Postfix + Dovecot ──────────────────────────────────────────
+  # (inline, same as docker-compose.mail.yml — single compose file for edge stack)
+  singine-mail:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.mail
+    image: singine-mail:latest
+    container_name: singine-mail
+    hostname: singine-mail
+    restart: unless-stopped
+
+    environment:
+      MAIL_DOMAIN: "${MAIL_DOMAIN:-localhost}"
+      MAIL_USER:   "${MAIL_USER:-singine}"
+      MAIL_PASS:   "${MAIL_PASS:-singinepass}"
+
+    ports:
+      - "1025:25"     # Postfix SMTP (raw MTA)
+      - "1587:587"    # Postfix Submission (ESMTP AUTH)
+      - "1143:143"    # Dovecot IMAP (plain — Camel connects here)
+      - "1993:993"    # Dovecot IMAPS (TLS)
+
+    volumes:
+      - singine-mail-spool:/var/mail
+
+    networks:
+      - singine-net
+
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 143 && nc -z localhost 587"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  singine-edge-data:
+    driver: local
+    labels:
+      singine.uri: "urn:singine:edge:data"
+  singine-mail-spool:
+    driver: local
+    labels:
+      singine.uri: "urn:singine:mail:spool"
+
+networks:
+  singine-net:
+    name: singine-net
+    driver: bridge
+    labels:
+      singine.uri: "urn:singine:net:bridge"

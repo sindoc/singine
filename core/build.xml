@@ -1,0 +1,177 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  singine/core/build.xml — Apache Ant JVM control layer
+  ======================================================
+  All JVM invocation, compilation, and test execution is controlled here.
+  Docker lifecycle is also managed via Ant exec tasks so everything is
+  reproducible from a single `ant <target>` call with no shell magic.
+
+  Targets:
+    ant compile           — javac all Java sources → classes/
+    ant test              — run Clojure test suite (full)
+    ant test-mail         — run only tc-mail01..tc-mail05
+    ant repl              — start Clojure REPL
+    ant mail-docker-up    — start Postfix + Dovecot via docker-compose
+    ant mail-docker-down  — stop mail Docker stack
+    ant mail-snap         — run git-snap! against live IMAP (needs Docker up)
+    ant jar               — build singine-core.jar (tools.build AOT)
+    ant clean             — remove classes/ and target/
+    ant all               — clean → compile → test → jar
+
+  Configuration (override via -D flag or environment):
+    imap.host       (default: localhost)
+    imap.port       (default: 993)
+    smtp.host       (default: localhost)
+    smtp.port       (default: 587)
+    mail.user       (default: singine@localhost)
+    mail.folder     (default: INBOX)
+    mail.search     (default: invoice)
+    java.home.bin   (default: /usr/bin)
+    clojure.bin     (default: /Users/skh/.local/clojure/bin/clojure)
+    sqlite.jar      (computed from ~/.m2 by init target)
+-->
+
+<project name="singine-core" default="all" basedir=".">
+
+  <!-- ── Properties ──────────────────────────────────────────────────────── -->
+
+  <property name="src.java"      value="${basedir}/java"/>
+  <property name="src.clj"       value="${basedir}/src"/>
+  <property name="test.clj"      value="${basedir}/test"/>
+  <property name="classes"       value="${basedir}/classes"/>
+  <property name="target"        value="${basedir}/target"/>
+  <property name="docker.dir"    value="${basedir}/../docker"/>
+
+  <property name="clojure.bin"   value="/Users/skh/.local/clojure/bin/clojure"/>
+  <property name="imap.host"     value="localhost"/>
+  <property name="imap.port"     value="993"/>
+  <property name="smtp.host"     value="localhost"/>
+  <property name="smtp.port"     value="587"/>
+  <property name="mail.user"     value="singine@localhost"/>
+  <property name="mail.folder"   value="INBOX"/>
+  <property name="mail.search"   value="invoice"/>
+
+  <!-- ── Init: detect sqlite-jdbc jar from local Maven cache ─────────────── -->
+
+  <target name="init" description="Detect sqlite-jdbc jar from ~/.m2">
+    <exec executable="bash" outputproperty="sqlite.jar" failonerror="true">
+      <arg value="-c"/>
+      <arg value="find ${user.home}/.m2 -name 'sqlite-jdbc-*.jar' | sort | tail -1"/>
+    </exec>
+    <echo message="sqlite.jar = ${sqlite.jar}"/>
+    <mkdir dir="${classes}"/>
+    <mkdir dir="${target}"/>
+  </target>
+
+  <!-- ── Compile: javac all Java sources ─────────────────────────────────── -->
+
+  <target name="compile" depends="init" description="javac all Java sources → classes/">
+    <exec executable="bash" failonerror="true">
+      <env key="PATH" value="/usr/bin:/bin"/>
+      <arg value="-c"/>
+      <arg value="javac -d '${classes}' -cp '${classes}:${sqlite.jar}' $(find '${src.java}' -name '*.java' | sort)"/>
+    </exec>
+    <echo message="Java compilation complete → ${classes}"/>
+  </target>
+
+  <!-- ── Test: full Clojure test suite ────────────────────────────────────── -->
+
+  <target name="test" depends="compile" description="Run full Clojure test suite">
+    <exec executable="bash" failonerror="true">
+      <env key="PATH" value="/Users/skh/.local/clojure/bin:/usr/bin:/bin"/>
+      <arg value="-c"/>
+      <arg value="cd '${basedir}' &amp;&amp; clojure -M:test"/>
+    </exec>
+  </target>
+
+  <!-- ── Test-mail: only tc-mail01..tc-mail05 ─────────────────────────────── -->
+
+  <target name="test-mail" depends="compile" description="Run only MAIL opcode tests">
+    <exec executable="bash" failonerror="true">
+      <env key="PATH" value="/Users/skh/.local/clojure/bin:/usr/bin:/bin"/>
+      <arg value="-c"/>
+      <arg value="cd '${basedir}' &amp;&amp; clojure -M:test -n singine.pos.tc-suite-test"/>
+    </exec>
+    <echo message="MAIL tests complete"/>
+  </target>
+
+  <!-- ── REPL ─────────────────────────────────────────────────────────────── -->
+
+  <target name="repl" depends="compile" description="Start Clojure REPL">
+    <exec executable="bash" failonerror="false">
+      <env key="PATH" value="/Users/skh/.local/clojure/bin:/usr/bin:/bin"/>
+      <arg value="-c"/>
+      <arg value="cd '${basedir}' &amp;&amp; clojure -M:repl"/>
+    </exec>
+  </target>
+
+  <!-- ── Docker: mail stack (Postfix + Dovecot) ───────────────────────────── -->
+
+  <target name="mail-docker-up" description="Start Postfix + Dovecot Docker stack">
+    <exec executable="docker" failonerror="true">
+      <arg value="compose"/>
+      <arg value="-f"/>
+      <arg value="${docker.dir}/docker-compose.mail.yml"/>
+      <arg value="up"/>
+      <arg value="-d"/>
+      <arg value="--build"/>
+    </exec>
+    <echo message="Mail Docker stack started. SMTP:1025  IMAP:1143"/>
+  </target>
+
+  <target name="mail-docker-down" description="Stop Postfix + Dovecot Docker stack">
+    <exec executable="docker" failonerror="false">
+      <arg value="compose"/>
+      <arg value="-f"/>
+      <arg value="${docker.dir}/docker-compose.mail.yml"/>
+      <arg value="down"/>
+    </exec>
+    <echo message="Mail Docker stack stopped."/>
+  </target>
+
+  <target name="mail-docker-logs" description="Tail mail stack logs">
+    <exec executable="docker" failonerror="false">
+      <arg value="compose"/>
+      <arg value="-f"/>
+      <arg value="${docker.dir}/docker-compose.mail.yml"/>
+      <arg value="logs"/>
+      <arg value="--tail=50"/>
+    </exec>
+  </target>
+
+  <!-- ── Mail snap: git-versioned IMAP snapshot ────────────────────────────── -->
+
+  <target name="mail-snap" depends="compile" description="Run git-snap! against live IMAP">
+    <exec executable="bash" failonerror="true">
+      <env key="PATH" value="/Users/skh/.local/clojure/bin:/usr/bin:/bin"/>
+      <arg value="-c"/>
+      <arg value="cd '${basedir}' &amp;&amp; clojure -M -e &quot;(require '[singine.net.mail :as m]) (let [auth {:user \&quot;${mail.user}\&quot; :roles [:admin] :exp Long/MAX_VALUE} opts {:imap-host \&quot;${imap.host}\&quot; :imap-port ${imap.port} :imap-tls false :user \&quot;${mail.user}\&quot; :pass \&quot;\&quot; :search \&quot;${mail.search}\&quot; :max 10 :dry-run false}] (println ((m/git-snap! auth opts))))&quot;"/>
+    </exec>
+  </target>
+
+  <!-- ── Jar: build singine-core.jar ─────────────────────────────────────── -->
+
+  <target name="jar" depends="compile" description="Build singine-core uberjar">
+    <exec executable="bash" failonerror="true">
+      <env key="PATH" value="/Users/skh/.local/clojure/bin:/usr/bin:/bin"/>
+      <arg value="-c"/>
+      <arg value="cd '${basedir}' &amp;&amp; clojure -T:build uber"/>
+    </exec>
+    <echo message="singine-core.jar built → ${target}/"/>
+  </target>
+
+  <!-- ── Clean ─────────────────────────────────────────────────────────────── -->
+
+  <target name="clean" description="Remove classes/ and target/">
+    <delete dir="${classes}" includeemptydirs="true"/>
+    <delete dir="${target}"  includeemptydirs="true"/>
+    <echo message="Clean complete."/>
+  </target>
+
+  <!-- ── All ──────────────────────────────────────────────────────────────── -->
+
+  <target name="all" depends="clean,compile,test" description="clean → compile → test">
+    <echo message="singine-core build complete."/>
+  </target>
+
+</project>

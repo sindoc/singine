@@ -43,6 +43,7 @@
     meta-cell-registry?,
     form?,
     locp?,
+    idpr?,
     naming-conventions?,
     iceberg-layers?,
     kafka-topics?,
@@ -403,6 +404,53 @@
     config          CDATA   #IMPLIED
 >
 <!ELEMENT nml-stdout (#PCDATA)>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     IDPR  — Self-hosted Identity Provider
+     Opcode: IDPR
+     Namespaces: idp=urn:singine:pos:idp
+                 ca=urn:singine:net:cacert
+                 jwt=urn:singine:auth:token
+     ═══════════════════════════════════════════════════════════════════ -->
+
+<!ELEMENT idpr (idp-keypair?, idp-discovery?, idp-ca-report?)>
+<!ATTLIST idpr
+    xmlns           CDATA   #FIXED   "urn:singine:pos:idp"
+    id              CDATA   #REQUIRED
+    generated-at    CDATA   #REQUIRED
+    opcode          CDATA   #FIXED   "IDPR"
+    issuer          CDATA   #IMPLIED
+    algo            CDATA   #IMPLIED
+>
+
+<!ELEMENT idp-keypair EMPTY>
+<!ATTLIST idp-keypair
+    alias       CDATA   #REQUIRED
+    urn         CDATA   #REQUIRED
+    algorithm   CDATA   #REQUIRED
+>
+
+<!ELEMENT idp-discovery EMPTY>
+<!ATTLIST idp-discovery
+    issuer                  CDATA   #REQUIRED
+    authorization-endpoint  CDATA   #IMPLIED
+    token-endpoint          CDATA   #IMPLIED
+    jwks-uri                CDATA   #IMPLIED
+>
+
+<!ELEMENT idp-ca-report (idp-ca*)>
+<!ATTLIST idp-ca-report
+    jvm-path    CDATA   #REQUIRED
+    ca-count    CDATA   #REQUIRED
+>
+
+<!ELEMENT idp-ca EMPTY>
+<!ATTLIST idp-ca
+    alias       CDATA   #REQUIRED
+    urn         CDATA   #REQUIRED
+    key-algo    CDATA   #IMPLIED
+    not-after   CDATA   #IMPLIED
+>
 
 <!-- ═══════════════════════════════════════════════════════════════════
      GOVERNED LAMBDA  — auth-first execution unit
