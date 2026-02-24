@@ -1,0 +1,85 @@
+version: "3.9"
+
+# docker-compose.mail.yml — singine mail stack
+# Postfix (SMTP) + Dovecot (IMAP4rev1) for local development + MailClient.java
+#
+# Start:  docker compose -f docker/docker-compose.mail.yml up -d --build
+# Stop:   docker compose -f docker/docker-compose.mail.yml down
+# Logs:   docker compose -f docker/docker-compose.mail.yml logs -f
+# Or via Ant:
+#         ant mail-docker-up
+#         ant mail-docker-down
+#
+# singine.net.mail/MailClient.java connects to:
+#   SMTP: host=localhost port=1587 tls=false
+#   IMAP: host=localhost port=1143 tls=false
+#   IMAPS: host=localhost port=1993 tls=true (self-signed cert, skip verify)
+#
+# To send a test email (from host):
+#   echo "Subject: test" | sendmail -S localhost:1587 -f singine@localhost singine@localhost
+# Or:
+#   singine mail send --to singine@localhost --subject "hello" --body "test"
+
+services:
+  singine-mail:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.mail
+    image: singine-mail:latest
+    container_name: singine-mail
+    hostname: singine-mail
+    restart: unless-stopped
+
+    environment:
+      MAIL_DOMAIN: "${MAIL_DOMAIN:-localhost}"
+      MAIL_USER:   "${MAIL_USER:-singine}"
+      MAIL_PASS:   "${MAIL_PASS:-singinepass}"
+
+    ports:
+      # SMTP
+      - "1025:25"     # Postfix SMTP (raw, for MTA relay)
+      - "1587:587"    # Postfix Submission (ESMTP AUTH — MailClient.java uses this)
+      # IMAP
+      - "1143:143"    # Dovecot IMAP plain  — MailClient.java uses this
+      - "1993:993"    # Dovecot IMAPS (TLS) — optional, self-signed cert
+
+    volumes:
+      # Persistent mailbox spool — survives container restarts
+      - singine-mail-spool:/var/mail
+      # Optional: mount host .loc/etc/config for locale-aware config
+      - type: bind
+        source: "${HOME}/.loc/etc"
+        target: /etc/singine/mail
+        read_only: true
+        bind:
+          create_host_path: true
+
+    networks:
+      - singine-net
+
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 143 && nc -z localhost 587"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  singine-mail-spool:
+    driver: local
+    labels:
+      singine.uri: "urn:singine:mail:spool"
+      singine.opcode: "MAIL"
+
+networks:
+  singine-net:
+    name: singine-net
+    driver: bridge
+    labels:
+      singine.uri: "urn:singine:net:bridge"

@@ -2,7 +2,29 @@
  :deps  {org.clojure/clojure       {:mvn/version "1.12.0"}
          org.clojure/data.json     {:mvn/version "2.5.1"}
          org.clojure/tools.logging {:mvn/version "1.3.0"}
-         org.xerial/sqlite-jdbc    {:mvn/version "3.45.3.0"}}
+         org.xerial/sqlite-jdbc    {:mvn/version "3.45.3.0"}
+
+         ;; ── Apache Camel 4.4 LTS — EIP backbone ─────────────────────────────
+         ;; camel-core: RouteBuilder, CamelContext, ProducerTemplate, Exchange
+         org.apache.camel/camel-core      {:mvn/version "4.4.4"}
+         ;; camel-mail: SMTP + IMAP4rev1 consumer/producer (via Jakarta Mail)
+         org.apache.camel/camel-mail      {:mvn/version "4.4.4"}
+         ;; camel-http: HTTP producer/consumer (Jetty backend)
+         org.apache.camel/camel-http      {:mvn/version "4.4.4"}
+         ;; camel-jackson: JSON marshal/unmarshal in routes
+         org.apache.camel/camel-jackson   {:mvn/version "4.4.4"}
+
+         ;; ── Jakarta Mail (camel-mail runtime implementation) ─────────────────
+         jakarta.mail/jakarta.mail-api    {:mvn/version "2.1.3"}
+         org.eclipse.angus/angus-mail     {:mvn/version "2.0.3"}
+
+         ;; ── Apache Commons utilities ──────────────────────────────────────────
+         ;; commons-lang3: StringUtils, Base64 (replaces manual Base64 in MailClient.java)
+         org.apache.commons/commons-lang3 {:mvn/version "3.14.0"}
+         ;; commons-io: IOUtils.toString, FileUtils, FilenameUtils
+         commons-io/commons-io            {:mvn/version "2.15.1"}
+         ;; commons-codec: DigestUtils SHA-256 (for urfm:File checksum)
+         commons-codec/commons-codec      {:mvn/version "1.17.0"}}
  :aliases
  {:run  {:main-opts ["-m" "singine.core.engine"]}
   :test {:extra-paths ["test"]

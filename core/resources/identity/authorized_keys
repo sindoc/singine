@@ -1,0 +1,7 @@
+# singine authorized keys — version-controlled, public
+# Format: <ssh-pubkey> <comment> # urn:<machine-urn>
+# Every entry here is an identity proof for a known machine.
+# Managed by: singine cap trust register-ssh
+# See: core/resources/identity/machines.edn
+#
+ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEAqLJ5SWBYx8peQkAPeZbQAdP5jh4nRIzUfXq6XEToIkntYjRGyOD8ZiTLlwUuWvu1NpDlxb7Zu9qpl8kHxLUziJ6NHGX+c6fKdonPL9rWm8q4JRpZKARuLEZROn0jir1u0UhyvhNPkYoqKBs8XUKbDub28sZrHmj+KPLEbjQ3k9+gY0GkMuAonLsKXMMhb0/zky7t2/WQ+4o6stVfWBR4yi2kt0sa4/jrDiMeHP0fZdMsyD0qT6cLE8kQU10yF53YxHe9u1X7Hvj4sOS4HN0CClmAnG/S7EmsyG7huSoxHjwxZm2rV+0YsMqJngszjIQzaGpXcL2M0l5xTkXu29qkfw== attar@iMacVafa # urn:singine:machine:imac-vafa:attar
