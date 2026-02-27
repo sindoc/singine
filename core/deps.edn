@@ -26,7 +26,10 @@
          ;; commons-codec: DigestUtils SHA-256 (for urfm:File checksum)
          commons-codec/commons-codec      {:mvn/version "1.17.0"}}
  :aliases
- {:run  {:main-opts ["-m" "singine.core.engine"]}
+ {:run   {:main-opts ["-m" "singine.core.engine"]}
+  ;; Start local network server on 0.0.0.0:8080 (Apache Camel + Jetty).
+  ;; Connect from iPad/iPhone/Android on same LAN: curl http://<mac-ip>:8080/health
+  :serve {:main-opts ["-m" "singine.server.main"]}
   :test {:extra-paths ["test"]
          :extra-deps  {io.github.cognitect-labs/test-runner
                        {:git/tag "v0.5.1"
