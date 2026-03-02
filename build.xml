@@ -884,4 +884,159 @@ Examples
           description="Remove all SPA build and staging directories."/>
 
 
+  <!-- ══════════════════════════════════════════════════
+       §8  PHOTOS PIPELINE TARGETS
+       Google Photos ↔ Apple Photos bridge.
+       Driven by photos/pipeline.xpl (XProc 3.0).
+       Dependency graph: photos/dependency-graph.xml
+       Compliance data:  photos/compliance.xml
+       Dialog envelope:  photos/dialog.xml
+       XPath queries:    photos/queries.xml
+       ══════════════════════════════════════════════════ -->
+
+  <!--
+    PHOTOS_SPRINT — sprint to process (e.g. s01, s03, ALL).
+    Override: ant photos-run -Dphotos.sprint=s03
+  -->
+  <property name="photos.sprint"        value="s01"/>
+
+  <!--
+    PHOTOS_DRY_RUN — when true, log actions but do not call APIs.
+    Override: ant photos-run -Dphotos.dry-run=true
+  -->
+  <property name="photos.dry-run"       value="true"/>
+
+  <!--
+    PHOTOS_PARALLELISM — max concurrent transfers within a batch.
+    Override: ant photos-run -Dphotos.parallelism=8
+  -->
+  <property name="photos.parallelism"   value="4"/>
+
+  <!--
+    PHOTOS_PIPELINE — path to the XProc 3.0 pipeline entry point.
+    Requires an XProc 3.0 processor on PATH (e.g. Calabash, MorganaXProc).
+    Override: ant photos-run -Dphotos.pipeline=photos/pipeline.xpl
+  -->
+  <property name="photos.pipeline"      value="${basedir}/photos/pipeline.xpl"/>
+  <property name="photos.graph"         value="${basedir}/photos/dependency-graph.xml"/>
+  <property name="photos.report-dir"    value="${basedir}/photos/batches"/>
+  <property name="photos.xproc.exec"    value="xproc"/>
+
+  <!--
+    PHOTOS_SAXON_EXEC — Saxon-HE/EE command for XPath queries.
+    Required only for the photos-query target.
+    Override: ant photos-query -Dphotos.saxon.exec=/path/to/saxonq
+  -->
+  <property name="photos.saxon.exec"    value="saxonq"/>
+
+
+  <!-- ─── photos-validate ───────────────────────────── -->
+  <!--
+    Validates dependency-graph.xml (with xi:include resolved)
+    and compliance.xml against the XML Schema.
+    Does not call any external API.
+  -->
+  <target name="photos-validate"
+          description="Validate the photo pipeline dependency graph and compliance data.">
+
+    <available file="${photos.graph}" property="photos.graph.present"/>
+    <fail unless="photos.graph.present"
+          message="MISSING: ${photos.graph}"/>
+
+    <echo message="[photos] Validating: ${photos.graph}"/>
+
+    <!-- Use xmllint (BSD + GNU/Linux standard) for well-formedness check -->
+    <exec executable="xmllint"
+          failonerror="true">
+      <arg value="--noout"/>
+      <arg value="--xinclude"/>
+      <arg value="${photos.graph}"/>
+    </exec>
+
+    <echo message="[photos] Dependency graph is well-formed."/>
+
+    <exec executable="xmllint"
+          failonerror="true">
+      <arg value="--noout"/>
+      <arg value="${basedir}/photos/compliance.xml"/>
+    </exec>
+
+    <echo message="[photos] Compliance document is well-formed."/>
+
+  </target>
+
+
+  <!-- ─── photos-query ──────────────────────────────── -->
+  <!--
+    Runs a named XPath query from photos/queries.xml against
+    the dependency graph.
+
+    Requires Saxon-HE on PATH (saxonq).
+    Usage: ant photos-query -Dphotos.query.id=q09
+    Default query: q01 (all pending batches).
+  -->
+  <property name="photos.query.id" value="q01"/>
+
+  <target name="photos-query"
+          depends="photos-validate"
+          description="Run a named XPath query from photos/queries.xml. Set photos.query.id.">
+
+    <echo message="[photos] Running query ${photos.query.id} from photos/queries.xml"/>
+    <echo message="[photos] Source: ${photos.graph}"/>
+
+    <!--
+      Extract the XPath expression for the requested query ID.
+      Then execute it against the merged dependency graph.
+    -->
+    <exec executable="${photos.saxon.exec}"
+          failonerror="true">
+      <arg value="-s:${photos.graph}"/>
+      <arg value="-qs://queries/query[@id='${photos.query.id}']/xpath"/>
+    </exec>
+
+  </target>
+
+
+  <!-- ─── photos-run ────────────────────────────────── -->
+  <!--
+    Executes the XProc 3.0 pipeline for a given sprint.
+    By default runs in dry-run mode (no API calls).
+
+    Requires an XProc 3.0 processor (e.g. XML Calabash 3.x) on PATH.
+    Install: https://xmlcalabash.com/
+
+    Usage:
+      ant photos-run -Dphotos.sprint=s01 -Dphotos.dry-run=true
+      ant photos-run -Dphotos.sprint=ALL -Dphotos.dry-run=false
+  -->
+  <target name="photos-run"
+          depends="photos-validate"
+          description="Execute the XProc photo pipeline for the given sprint.">
+
+    <echo message="[photos] Sprint     : ${photos.sprint}"/>
+    <echo message="[photos] Dry-run    : ${photos.dry-run}"/>
+    <echo message="[photos] Parallelism: ${photos.parallelism}"/>
+    <echo message="[photos] Pipeline   : ${photos.pipeline}"/>
+
+    <exec executable="${photos.xproc.exec}"
+          dir="${basedir}/photos"
+          failonerror="true">
+      <arg value="${photos.pipeline}"/>
+      <arg value="--input"/>
+      <arg value="dependency-graph=${photos.graph}"/>
+      <arg value="--option"/>
+      <arg value="sprint-id=${photos.sprint}"/>
+      <arg value="--option"/>
+      <arg value="dry-run=${photos.dry-run}"/>
+      <arg value="--option"/>
+      <arg value="parallelism=${photos.parallelism}"/>
+      <arg value="--option"/>
+      <arg value="report-dir=${photos.report-dir}"/>
+    </exec>
+
+    <echo message="[photos] Pipeline complete. Reports in: ${photos.report-dir}"/>
+
+  </target>
+
+
 </project>
