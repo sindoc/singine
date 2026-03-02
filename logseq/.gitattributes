@@ -1,0 +1,25 @@
+# logseq/.gitattributes
+# ──────────────────────
+# Declares the logseq-merge custom merge driver for Logseq source files.
+#
+# The driver must be registered in .git/config before it activates.
+# Register it once per clone with:
+#
+#   ant -f ../build.xml register-merge-driver
+#
+# What the driver does when git encounters a conflict in a matched file:
+#   1. Calls: ant -f build.xml resolve-conflicts
+#   2. Ant reads the conflict-strategy from logseq/deploy.xml
+#   3. Applies git checkout --ours / --theirs accordingly
+#   4. Stages and commits the resolution
+#
+# recursive=binary prevents git from re-invoking the driver recursively
+# when resolving a three-way merge; the Ant target handles it atomically.
+#
+# Patterns
+# ─────────
+# *.md   — all Logseq page and journal markdown files
+# *.edn  — Logseq config files (config.edn, graphs-txid.edn, whiteboards)
+
+*.md    merge=logseq-merge
+*.edn   merge=logseq-merge
