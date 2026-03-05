@@ -1,0 +1,314 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  photos/compliance.xml — Sanctions, country restrictions, insurance premiums
+  ─────────────────────────────────────────────────────────────────────────────
+  This document is included into dependency-graph.xml by XPL (XProc 3.0)
+  via xi:include at pipeline run time:
+
+    <xi:include href="compliance.xml"
+                xpointer="xpointer(//sg:compliance)"/>
+
+  It is also standalone-queryable via XPath 3.1:
+
+    XPath: find all high-risk countries:
+      //country[@risk='high']
+
+    XPath: find active sanctions:
+      //sanction[@active='true' and xs:date(@expires) ge current-date()]
+
+    XPath: find insurance premium for a country:
+      //country[@code='RU']/insurance/@premium-bps
+
+    XPath: find countries subject to OFAC primary sanctions:
+      //sanction[@list='OFAC-primary']//country-ref/@code
+
+  Notes
+  ─────
+  • Sanctions lists change frequently.  This file should be regenerated
+    from authoritative sources at the start of each sprint.
+  • Authoritative sources referenced below:
+      OFAC SDN:   https://sanctionslist.ofac.treas.gov/Home/SdnList
+      EU Sanctions: https://www.sanctionsmap.eu/
+      UN Sanctions: https://scsanctions.un.org/
+  • Premium values are in basis points (bps) of asset value per year.
+    1 bps = 0.01%.  E.g. premium-bps="150" means 1.5% p.a.
+  • This file does NOT constitute legal advice.  Consult qualified
+    legal and insurance professionals before processing photos with
+    provenance in or transit through restricted jurisdictions.
+
+  Namespace:  https://singine.local/photos/1.0  (prefix: sg)
+-->
+<sg:compliance
+    xmlns:sg="https://singine.local/photos/1.0"
+    xmlns:xs="http://www.w3.org/2001/XMLSchema"
+    version="1.0"
+    updated="2026-03-02">
+
+
+  <!-- ══════════════════════════════════════════════════
+       §1  SANCTIONS LISTS
+       ══════════════════════════════════════════════════ -->
+
+  <sanctions>
+
+    <!--
+      OFAC SDN (Office of Foreign Assets Control — Specially Designated Nationals)
+      Primary sanctions: US persons are prohibited from transacting.
+      Includes photo storage, cloud transfer, and processing services
+      when the subject's data is involved.
+    -->
+    <sanction id="OFAC-primary"
+              authority="US-OFAC"
+              list="SDN"
+              type="primary"
+              active="true"
+              updated="2026-03-01"
+              source-url="https://sanctionslist.ofac.treas.gov/Home/SdnList">
+      <description>
+        OFAC primary sanctions apply to US persons and US-incorporated
+        entities.  Processing or transferring data with provenance in
+        listed countries may require a licence from OFAC.
+      </description>
+      <country-refs>
+        <country-ref code="CU" label="Cuba"/>
+        <country-ref code="IR" label="Iran"/>
+        <country-ref code="KP" label="North Korea"/>
+        <country-ref code="SY" label="Syria"/>
+        <country-ref code="RU" label="Russia (sectoral, as of 2022-02-28)"/>
+        <country-ref code="BY" label="Belarus (sectoral)"/>
+        <country-ref code="VE" label="Venezuela (targeted individuals)"/>
+        <country-ref code="MM" label="Myanmar"/>
+      </country-refs>
+    </sanction>
+
+    <!--
+      EU Restrictive Measures (Council Regulation basis)
+      Secondary sanctions: EU-incorporated entities.
+    -->
+    <sanction id="EU-restrictive"
+              authority="EU-Council"
+              list="EU-Restrictive-Measures"
+              type="primary"
+              active="true"
+              updated="2026-03-01"
+              source-url="https://www.sanctionsmap.eu/">
+      <description>
+        EU restrictive measures apply to EU persons and EU-incorporated
+        entities.  Significant overlap with OFAC; stricter controls on RU/BY.
+      </description>
+      <country-refs>
+        <country-ref code="RU" label="Russia"/>
+        <country-ref code="BY" label="Belarus"/>
+        <country-ref code="IR" label="Iran"/>
+        <country-ref code="SY" label="Syria"/>
+        <country-ref code="KP" label="North Korea"/>
+        <country-ref code="MM" label="Myanmar"/>
+        <country-ref code="ZW" label="Zimbabwe (targeted)"/>
+        <country-ref code="SD" label="Sudan"/>
+        <country-ref code="LY" label="Libya"/>
+        <country-ref code="VU" label="Vanuatu (AML/CFT)"/>
+      </country-refs>
+    </sanction>
+
+    <!--
+      UN Security Council Sanctions
+      Applies globally under UN Charter Article 25.
+    -->
+    <sanction id="UN-UNSCR"
+              authority="UN-Security-Council"
+              list="UN-Consolidated"
+              type="multilateral"
+              active="true"
+              updated="2026-03-01"
+              source-url="https://scsanctions.un.org/">
+      <country-refs>
+        <country-ref code="KP" label="North Korea (UNSCR 1718)"/>
+        <country-ref code="ML" label="Mali (UNSCR 2374)"/>
+        <country-ref code="CF" label="Central African Republic (UNSCR 2127)"/>
+        <country-ref code="YE" label="Yemen (UNSCR 2140)"/>
+        <country-ref code="LY" label="Libya (UNSCR 1970)"/>
+        <country-ref code="SO" label="Somalia (UNSCR 751)"/>
+        <country-ref code="SS" label="South Sudan (UNSCR 2206)"/>
+        <country-ref code="SD" label="Sudan (UNSCR 1591)"/>
+      </country-refs>
+    </sanction>
+
+  </sanctions>
+
+
+  <!-- ══════════════════════════════════════════════════
+       §2  COUNTRY TRANSFER RESTRICTIONS
+       Per-country rules for photo data in transit.
+       XPath: //country[@code='CN']/@data-localisation
+       ══════════════════════════════════════════════════ -->
+
+  <countries>
+
+    <!--
+      risk levels:   low | medium | high | prohibited
+      data-localisation: true = personal data must not leave the country
+      transfer-requires-consent: explicit consent required before export
+    -->
+
+    <country code="US" label="United States"
+             risk="low"
+             data-localisation="false"
+             transfer-requires-consent="false">
+      <notes>GDPR adequacy (Privacy Shield successor).  Standard processing.</notes>
+      <insurance premium-bps="10" basis="asset-value-pa"/>
+    </country>
+
+    <country code="GB" label="United Kingdom"
+             risk="low"
+             data-localisation="false"
+             transfer-requires-consent="false">
+      <notes>UK GDPR applies.  Adequacy decision with EU.</notes>
+      <insurance premium-bps="10" basis="asset-value-pa"/>
+    </country>
+
+    <country code="DE" label="Germany"
+             risk="low"
+             data-localisation="false"
+             transfer-requires-consent="false">
+      <notes>EU GDPR.  Strong data protection authority (BfDI).</notes>
+      <insurance premium-bps="10" basis="asset-value-pa"/>
+    </country>
+
+    <country code="CN" label="China"
+             risk="high"
+             data-localisation="true"
+             transfer-requires-consent="true">
+      <notes>
+        PIPL (Personal Information Protection Law) restricts cross-border
+        data transfer.  Photos may require security assessment by CAC
+        before export.  Data localisation required for critical data.
+      </notes>
+      <insurance premium-bps="350" basis="asset-value-pa"/>
+    </country>
+
+    <country code="RU" label="Russia"
+             risk="high"
+             data-localisation="true"
+             transfer-requires-consent="true">
+      <notes>
+        Federal Law 149-FZ requires personal data of Russian citizens
+        to be stored on Russian territory.  OFAC and EU sanctions apply.
+        Strongly recommend legal review before any processing.
+      </notes>
+      <insurance premium-bps="500" basis="asset-value-pa"/>
+      <sanction-refs>
+        <sanction-ref id="OFAC-primary"/>
+        <sanction-ref id="EU-restrictive"/>
+      </sanction-refs>
+    </country>
+
+    <country code="IR" label="Iran"
+             risk="prohibited"
+             data-localisation="false"
+             transfer-requires-consent="false">
+      <notes>
+        Comprehensive OFAC, EU, and UN sanctions.  No processing permitted
+        without explicit OFAC licence.  Photos with GPS metadata in Iran
+        must be quarantined pending legal clearance.
+      </notes>
+      <insurance premium-bps="0" basis="not-insurable"/>
+      <sanction-refs>
+        <sanction-ref id="OFAC-primary"/>
+        <sanction-ref id="EU-restrictive"/>
+        <sanction-ref id="UN-UNSCR"/>
+      </sanction-refs>
+    </country>
+
+    <country code="KP" label="North Korea"
+             risk="prohibited"
+             data-localisation="false"
+             transfer-requires-consent="false">
+      <notes>
+        Total embargo (OFAC, EU, UN).  Any data with DPRK provenance
+        must not be processed without OFAC licence.
+      </notes>
+      <insurance premium-bps="0" basis="not-insurable"/>
+      <sanction-refs>
+        <sanction-ref id="OFAC-primary"/>
+        <sanction-ref id="EU-restrictive"/>
+        <sanction-ref id="UN-UNSCR"/>
+      </sanction-refs>
+    </country>
+
+    <country code="SY" label="Syria"
+             risk="prohibited"
+             data-localisation="false"
+             transfer-requires-consent="false">
+      <notes>OFAC, EU, UN sanctions.  Quarantine required.</notes>
+      <insurance premium-bps="0" basis="not-insurable"/>
+      <sanction-refs>
+        <sanction-ref id="OFAC-primary"/>
+        <sanction-ref id="EU-restrictive"/>
+        <sanction-ref id="UN-UNSCR"/>
+      </sanction-refs>
+    </country>
+
+    <country code="IN" label="India"
+             risk="medium"
+             data-localisation="false"
+             transfer-requires-consent="true">
+      <notes>
+        DPDP Act 2023 in force.  Cross-border transfer of personal data
+        requires consent.  No adequacy decision with EU as of 2026.
+      </notes>
+      <insurance premium-bps="60" basis="asset-value-pa"/>
+    </country>
+
+    <country code="BR" label="Brazil"
+             risk="medium"
+             data-localisation="false"
+             transfer-requires-consent="true">
+      <notes>LGPD applies.  Cross-border transfer rules apply.</notes>
+      <insurance premium-bps="50" basis="asset-value-pa"/>
+    </country>
+
+    <country code="AU" label="Australia"
+             risk="low"
+             data-localisation="false"
+             transfer-requires-consent="false">
+      <notes>Privacy Act 1988.  No sanctions concerns.</notes>
+      <insurance premium-bps="15" basis="asset-value-pa"/>
+    </country>
+
+  </countries>
+
+
+  <!-- ══════════════════════════════════════════════════
+       §3  COMPLIANCE CHECK TEMPLATES
+       Referenced by batch compliance-check/@ref.
+       ══════════════════════════════════════════════════ -->
+
+  <compliance-checks>
+
+    <compliance-check id="cc01"
+                      label="Standard GPS provenance screen">
+      <steps>
+        <step id="cc01-s1" label="Extract GPS EXIF from all photos in batch"/>
+        <step id="cc01-s2" label="Reverse-geocode GPS → ISO 3166-1 country code"/>
+        <step id="cc01-s3" label="XPath lookup: //country[@code=$code]/@risk"/>
+        <step id="cc01-s4" label="Quarantine photos where @risk = 'prohibited'"/>
+        <step id="cc01-s5" label="Flag photos where @risk = 'high' for insurance review"/>
+        <step id="cc01-s6" label="Emit compliance-report to batches/ccNN-report.xml"/>
+      </steps>
+      <fail-action>quarantine</fail-action>
+    </compliance-check>
+
+    <compliance-check id="cc02"
+                      label="Pre-import sanctions screen">
+      <steps>
+        <step id="cc02-s1" label="Load clearance report from batch b04"/>
+        <step id="cc02-s2" label="Verify all items have clearance-status = 'cleared'"/>
+        <step id="cc02-s3" label="Block import of any item with clearance-status != 'cleared'"/>
+      </steps>
+      <fail-action>block-import</fail-action>
+    </compliance-check>
+
+  </compliance-checks>
+
+
+</sg:compliance>

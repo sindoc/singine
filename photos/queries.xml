@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  photos/queries.xml — XPath 3.1 query reference for the photo pipeline
+  ──────────────────────────────────────────────────────────────────────
+  Canonical XPath 3.1 expressions for querying dependency-graph.xml
+  (after xi:include has merged compliance.xml into it).
+
+  Usage
+  ─────
+  These expressions can be used:
+    1. Inside XProc 3.0 steps (p:for-each with p:select or
+       p:viewport with XPath match)
+    2. In <xsl:value-of select="..."/> inside compress.xsl
+    3. From the command line via an XPath tool (e.g. xmllint --xpath,
+       BaseX, Saxon):
+         saxonq -s:dependency-graph.xml -qs:"//batch[@status='pending']"
+    4. From Ant via <xmlproperty> + <condition> or <script type="javascript">
+
+  Namespace bindings required in the query context:
+    sg  = https://singine.local/photos/1.0
+    xs  = http://www.w3.org/2001/XMLSchema
+-->
+<queries
+    xmlns:sg="https://singine.local/photos/1.0"
+    xmlns:xs="http://www.w3.org/2001/XMLSchema">
+
+
+  <!-- ── Batch selection ──────────────────────────────────────────────── -->
+
+  <query id="q01" label="All pending batches">
+    <xpath>//batch[@status='pending']</xpath>
+  </query>
+
+  <query id="q02" label="Pending batches for a specific sprint (bind $sid)">
+    <xpath>//batch[@sprint=$sid][@status='pending']</xpath>
+    <variables>
+      <var name="sid" type="xs:string" example="s03"/>
+    </variables>
+  </query>
+
+  <query id="q03" label="Batches blocked by unfinished dependencies">
+    <xpath>
+      //batch[
+        some $dep in tokenize(@depends-on, '\s+') satisfies
+          not(//batch[@id = $dep]/@status = 'done')
+      ]
+    </xpath>
+  </query>
+
+  <query id="q04" label="Batches eligible to run (pending, deps done)">
+    <xpath>
+      //batch[
+        @status = 'pending' and
+        (
+          not(@depends-on) or
+          every $dep in tokenize(@depends-on, '\s+') satisfies
+            //batch[@id = $dep]/@status = 'done'
+        )
+      ]
+    </xpath>
+  </query>
+
+  <query id="q05" label="Sprint deadline (upcoming sprints only)">
+    <xpath>
+      //sprint[xs:date(@end) ge current-date()]
+              [1]/@end
+    </xpath>
+  </query>
+
+  <query id="q06" label="Days remaining before project deadline">
+    <xpath>
+      days-from-duration(
+        xs:date(/*/@deadline) - current-date()
+      )
+    </xpath>
+  </query>
+
+
+  <!-- ── Compression parameters ───────────────────────────────────────── -->
+
+  <query id="q07" label="Batches using AVIF compression">
+    <xpath>//batch[@compression[starts-with(., 'lossy-avif')]]</xpath>
+  </query>
+
+  <query id="q08" label="AVIF quality setting for a specific batch (bind $bid)">
+    <xpath>//batch[@id=$bid]/compression-params/param[@name='quality']/@value</xpath>
+    <variables>
+      <var name="bid" type="xs:string" example="b03"/>
+    </variables>
+  </query>
+
+
+  <!-- ── Compliance queries ────────────────────────────────────────────── -->
+
+  <query id="q09" label="All prohibited-risk countries">
+    <xpath>//sg:compliance//country[@risk='prohibited']/@code</xpath>
+  </query>
+
+  <query id="q10" label="All high-risk countries">
+    <xpath>//sg:compliance//country[@risk=('high','prohibited')]</xpath>
+  </query>
+
+  <query id="q11" label="Insurance premium for a country (bind $code)">
+    <xpath>//sg:compliance//country[@code=$code]/insurance/@premium-bps</xpath>
+    <variables>
+      <var name="code" type="xs:string" example="RU"/>
+    </variables>
+  </query>
+
+  <query id="q12" label="Countries subject to OFAC primary sanctions">
+    <xpath>
+      //sg:compliance//sanction[@id='OFAC-primary']//country-ref/@code
+    </xpath>
+  </query>
+
+  <query id="q13" label="Countries requiring data-localisation">
+    <xpath>//sg:compliance//country[@data-localisation='true']/@code</xpath>
+  </query>
+
+  <query id="q14" label="Active sanctions (not yet expired, if expires attr present)">
+    <xpath>
+      //sg:compliance//sanction[
+        @active='true' and
+        (not(@expires) or xs:date(@expires) ge current-date())
+      ]
+    </xpath>
+  </query>
+
+
+  <!-- ── Dialog queries ───────────────────────────────────────────────── -->
+
+  <query id="q15" label="Request sent by Google entity">
+    <xpath>//sg:request[@entity='google']</xpath>
+  </query>
+
+  <query id="q16" label="Successfully transferred items in a response">
+    <xpath>//sg:response/sg:items/sg:item[@status='transferred']</xpath>
+  </query>
+
+  <query id="q17" label="Quarantined items across all dialogs">
+    <xpath>//sg:response/sg:items/sg:item[@status='quarantined']</xpath>
+  </query>
+
+  <query id="q18" label="Batches that produced compliance holds">
+    <xpath>//sg:response[sg:compliance-holds/sg:compliance-hold]/@batch-id</xpath>
+  </query>
+
+  <query id="q19" label="Total items transferred across all dialogs">
+    <xpath>sum(//sg:response/sg:summary/sg:transferred-count/number(.))</xpath>
+  </query>
+
+
+  <!-- ── Entity capability queries ────────────────────────────────────── -->
+
+  <query id="q20" label="Entities that support HEIC import">
+    <xpath>//entity[capabilities/cap[@name='import-heic'][@supported='true']]/@id</xpath>
+  </query>
+
+  <query id="q21" label="All capabilities of a specific entity (bind $eid)">
+    <xpath>//entity[@id=$eid]/capabilities/cap</xpath>
+    <variables>
+      <var name="eid" type="xs:string" example="apple"/>
+    </variables>
+  </query>
+
+
+</queries>
