@@ -1,0 +1,31 @@
+# .gitattributes — root
+# ──────────────────────
+# Line ending normalisation and merge driver registration for
+# Logseq graph source files and SPA build artefacts.
+#
+# The logseq-merge driver is implemented in build.xml (resolve-conflicts
+# target) and reads its strategy from logseq/deploy.xml.
+# Register it once per clone: ant register-merge-driver
+
+# ── Line endings ──────────────────────────────────────────────────────── #
+# Normalise all text files to LF on commit; check out as-is.
+* text=auto
+
+
+# ── Logseq graph source files ─────────────────────────────────────────── #
+# Use the Ant-based logseq-merge driver for conflict resolution.
+# Driver is registered in .git/config by: ant register-merge-driver
+pages/*.md           merge=logseq-merge
+pages/**/*.md        merge=logseq-merge
+journals/*.md        merge=logseq-merge
+journals/**/*.md     merge=logseq-merge
+whiteboards/*.edn    merge=logseq-merge
+logseq/*.edn         merge=logseq-merge
+
+
+# ── SPA build artefacts ───────────────────────────────────────────────── #
+# Never merge generated files; always take our version.
+# These directories are produced by logseq-publish-spa and must never
+# be subject to a three-way content merge.
+www/**               merge=ours
+www-vessel/**        merge=ours
