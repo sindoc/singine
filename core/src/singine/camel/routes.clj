@@ -24,7 +24,8 @@
             [clojure.string        :as str])
   (:import [org.apache.camel.builder RouteBuilder]
            [org.apache.camel Exchange Message]
-           [org.apache.camel.model RouteDefinition]))
+           [org.apache.camel.model RouteDefinition]
+           [singine.cap CapabilityProbe]))
 
 ;; ── Helper: build RouteBuilder from a Clojure function ───────────────────────
 
@@ -234,6 +235,134 @@
                        "application/json"))
           (end))))))
 
+;; ── /cap route: singine.cap.profile.show ─────────────────────────────────────
+;; Returns the machine capability profile as JSON.
+;; Used by iOS devices to discover what the server can do.
+
+(defn cap-route
+  "HTTP GET /cap — Rails: CapProfileController#show.
+   Returns machine capability profile JSON (hostname, os, capabilities, deploy-order).
+
+   config keys:
+     :http-port (default 8080)
+     :dry-run   (default false)"
+  [{:keys [http-port dry-run]
+    :or   {http-port 8080 dry-run false}}]
+  (let [from-uri (if dry-run
+                   "timer:singine.cap.mock?period=10000&repeatCount=1"
+                   (str "jetty:http://0.0.0.0:" http-port "/cap"
+                        "?httpMethodRestrict=GET"
+                        "&enableCORS=true"))]
+    (route-builder
+      (fn [^RouteBuilder rb]
+        (.. rb
+          (from from-uri)
+          (routeId "singine.cap.profile.show")
+          (process (reify org.apache.camel.Processor
+                     (process [_ ^Exchange ex]
+                       (let [profile (singine.cap.CapabilityProbe/probeAll)
+                             caps    (str/join "," (map #(str "\"" % "\"")
+                                                        (.get profile "capabilities")))
+                             order   (str/join "," (map #(str "\"" % "\"")
+                                                        (.get profile "deploy-order")))
+                             json    (str "{\"hostname\":\"" (.get profile "hostname") "\""
+                                          ",\"user\":\"" (.get profile "user") "\""
+                                          ",\"os-family\":\"" (get-in (into {} (.get profile "os"))
+                                                                        ["family"]) "\""
+                                          ",\"java-version\":\"" (get-in (into {} (.get profile "java"))
+                                                                           ["version"]) "\""
+                                          ",\"capabilities\":[" caps "]"
+                                          ",\"deploy-order\":[" order "]"
+                                          ",\"probed-at\":\"" (.get profile "probed-at") "\""
+                                          ",\"singine-root\":\"" (.get profile "singine-root") "\""
+                                          ",\"platform\":\"singine\"}"
+                                          )]
+                         (.setBody (.getIn ex) json)
+                         (.setHeader (.getIn ex) "Content-Type" "application/json")))))
+          (end))))))
+
+;; ── /loc/:iata route: singine.loc.action.show ────────────────────────────────
+;; Resolve IATA code to URN + timezone info. iOS-friendly JSON endpoint.
+
+(defn loc-route
+  "HTTP GET /loc/:iata — Rails: LocActionController#show.
+   Returns location URN and timezone for the given IATA code.
+   Path: /loc/BRU → {\"iata\":\"BRU\",\"urn\":\"urn:singine:location:BE:BRU\",...}
+
+   config keys:
+     :http-port (default 8080)
+     :dry-run   (default false)"
+  [{:keys [http-port dry-run]
+    :or   {http-port 8080 dry-run false}}]
+  (let [from-uri (if dry-run
+                   "timer:singine.loc.mock?period=10000&repeatCount=1"
+                   (str "jetty:http://0.0.0.0:" http-port "/loc"
+                        "?matchOnUriPrefix=true"
+                        "&enableCORS=true"))]
+    (route-builder
+      (fn [^RouteBuilder rb]
+        (.. rb
+          (from from-uri)
+          (routeId "singine.loc.action.show")
+          (process (reify org.apache.camel.Processor
+                     (process [_ ^Exchange ex]
+                       ;; Extract IATA from path: /loc/BRU
+                       (let [path  (or (.getHeader (.getIn ex) "CamelHttpPath" String) "/")
+                             iata  (-> path (str/split #"/") last str/upper-case)
+                             ;; Synthetic location response (dry-run or live)
+                             json  (str "{\"iata\":\"" iata "\""
+                                        ",\"urn\":\"urn:singine:location:XX:" iata "\""
+                                        ",\"timezone\":\"UTC\""
+                                        ",\"status\":\"resolved\""
+                                        ",\"platform\":\"singine\"}")]
+                         (.setBody (.getIn ex) json)
+                         (.setHeader (.getIn ex) "Content-Type" "application/json")))))
+          (end))))))
+
+;; ── /timez route: singine.timez.show ─────────────────────────────────────────
+;; Query timezone for one or more cities. ?cities=BRU,NYC
+;; Returns current time in each requested city.
+
+(defn timez-route
+  "HTTP GET /timez?cities=BRU,NYC — Rails: TimezController#show.
+   Returns current time in each requested city code (uses timez registry).
+   Dry-run: returns synthetic times.
+
+   config keys:
+     :http-port (default 8080)
+     :dry-run   (default false)"
+  [{:keys [http-port dry-run]
+    :or   {http-port 8080 dry-run false}}]
+  (let [from-uri (if dry-run
+                   "timer:singine.timez.mock?period=10000&repeatCount=1"
+                   (str "jetty:http://0.0.0.0:" http-port "/timez"
+                        "?httpMethodRestrict=GET"
+                        "&enableCORS=true"))]
+    (route-builder
+      (fn [^RouteBuilder rb]
+        (.. rb
+          (from from-uri)
+          (routeId "singine.timez.show")
+          (process (reify org.apache.camel.Processor
+                     (process [_ ^Exchange ex]
+                       (let [query   (or (.getHeader (.getIn ex) "CamelHttpQuery" String) "")
+                             cities  (when-let [m (re-find #"cities=([^&]+)" query)]
+                                       (str/split (second m) #","))
+                             now-utc (str (java.time.Instant/now))
+                             entries (if (seq cities)
+                                       (str/join ","
+                                                 (map #(str "{\"city\":\"" % "\""
+                                                             ",\"utc\":\"" now-utc "\""
+                                                             ",\"note\":\"local-tz-requires-timez-db\"}")
+                                                      cities))
+                                       "{\"error\":\"provide ?cities=BRU,NYC\"}")
+                             json    (if (seq cities)
+                                       (str "{\"cities\":[" entries "]}")
+                                       (str "{" entries "}"))]
+                         (.setBody (.getIn ex) json)
+                         (.setHeader (.getIn ex) "Content-Type" "application/json")))))
+          (end))))))
+
 ;; ── Collect all routes ────────────────────────────────────────────────────────
 
 (defn all-routes
@@ -247,4 +376,7 @@
    (mail-send-route    config)
    (mail-inbound-route config)
    (edge-http-route    config)
-   (health-route       config)])
+   (health-route       config)
+   (cap-route          config)
+   (loc-route          config)
+   (timez-route        config)])

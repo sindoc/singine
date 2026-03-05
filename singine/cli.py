@@ -1,6 +1,9 @@
 """Command-line interface for singine."""
 
 import sys
+import os
+import subprocess
+import socket
 import argparse
 import json
 from pathlib import Path
@@ -414,6 +417,227 @@ def cmd_kg_stats(args):
         return 1
 
 
+def _get_local_ips():
+    """Return non-loopback IPv4 addresses for this machine."""
+    ips = []
+    try:
+        import socket
+        hostname = socket.gethostname()
+        for info in socket.getaddrinfo(hostname, None):
+            ip = info[4][0]
+            if ':' not in ip and not ip.startswith('127.'):
+                ips.append(ip)
+    except Exception:
+        pass
+    # Also try connecting to an external address to find primary interface
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(('8.8.8.8', 80))
+        ips.append(s.getsockname()[0])
+        s.close()
+    except Exception:
+        pass
+    return list(dict.fromkeys(ips))  # deduplicate preserving order
+
+
+def _find_clojure():
+    """Find clojure binary: PATH first, then ~/.local/clojure/bin."""
+    import shutil
+    clj = shutil.which('clojure')
+    if clj:
+        return clj
+    local = Path.home() / '.local' / 'clojure' / 'bin' / 'clojure'
+    if local.exists():
+        return str(local)
+    return None
+
+
+def _find_singine_core():
+    """Find singine core/ directory (parent of this file → ../../core)."""
+    here = Path(__file__).resolve().parent
+    # singine/singine/cli.py → singine/core/
+    candidate = here.parent / 'core'
+    if candidate.exists() and (candidate / 'deps.edn').exists():
+        return candidate
+    return None
+
+
+def cmd_serve(args):
+    """Start singine local network server."""
+    port = args.port
+    dry_run = args.dry_run
+
+    clj = _find_clojure()
+    if not clj:
+        print("Error: clojure not found on PATH or ~/.local/clojure/bin/clojure", file=sys.stderr)
+        print("Install: https://clojure.org/guides/install_clojure", file=sys.stderr)
+        return 1
+
+    core_dir = _find_singine_core()
+    if not core_dir:
+        print("Error: singine/core/ not found", file=sys.stderr)
+        return 1
+
+    ips = _get_local_ips()
+
+    if not args.no_detect:
+        print("Detecting machine capabilities...")
+        try:
+            cap_result = subprocess.run(
+                [sys.executable, '-m', 'singine.cli', 'cap', 'detect'],
+                capture_output=True, text=True, timeout=30
+            )
+            if cap_result.returncode == 0:
+                print(cap_result.stdout.rstrip())
+        except Exception:
+            print("  (capability detection skipped)")
+        print()
+
+    print(f"Starting singine server on 0.0.0.0:{port}...")
+    print()
+
+    if ips:
+        print("Connect from your iOS devices (same LAN):")
+        for ip in ips:
+            print(f"  iPad (iSH):        curl http://{ip}:{port}/health")
+            print(f"  iPhone (a-Shell):  curl http://{ip}:{port}/health")
+            print(f"  Android (Termux):  curl http://{ip}:{port}/health")
+        print()
+
+    print("Routes available:")
+    print(f"  GET  /health          — ping")
+    print(f"  GET  /cap             — machine capability profile")
+    print(f"  GET  /messages        — mail search (?search=<term>)")
+    print(f"  GET  /loc/<iata>      — resolve IATA → URN + timezone")
+    print(f"  GET  /timez           — timezone query (?cities=BRU,NYC)")
+    print()
+    if dry_run:
+        print("  [DRY-RUN: no real mail/Kafka I/O]")
+        print()
+    print("Press Ctrl-C to stop.")
+    print()
+
+    cmd = [clj, '-M:serve']
+    if dry_run:
+        cmd.append('--dry-run')
+    if port != 8080:
+        cmd.extend(['--port', str(port)])
+
+    try:
+        proc = subprocess.run(cmd, cwd=str(core_dir))
+        return proc.returncode
+    except KeyboardInterrupt:
+        print("\nsingine server stopped.")
+        return 0
+    except FileNotFoundError:
+        print(f"Error: could not start clojure at {clj}", file=sys.stderr)
+        return 1
+
+
+def cmd_cap_detect(args):
+    """Detect machine capabilities."""
+    import platform
+    import shutil
+
+    caps = []
+    profile = {
+        'hostname': socket.gethostname(),
+        'user': os.environ.get('USER', os.environ.get('USERNAME', 'unknown')),
+        'os': platform.system(),
+        'os-version': platform.release(),
+        'python': sys.version.split()[0],
+    }
+
+    # Java
+    clj = _find_clojure()
+    java = shutil.which('java')
+    if java:
+        try:
+            r = subprocess.run(['java', '-version'], capture_output=True, text=True, timeout=5)
+            profile['java'] = r.stderr.split('\n')[0] if r.stderr else 'present'
+            caps.extend(['java', 'broker', 'kg', 'sec'])
+        except Exception:
+            profile['java'] = 'not detected'
+    else:
+        profile['java'] = 'unavailable'
+
+    # Clojure
+    profile['clojure'] = clj if clj else 'unavailable'
+    if clj:
+        caps.append('clojure')
+
+    # Docker
+    docker = shutil.which('docker')
+    if docker:
+        try:
+            r = subprocess.run(['docker', 'info'], capture_output=True, timeout=5)
+            if r.returncode == 0:
+                caps.extend(['docker', 'edge'])
+                profile['docker'] = 'running'
+            else:
+                profile['docker'] = 'installed (daemon not running)'
+        except Exception:
+            profile['docker'] = 'installed'
+    else:
+        profile['docker'] = 'unavailable'
+
+    # Git
+    git = shutil.which('git')
+    if git:
+        try:
+            r = subprocess.run(['git', '--version'], capture_output=True, text=True, timeout=5)
+            profile['git'] = r.stdout.strip()
+        except Exception:
+            profile['git'] = 'present'
+    else:
+        profile['git'] = 'unavailable'
+
+    # SSH
+    ssh_key = Path.home() / '.ssh' / 'id_rsa.pub'
+    if not ssh_key.exists():
+        ssh_key = Path.home() / '.ssh' / 'id_ed25519.pub'
+    if ssh_key.exists():
+        caps.append('ssh')
+        profile['ssh'] = str(ssh_key)
+    else:
+        profile['ssh'] = 'no key found'
+
+    # Always available
+    caps = ['mail', 'cli', 'python'] + [c for c in caps if c not in ('mail', 'cli', 'python')]
+    profile['capabilities'] = caps
+
+    if hasattr(args, 'json') and args.json:
+        print(json.dumps(profile, indent=2))
+    else:
+        print(f"  hostname:     {profile['hostname']}")
+        print(f"  user:         {profile['user']}")
+        print(f"  os:           {profile['os']} {profile['os-version']}")
+        print(f"  python:       {profile['python']}")
+        print(f"  java:         {profile['java']}")
+        print(f"  clojure:      {profile['clojure']}")
+        print(f"  docker:       {profile['docker']}")
+        print(f"  git:          {profile['git']}")
+        print(f"  ssh:          {profile['ssh']}")
+        print(f"  capabilities: {', '.join(caps)}")
+    return 0
+
+
+def cmd_cap_deploy(args):
+    """Show deploy order for this machine."""
+    print("Deploy order for this machine:")
+    # Basic deploy order based on Python-detectable capabilities
+    order = ['mail']
+    import shutil
+    if shutil.which('java'):
+        order.extend(['broker', 'kg'])
+    if shutil.which('docker'):
+        order.append('edge')
+    order.append('checkin')
+    for i, step in enumerate(order, 1):
+        print(f"  {i}. {step}")
+    return 0
+
+
 def main():
     """Main entry point for the CLI."""
     parser = argparse.ArgumentParser(
@@ -495,6 +719,45 @@ def main():
     stats_parser.add_argument('--rdf', type=str, help='Load RDF concepts')
     stats_parser.add_argument('--logseq', action='store_true', help='Load Logseq todos')
     stats_parser.set_defaults(func=cmd_kg_stats)
+
+    # serve command — start local network server for iOS/Android devices
+    serve_parser = subparsers.add_parser(
+        'serve',
+        help='Start singine local network server (Apache Camel + Jetty on :8080)'
+    )
+    serve_parser.add_argument(
+        '--port', '-p',
+        type=int,
+        default=8080,
+        help='HTTP port to listen on (default: 8080)'
+    )
+    serve_parser.add_argument(
+        '--dry-run',
+        action='store_true',
+        help='Dry-run mode: no real mail/Kafka I/O (synthetic responses)'
+    )
+    serve_parser.add_argument(
+        '--no-detect',
+        action='store_true',
+        help='Skip capability detection (faster startup)'
+    )
+    serve_parser.set_defaults(func=cmd_serve)
+
+    # cap command — machine capability detection
+    cap_parser = subparsers.add_parser(
+        'cap',
+        help='Machine capability detection and trust store management'
+    )
+    cap_subparsers = cap_parser.add_subparsers(dest='cap_subcommand', help='Cap operations')
+
+    detect_parser = cap_subparsers.add_parser('detect', help='Detect machine capabilities')
+    detect_parser.add_argument('--json', action='store_true', help='Output as JSON')
+    detect_parser.set_defaults(func=cmd_cap_detect)
+
+    deploy_parser = cap_subparsers.add_parser('deploy', help='Show deploy order for this machine')
+    deploy_parser.set_defaults(func=cmd_cap_deploy)
+
+    cap_parser.set_defaults(func=lambda args: cap_parser.print_help() or 0)
 
     args = parser.parse_args()
 

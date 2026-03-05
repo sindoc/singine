@@ -4,7 +4,8 @@
    + tc-mime01..tc-mime07 + tc-mandate01..tc-mandate07
    + tc-mail01..tc-mail05 + tc-camel01..tc-camel02
    + tc-edge01..tc-edge02 + tc-rails01..tc-rails02
-   + tc-broker01..tc-broker02 + tc-trust01..tc-trust02.
+   + tc-broker01..tc-broker02 + tc-trust01..tc-trust02
+   + tc-cap01..tc-cap02 + tc-srv01..tc-srv02.
 
    Two-character ASCII IDs for the condition system.
    Mock data generated inline via gen-mock — this IS the data product demo:
@@ -51,6 +52,7 @@
             [singine.camel.context   :as camel-ctx]
             [singine.broker.core     :as broker]
             [singine.sec.trust       :as trust]
+            [singine.cap.machine     :as cap]
             [singine.pos.lambda      :as lam]))
 
 ;; ── Mock data generator ───────────────────────────────────────────────────────
@@ -1279,3 +1281,114 @@
       (is (contains? result :required-aliases))
       (is (contains? (set (:required-aliases result)) "singine-identity-attar"))
       (is (map? (:time result))))))
+
+;; ══════════════════════════════════════════════════════════════════════════════
+;; tc-cap01..tc-cap02 — machine capability detection (16.A)
+;; ══════════════════════════════════════════════════════════════════════════════
+
+(deftest tc-cap01-detect-machine-profile
+  (testing "CAP detect! — returns full machine profile with required keys"
+    (let [thunk  (cap/detect! test-auth)
+          result (thunk)]
+      ;; Top-level identity fields
+      (is (string? (:hostname result))  "hostname must be a string")
+      (is (string? (:user result))      "user must be a string")
+      (is (string? (:singine-root result)) "singine-root must be a string")
+      (is (string? (:probed-at result)) "probed-at must be a string")
+      ;; Component probe maps
+      (is (map? (:java result))            "java probe must be a map")
+      (is (map? (:os result))              "os probe must be a map")
+      (is (map? (:git result))             "git probe must be a map")
+      (is (map? (:python result))          "python probe must be a map")
+      (is (map? (:clojure result))         "clojure probe must be a map")
+      (is (map? (:docker result))          "docker probe must be a map")
+      (is (map? (:package-managers result)) "package-managers must be a map")
+      (is (map? (:latex result))           "latex probe must be a map")
+      (is (map? (:ssh result))             "ssh probe must be a map")
+      ;; Java is always available (we ARE running in a JVM)
+      (is (true? (get-in result [:java :available]))
+          "java must always be available (we are in JVM)")
+      (is (string? (get-in result [:java :version]))
+          "java version must be a string")
+      ;; OS family must be a non-empty string
+      (is (string? (get-in result [:os :family]))
+          "os family must be a string")
+      ;; Capabilities and deploy-order
+      (is (vector? (:capabilities result))  "capabilities must be a vector")
+      (is (seq (:capabilities result))      "capabilities must be non-empty")
+      (is (vector? (:deploy-order result))  "deploy-order must be a vector")
+      (is (seq (:deploy-order result))      "deploy-order must be non-empty")
+      ;; mail and cli are always in capabilities (dry-run available everywhere)
+      (is (some #{:mail} (:capabilities result))
+          "mail must always be a capability")
+      (is (some #{:cli} (:capabilities result))
+          "cli must always be a capability")
+      ;; java must be in capabilities (we ARE running in a JVM)
+      (is (some #{:java} (:capabilities result))
+          "java must be a capability since we are in JVM")
+      ;; deploy-order always starts with mail
+      (is (= :mail (first (:deploy-order result)))
+          "deploy-order must start with :mail")
+      ;; Governed time
+      (is (map? (:time result)) "time must be a map")
+      (is (string? (:iso (:time result))) "time must have :iso string"))))
+
+(deftest tc-cap02-cap-dispatcher
+  (testing "CAP cap! dispatcher — :detect and :deploy sub-commands"
+    ;; :detect sub-command
+    (let [thunk  (cap/cap! test-auth :detect {})
+          result (thunk)]
+      (is (map? result)             "detect result must be a map")
+      (is (string? (:hostname result)) "hostname must be present")
+      (is (vector? (:capabilities result)) "capabilities must be present")
+      (is (map? (:time result))     "time must be present"))
+
+    ;; :show alias for :detect
+    (let [thunk  (cap/cap! test-auth :show {})
+          result (thunk)]
+      (is (map? result)             "show (alias for detect) must be a map")
+      (is (vector? (:capabilities result)) "capabilities must be present via :show"))
+
+    ;; :deploy sub-command — returns deploy-order only
+    (let [thunk  (cap/deploy-order! test-auth)
+          result (thunk)]
+      (is (map? result)                 "deploy result must be a map")
+      (is (vector? (:deploy-order result)) "deploy-order must be a vector")
+      (is (string? (:hostname result))  "hostname must be present")
+      (is (vector? (:capabilities result)) "capabilities must be present")
+      (is (= :mail (first (:deploy-order result)))
+          "deploy-order must start with :mail")
+      (is (map? (:time result)) "time must be present"))
+
+    ;; Unknown sub-command
+    (let [thunk  (cap/cap! test-auth :unknown-sub-cmd {})
+          result (thunk)]
+      (is (false? (:ok result))         ":ok must be false for unknown sub-cmd")
+      (is (string? (:error result))     "error must be a string")
+      (is (vector? (:available result)) "must list available sub-commands"))))
+
+;; ══════════════════════════════════════════════════════════════════════════════
+;; tc-srv01..tc-srv02 — local network server (19.B/C)
+;; ══════════════════════════════════════════════════════════════════════════════
+
+(deftest tc-srv01-start-server-dry-run
+  (testing "SERVER start-server! dry-run — returns ok + port + routes"
+    (let [thunk  (camel-ctx/start-server! test-auth {:http-port 8080 :dry-run true})
+          result (thunk)]
+      (is (true? (:ok result))        "start-server! dry-run must succeed")
+      (is (= 8080 (:port result))     "port must be 8080")
+      (is (true? (:dry-run result))   "dry-run flag must be reflected")
+      (is (string? (:bind-addr result)) "bind-addr must be a string")
+      (is (= "0.0.0.0" (:bind-addr result)) "must bind to all interfaces")
+      (is (map? (:time result))       "time must be present"))))
+
+(deftest tc-srv02-status-summary-not-started
+  (testing "SERVER status-summary when context not started — returns :started false"
+    ;; The CamelContext is not started during tests — just check the status model
+    (let [summary (camel-ctx/status-summary)]
+      (is (map? summary)                 "status-summary must return a map")
+      (is (contains? summary :started)   "must have :started key")
+      (is (contains? summary :name)      "must have :name key")
+      (is (contains? summary :routes)    "must have :routes key")
+      (is (string? (:name summary))      "name must be a string")
+      (is (vector? (:routes summary))    "routes must be a vector"))))
