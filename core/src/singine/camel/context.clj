@@ -117,6 +117,28 @@
   (when-let [^CamelContext ctx @ctx-atom]
     (.createConsumerTemplate ctx)))
 
+(defn start-server!
+  "Start the Camel context with all routes and block until SIGTERM.
+   Designed to be called from singine.server.main (clojure -M:serve).
+   Prints connection info for iOS devices on the local network.
+
+   opts:
+     :http-port (default 8080)
+     :dry-run   (default false)"
+  [auth opts]
+  (lam/govern auth
+    (fn [t]
+      (let [http-port (:http-port opts 8080)
+            dry-run   (:dry-run opts false)
+            result    ((start! auth))]
+        {:ok        (:ok result)
+         :port      http-port
+         :dry-run   dry-run
+         :routes    (:routes result)
+         :status    (:status result)
+         :bind-addr "0.0.0.0"
+         :time      (select-keys t [:iso :path])}))))
+
 ;; ── Status summary ─────────────────────────────────────────────────────────────
 
 (defn status-summary
