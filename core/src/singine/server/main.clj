@@ -116,8 +116,8 @@
   [& args]
   (let [cli-config (parse-args args)
         config     (merge default-config cli-config)
-        ;; Synthetic auth for governed calls
-        auth       {:user "singine-server" :token "local" :dry-run (:dry-run config)}
+        ;; Auth for governed calls
+        auth       (lam/make-auth "urn:singine:agent:server" :anonymous-function)
         camel-ctx  (ctx/make-context)]
 
     ;; Probe capabilities

@@ -5,7 +5,8 @@
    + tc-mail01..tc-mail05 + tc-camel01..tc-camel02
    + tc-edge01..tc-edge02 + tc-rails01..tc-rails02
    + tc-broker01..tc-broker02 + tc-trust01..tc-trust02
-   + tc-cap01..tc-cap02 + tc-srv01..tc-srv02.
+   + tc-cap01..tc-cap02 + tc-srv01..tc-srv02
+   + tc-lac01..tc-lac02.
 
    Two-character ASCII IDs for the condition system.
    Mock data generated inline via gen-mock — this IS the data product demo:
@@ -53,6 +54,7 @@
             [singine.broker.core     :as broker]
             [singine.sec.trust       :as trust]
             [singine.cap.machine     :as cap]
+            [singine.loc.action      :as lac]
             [singine.pos.lambda      :as lam]))
 
 ;; ── Mock data generator ───────────────────────────────────────────────────────
@@ -1392,3 +1394,74 @@
       (is (contains? summary :routes)    "must have :routes key")
       (is (string? (:name summary))      "name must be a string")
       (is (vector? (:routes summary))    "routes must be a vector"))))
+
+;; ══════════════════════════════════════════════════════════════════════════════
+;; tc-lac01..tc-lac02 — Location-Action Correlation engine (Section 18 LAC-v1)
+;; ══════════════════════════════════════════════════════════════════════════════
+
+(deftest tc-lac01-correlate-bru-task
+  (testing "LAC correlate! BRU + :task action + 500km radius → decision map"
+    (let [thunk  (lac/correlate! test-auth
+                                 {:location          "BRU"
+                                  :action            {:type         :task
+                                                      :agent-type   :human
+                                                      :entity-count 3}
+                                  :space-constraint  {:reference-iata "BRU"
+                                                      :target-iata    "AMS"
+                                                      :radius-km      500.0}
+                                  :impact-threshold  0.9
+                                  :dry-run           true})
+          result (thunk)]
+      ;; Top-level structure
+      (is (map? result)                 "correlate! must return a map")
+      (is (contains? result :feasible)  "must have :feasible key")
+      (is (boolean? (:feasible result)) "feasible must be a boolean")
+      (is (string? (:location-urn result)) "location-urn must be a string")
+      (is (string? (:action-urn result))   "action-urn must be a string")
+      (is (str/starts-with? (:location-urn result) "urn:singine:location:")
+          "location-urn must start with urn:singine:location:")
+      (is (str/starts-with? (:action-urn result) "urn:singine:action:task:")
+          "action-urn must start with urn:singine:action:task:")
+      ;; Sub-evaluations
+      (is (map? (:time-window result))  "time-window must be a map")
+      (is (map? (:space-window result)) "space-window must be a map")
+      (is (map? (:impact result))       "impact must be a map")
+      (is (map? (:decision result))     "decision must be a map")
+      ;; Space: BRU→AMS is ~174km — well within 500km
+      (is (true? (get-in result [:space-window :feasible]))
+          "BRU→AMS 174km must be within 500km radius")
+      (is (number? (get-in result [:space-window :distance-km]))
+          "distance-km must be a number")
+      ;; Impact structure
+      (is (number? (get-in result [:impact :impact-score]))
+          "impact-score must be a number")
+      (is (number? (get-in result [:impact :breach-probability]))
+          "breach-probability must be a number")
+      ;; Decision structure
+      (is (contains? (:decision result) :feasible) "decision must have :feasible")
+      (is (string? (get-in result [:decision :reason])) "decision must have :reason string")
+      (is (string? (get-in result [:decision :decision-id])) "decision must have :decision-id")
+      ;; Governed time
+      (is (map? (:time result)) "time must be present")
+      (is (string? (:iso (:time result))) "time must have :iso string"))))
+
+(deftest tc-lac02-decide-publishes-to-broker
+  (testing "LAC decide! — publishes decision to Kafka dry-run, returns correlation + broker info"
+    (let [thunk  (lac/decide! test-auth
+                              {:location         "LHR"
+                               :action           {:type         :decision
+                                                  :agent-type   :collaborative
+                                                  :entity-count 5}
+                               :impact-threshold 0.85
+                               :dry-run          true}
+                              0.85)
+          result (thunk)]
+      (is (map? result)                   "decide! must return a map")
+      (is (contains? result :feasible)    "must have :feasible")
+      (is (contains? result :published)   "must have :published (broker ack)")
+      (is (contains? result :topic)       "must have :topic (kafka topic)")
+      (is (contains? result :broker-checksum) "must have :broker-checksum (SHA-256)")
+      (is (string? (:topic result))       "topic must be a string")
+      (is (string? (:broker-checksum result)) "broker-checksum must be a string")
+      (is (map? (:decision result))       "decision sub-map must be present")
+      (is (map? (:time result))           "governed time must be present"))))

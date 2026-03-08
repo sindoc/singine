@@ -71,31 +71,31 @@
                         (when-not (str/blank? search-term)
                           (str "&searchTerm=subject:" search-term))
                         "&delay=" poll-delay-ms
-                        "&consumer.bridgeErrorHandler=true"))]
+                        "&bridgeErrorHandler=true"))]
     (route-builder
       (fn [^RouteBuilder rb]
-        (.. rb
-          (from from-uri)
-          (routeId "singine.mail.messages.index")
-          (process (reify org.apache.camel.Processor
-                     (process [_ ^Exchange ex]
-                       (let [msg  (.getIn ex)
-                             subj (or (.getHeader msg "Subject" String) "(no subject)")
-                             from (or (.getHeader msg "From" String) "unknown")
-                             uid  (str (System/currentTimeMillis))]
-                         (log/debugf "singine.mail.messages.index: from=%s subj=%s" from subj)
-                         ;; Build minimal XML envelope
-                         (let [xml (str "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
-                                        "<mail-batch xmlns=\"urn:singine:mail\" count=\"1\">"
-                                        "<mail uid=\"" uid "\" folder=\"" folder "\">"
-                                        "<from>" from "</from>"
-                                        "<subject>" subj "</subject>"
-                                        "</mail></mail-batch>")]
-                           (.setBody msg xml)
-                           (.setHeader msg "Content-Type" "application/xml")
-                           (.setHeader msg "singine.mail.uid" uid))))))
-          (to "direct:singine.mail.inbound")
-          (end))))))
+        (let [proc (proxy [org.apache.camel.Processor] []
+                     (process [ex]
+                       (let [^org.apache.camel.Exchange ex ex
+                             subj (or (.getHeader (.getIn ex) "Subject" String) "(no subject)")
+                             from (or (.getHeader (.getIn ex) "From" String) "unknown")
+                             uid  (str (System/currentTimeMillis))
+                             xml  (str "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+                                       "<mail-batch xmlns=\"urn:singine:mail\" count=\"1\">"
+                                       "<mail uid=\"" uid "\" folder=\"" folder "\">"
+                                       "<from>" from "</from>"
+                                       "<subject>" subj "</subject>"
+                                       "</mail></mail-batch>")]
+                         (.setBody (.getIn ex) xml)
+                         (.setHeader (.getIn ex) "Content-Type" "application/xml")
+                         (.setHeader (.getIn ex) "singine.mail.uid" uid)
+                         nil)))]
+          (.. rb
+            (from from-uri)
+            (routeId "singine.mail.messages.index")
+            (process proc)
+            (to "direct:singine.mail.inbound")
+            (end)))))))
 
 ;; ── SMTP producer: singine.mail.messages.send ────────────────────────────────
 ;; Receives a message from direct:singine.mail.send, dispatches via SMTP.
@@ -175,38 +175,33 @@
    config keys:
      :http-port   (default 8080)
      :dry-run     (default false)"
-  [{:keys [http-port dry-run]
-    :or   {http-port 8080 dry-run false}}]
-  (let [from-uri (if dry-run
-                   "timer:singine.edge.mock?period=10000&repeatCount=1"
-                   (str "jetty:http://0.0.0.0:" http-port "/messages"
-                        "?httpMethodRestrict=GET"
-                        "&enableCORS=true"))]
+  [{:keys [http-port]
+    :or   {http-port 8080}}]
+  (let [from-uri (str "jetty:http://0.0.0.0:" http-port "/messages"
+                      "?httpMethodRestrict=GET"
+                      "&enableCORS=true")]
     (route-builder
       (fn [^RouteBuilder rb]
         (.. rb
           (from from-uri)
           (routeId "singine.edge.messages.index")
-          (process (reify org.apache.camel.Processor
-                     (process [_ ^Exchange ex]
-                       ;; Extract query param: ?search=invoice
-                       (let [params (.getHeader (.getIn ex)
-                                                "CamelHttpQuery" String)
+          (process (proxy [org.apache.camel.Processor] []
+                     (process [ex]
+                       (let [^org.apache.camel.Exchange ex ex
+                             params (.getHeader (.getIn ex) "CamelHttpQuery" String)
                              search (when params
                                       (second (re-find #"search=([^&]+)" params)))]
-                         (.setHeader (.getIn ex)
-                                     "singine.mail.search"
-                                     (or search ""))))))
+                         (.setHeader (.getIn ex) "singine.mail.search" (or search ""))
+                         nil))))
           (to "direct:singine.mail.search")
           ;; Wrap response in JSON array
-          (process (reify org.apache.camel.Processor
-                     (process [_ ^Exchange ex]
-                       (let [body (str (.getBody (.getIn ex)))]
-                         (.setBody (.getIn ex)
-                                   (str "{\"messages\":[" body "]}"))
-                         (.setHeader (.getIn ex)
-                                     "Content-Type"
-                                     "application/json")))))
+          (process (proxy [org.apache.camel.Processor] []
+                     (process [ex]
+                       (let [^org.apache.camel.Exchange ex ex
+                             body (str (.getBody (.getIn ex)))]
+                         (.setBody (.getIn ex) (str "{\"messages\":[" body "]}"))
+                         (.setHeader (.getIn ex) "Content-Type" "application/json")
+                         nil))))
           (end))))))
 
 ;; ── Health check route: singine.edge.health ──────────────────────────────────
@@ -217,12 +212,10 @@
 
    config keys:
      :http-port (default 8080)"
-  [{:keys [http-port dry-run]
-    :or   {http-port 8080 dry-run false}}]
-  (let [from-uri (if dry-run
-                   "timer:singine.health.mock?period=10000&repeatCount=1"
-                   (str "jetty:http://0.0.0.0:" http-port "/health"
-                        "?httpMethodRestrict=GET"))]
+  [{:keys [http-port]
+    :or   {http-port 8080}}]
+  (let [from-uri (str "jetty:http://0.0.0.0:" http-port "/health"
+                      "?httpMethodRestrict=GET")]
     (route-builder
       (fn [^RouteBuilder rb]
         (.. rb
@@ -246,21 +239,20 @@
    config keys:
      :http-port (default 8080)
      :dry-run   (default false)"
-  [{:keys [http-port dry-run]
-    :or   {http-port 8080 dry-run false}}]
-  (let [from-uri (if dry-run
-                   "timer:singine.cap.mock?period=10000&repeatCount=1"
-                   (str "jetty:http://0.0.0.0:" http-port "/cap"
-                        "?httpMethodRestrict=GET"
-                        "&enableCORS=true"))]
+  [{:keys [http-port]
+    :or   {http-port 8080}}]
+  (let [from-uri (str "jetty:http://0.0.0.0:" http-port "/cap"
+                      "?httpMethodRestrict=GET"
+                      "&enableCORS=true")]
     (route-builder
       (fn [^RouteBuilder rb]
         (.. rb
           (from from-uri)
           (routeId "singine.cap.profile.show")
-          (process (reify org.apache.camel.Processor
-                     (process [_ ^Exchange ex]
-                       (let [profile (singine.cap.CapabilityProbe/probeAll)
+          (process (proxy [org.apache.camel.Processor] []
+                     (process [ex]
+                       (let [^org.apache.camel.Exchange ex ex
+                             profile (singine.cap.CapabilityProbe/probeAll)
                              caps    (str/join "," (map #(str "\"" % "\"")
                                                         (.get profile "capabilities")))
                              order   (str/join "," (map #(str "\"" % "\"")
@@ -275,10 +267,10 @@
                                           ",\"deploy-order\":[" order "]"
                                           ",\"probed-at\":\"" (.get profile "probed-at") "\""
                                           ",\"singine-root\":\"" (.get profile "singine-root") "\""
-                                          ",\"platform\":\"singine\"}"
-                                          )]
+                                          ",\"platform\":\"singine\"}")]
                          (.setBody (.getIn ex) json)
-                         (.setHeader (.getIn ex) "Content-Type" "application/json")))))
+                         (.setHeader (.getIn ex) "Content-Type" "application/json")
+                         nil))))
           (end))))))
 
 ;; ── /loc/:iata route: singine.loc.action.show ────────────────────────────────
@@ -292,31 +284,29 @@
    config keys:
      :http-port (default 8080)
      :dry-run   (default false)"
-  [{:keys [http-port dry-run]
-    :or   {http-port 8080 dry-run false}}]
-  (let [from-uri (if dry-run
-                   "timer:singine.loc.mock?period=10000&repeatCount=1"
-                   (str "jetty:http://0.0.0.0:" http-port "/loc"
-                        "?matchOnUriPrefix=true"
-                        "&enableCORS=true"))]
+  [{:keys [http-port]
+    :or   {http-port 8080}}]
+  (let [from-uri (str "jetty:http://0.0.0.0:" http-port "/loc"
+                      "?matchOnUriPrefix=true"
+                      "&enableCORS=true")]
     (route-builder
       (fn [^RouteBuilder rb]
         (.. rb
           (from from-uri)
           (routeId "singine.loc.action.show")
-          (process (reify org.apache.camel.Processor
-                     (process [_ ^Exchange ex]
-                       ;; Extract IATA from path: /loc/BRU
-                       (let [path  (or (.getHeader (.getIn ex) "CamelHttpPath" String) "/")
+          (process (proxy [org.apache.camel.Processor] []
+                     (process [ex]
+                       (let [^org.apache.camel.Exchange ex ex
+                             path  (or (.getHeader (.getIn ex) "CamelHttpPath" String) "/")
                              iata  (-> path (str/split #"/") last str/upper-case)
-                             ;; Synthetic location response (dry-run or live)
                              json  (str "{\"iata\":\"" iata "\""
                                         ",\"urn\":\"urn:singine:location:XX:" iata "\""
                                         ",\"timezone\":\"UTC\""
                                         ",\"status\":\"resolved\""
                                         ",\"platform\":\"singine\"}")]
                          (.setBody (.getIn ex) json)
-                         (.setHeader (.getIn ex) "Content-Type" "application/json")))))
+                         (.setHeader (.getIn ex) "Content-Type" "application/json")
+                         nil))))
           (end))))))
 
 ;; ── /timez route: singine.timez.show ─────────────────────────────────────────
@@ -331,21 +321,20 @@
    config keys:
      :http-port (default 8080)
      :dry-run   (default false)"
-  [{:keys [http-port dry-run]
-    :or   {http-port 8080 dry-run false}}]
-  (let [from-uri (if dry-run
-                   "timer:singine.timez.mock?period=10000&repeatCount=1"
-                   (str "jetty:http://0.0.0.0:" http-port "/timez"
-                        "?httpMethodRestrict=GET"
-                        "&enableCORS=true"))]
+  [{:keys [http-port]
+    :or   {http-port 8080}}]
+  (let [from-uri (str "jetty:http://0.0.0.0:" http-port "/timez"
+                      "?httpMethodRestrict=GET"
+                      "&enableCORS=true")]
     (route-builder
       (fn [^RouteBuilder rb]
         (.. rb
           (from from-uri)
           (routeId "singine.timez.show")
-          (process (reify org.apache.camel.Processor
-                     (process [_ ^Exchange ex]
-                       (let [query   (or (.getHeader (.getIn ex) "CamelHttpQuery" String) "")
+          (process (proxy [org.apache.camel.Processor] []
+                     (process [ex]
+                       (let [^org.apache.camel.Exchange ex ex
+                             query   (or (.getHeader (.getIn ex) "CamelHttpQuery" String) "")
                              cities  (when-let [m (re-find #"cities=([^&]+)" query)]
                                        (str/split (second m) #","))
                              now-utc (str (java.time.Instant/now))
@@ -360,7 +349,8 @@
                                        (str "{\"cities\":[" entries "]}")
                                        (str "{" entries "}"))]
                          (.setBody (.getIn ex) json)
-                         (.setHeader (.getIn ex) "Content-Type" "application/json")))))
+                         (.setHeader (.getIn ex) "Content-Type" "application/json")
+                         nil))))
           (end))))))
 
 ;; ── Collect all routes ────────────────────────────────────────────────────────

@@ -15,6 +15,7 @@
      singine.processed.text      ← extracted text + metadata
      singine.processed.triples   ← RDF triples
      singine.events.activity     ← activity lifecycle
+     singine.events.decision     ← LAC engine location-action decisions
      singine.events.gdpr         ← GDPR audit records
      singine.events.release      ← git release triggers
      singine.edge.sync           ← edge node synchronisation
@@ -49,10 +50,12 @@
    :processed-text     "singine.processed.text"
    :processed-triples  "singine.processed.triples"
    :events-activity    "singine.events.activity"
+   :events-decision    "singine.events.decision"    ; LAC engine decisions (Section 18)
    :events-gdpr        "singine.events.gdpr"
    :events-release     "singine.events.release"
    :edge-sync          "singine.edge.sync"
    :hf-publish         "singine.hf.publish"
+   :broker-dead        "singine.broker.dead"
    :dead-letter        "singine.broker.dead"})
 
 ;; ── RabbitMQ exchange registry ────────────────────────────────────────────────
