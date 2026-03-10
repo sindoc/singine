@@ -353,6 +353,80 @@
                          nil))))
           (end))))))
 
+;; ── DIAC scenario ingest: singine.scenario.ingest ────────────────────────────
+;; Consumes raw conversation-turn events from singine.scenario.raw,
+;; processes them through the Python PoLA engine,
+;; publishes computed metrics to singine.scenario.base.
+
+(defn scenario-ingest-route
+  "Camel route: singine.scenario.raw → PoLA compute → singine.scenario.base.
+
+   In live mode: from kafka:singine.scenario.raw → processor → to kafka:singine.scenario.base.
+   In dry-run:   from timer: (fires once) → log: (simulates both ends).
+
+   The Processor:
+     1. Reads raw DIAC event JSON from exchange body
+     2. Extracts scenario-id, request, group-a, group-b
+     3. Invokes Python: python3 -m singine.conversation_log compute <json>
+     4. Sets exchange body to base event JSON (metrics + selected response)
+
+   config keys:
+     :kafka-brokers  (default localhost:9092)
+     :dry-run        (default false)"
+  [{:keys [kafka-brokers dry-run]
+    :or   {kafka-brokers "localhost:9092" dry-run false}}]
+  (let [from-uri (if dry-run
+                   "timer:singine.scenario.mock?period=10000&repeatCount=1"
+                   (str "kafka:singine.scenario.raw"
+                        "?brokers=" kafka-brokers
+                        "&groupId=singine-scenario-ingest"
+                        "&autoOffsetReset=earliest"))
+        to-uri   (if dry-run
+                   "log:singine.scenario.base?level=INFO&showBody=true"
+                   (str "kafka:singine.scenario.base"
+                        "?brokers=" kafka-brokers
+                        "&serializerClass=org.apache.kafka.common.serialization.StringSerializer"))]
+    (route-builder
+      (fn [^RouteBuilder rb]
+        (let [proc (proxy [org.apache.camel.Processor] []
+                     (process [ex]
+                       (let [^org.apache.camel.Exchange ex ex
+                             raw-body  (str (or (.getBody (.getIn ex)) "{}"))
+                             ;; Extract scenario-id from header or body
+                             sid       (or (.getHeader (.getIn ex) "singine.scenario.id" String)
+                                          "DIAC-pending")
+                             ;; Build synthetic base event in dry-run
+                             base-json (if dry-run
+                                         (str "{\"scenario-id\":\"" sid "\""
+                                              ",\"event-type\":\"metrics-computed\""
+                                              ",\"selected-resp\":\"R4\""
+                                              ",\"action-score\":4.2"
+                                              ",\"net-result\":5.8"
+                                              ",\"dry-run\":true"
+                                              ",\"raw-length\":" (count raw-body) "}")
+                                         ;; Live: delegate to Python PoLA engine
+                                         (let [pb  (ProcessBuilder.
+                                                      ^java.util.List
+                                                      ["python3" "-m" "singine.conversation_log"
+                                                       "compute" raw-body "0.75"])
+                                               _   (.redirectError pb ProcessBuilder$Redirect/INHERIT)
+                                               p   (.start pb)
+                                               out (slurp (.getInputStream p))
+                                               _   (.waitFor p)]
+                                           (if (str/blank? out)
+                                             (str "{\"scenario-id\":\"" sid "\",\"error\":\"python-empty\"}")
+                                             (str/trim out))))]
+                         (.setBody (.getIn ex) base-json)
+                         (.setHeader (.getIn ex) "Content-Type" "application/json")
+                         (.setHeader (.getIn ex) "singine.scenario.id" sid)
+                         nil)))]
+          (.. rb
+            (from from-uri)
+            (routeId "singine.scenario.ingest")
+            (process proc)
+            (to to-uri)
+            (end)))))))
+
 ;; ── Collect all routes ────────────────────────────────────────────────────────
 
 (defn all-routes
@@ -362,11 +436,12 @@
    config keys: union of all individual route configs above.
    dry-run: true → all network I/O replaced with log:/timer: endpoints."
   [config]
-  [(mail-consume-route config)
-   (mail-send-route    config)
-   (mail-inbound-route config)
-   (edge-http-route    config)
-   (health-route       config)
-   (cap-route          config)
-   (loc-route          config)
-   (timez-route        config)])
+  [(mail-consume-route      config)
+   (mail-send-route         config)
+   (mail-inbound-route      config)
+   (edge-http-route         config)
+   (health-route            config)
+   (cap-route               config)
+   (loc-route               config)
+   (timez-route             config)
+   (scenario-ingest-route   config)])

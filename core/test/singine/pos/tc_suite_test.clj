@@ -6,7 +6,8 @@
    + tc-edge01..tc-edge02 + tc-rails01..tc-rails02
    + tc-broker01..tc-broker02 + tc-trust01..tc-trust02
    + tc-cap01..tc-cap02 + tc-srv01..tc-srv02
-   + tc-lac01..tc-lac02.
+   + tc-lac01..tc-lac02
+   + tc-diac03..tc-diac05.
 
    Two-character ASCII IDs for the condition system.
    Mock data generated inline via gen-mock — this IS the data product demo:
@@ -55,6 +56,7 @@
             [singine.sec.trust       :as trust]
             [singine.cap.machine     :as cap]
             [singine.loc.action      :as lac]
+            [singine.scenario.diac   :as diac]
             [singine.pos.lambda      :as lam]))
 
 ;; ── Mock data generator ───────────────────────────────────────────────────────
@@ -1465,3 +1467,76 @@
       (is (string? (:broker-checksum result)) "broker-checksum must be a string")
       (is (map? (:decision result))       "decision sub-map must be present")
       (is (map? (:time result))           "governed time must be present"))))
+
+;; ── tc-diac03: ScenarioId URN format ──────────────────────────────────────────
+
+(deftest tc-diac03-scenario-urn-format
+  (testing "make-diac-event — produces well-formed DIAC event map with correct URN prefix"
+    (let [event (diac/make-diac-event
+                  "Engineering team decides on capability X implementation"
+                  {:name "Engineering Team" :members ["Alice" "Bob"] :role "acting"}
+                  {:name "Product Team"     :members ["Diana" "Eve"] :role "target"})]
+      (is (map? event)                          "make-diac-event must return a map")
+      (is (= "DIAC" (:scenario-code event))     "scenario-code must be DIAC")
+      (is (= "conversation-turn" (:event-type event)) "event-type must be conversation-turn")
+      (is (string? (:urn event))                "urn must be a string")
+      (is (.startsWith ^String (:urn event) "urn:singine:scenario:DIAC")
+          "URN must start with urn:singine:scenario:DIAC")
+      (is (string? (:timestamp event))          "timestamp must be an ISO-8601 string")
+      (is (map? (:group-a event))               "group-a must be a map")
+      (is (map? (:group-b event))               "group-b must be a map")
+      (is (= "acting" (get-in event [:group-a :role])) "group-a role must be acting")
+      (is (= "target" (get-in event [:group-b :role])) "group-b role must be target")
+      (is (= "1.0" (:schema-version event))     "schema-version must be 1.0"))))
+
+;; ── tc-diac04: ingest! dry-run governed thunk ─────────────────────────────────
+
+(deftest tc-diac04-ingest-dry-run
+  (testing "ingest! dry-run — returns governed thunk; thunk produces PoLA result map"
+    (let [thunk (diac/ingest! test-auth
+                              {:scenario-id   "DIAC-test-04"
+                               :request       "Decide on sprint scope for feature X"
+                               :group-a-name  "Engineering Team"
+                               :group-b-name  "Product Team"
+                               :dry-run       true})]
+      (is (fn? thunk) "ingest! must return a zero-arg thunk (governed fn)")
+      (let [result (thunk)]
+        (is (map? result)                              "thunk must return a map")
+        (is (contains? result :selected-response)      "result must have :selected-response")
+        (is (contains? result :action-score)           "result must have :action-score (S)")
+        (is (contains? result :net-result)             "result must have :net-result (Δ)")
+        (is (contains? result :scenario-id)            "result must have :scenario-id")
+        (is (string? (:selected-response result))      ":selected-response must be a string")
+        (is (number? (:action-score result))           ":action-score must be a number")
+        (is (number? (:net-result result))             ":net-result must be a number")
+        (is (pos? (:net-result result))                "net result Δ must be positive")
+        (is (contains? #{"R1" "R2" "R3" "R4"} (:selected-response result))
+            ":selected-response must be one of R1..R4")
+        (is (map? (:time result))                      "governed time must be present")))))
+
+;; ── tc-diac05: render-logseq! dry-run governed thunk ──────────────────────────
+
+(deftest tc-diac05-render-logseq-dry-run
+  (testing "render-logseq! dry-run — returns governed thunk; thunk returns output path map"
+    (let [thunk (diac/render-logseq! test-auth
+                                     {:scenario-id  "DIAC-0001"
+                                      :graph-path   "/tmp/singine-test-graph"
+                                      :request      "Engineering team decides on feature X"
+                                      :group-a-name "Engineering Team"
+                                      :group-b-name "Product Team"
+                                      :dry-run      true})]
+      (is (fn? thunk) "render-logseq! must return a zero-arg thunk (governed fn)")
+      (let [result (thunk)]
+        (is (map? result)                            "thunk must return a result map")
+        (is (contains? result :logseq-path)          "result must have :logseq-path")
+        (is (contains? result :scenario-id)          "result must have :scenario-id")
+        (is (contains? result :graph-path)           "result must have :graph-path")
+        (is (contains? result :dry-run)              "result must have :dry-run flag")
+        (is (true? (:dry-run result))                ":dry-run must be true")
+        (is (= "DIAC-0001" (:scenario-id result))    "scenario-id must match")
+        (is (string? (:logseq-path result))          ":logseq-path must be a string")
+        (is (.endsWith ^String (:logseq-path result) ".md")
+            ":logseq-path must end with .md")
+        (is (.contains ^String (:logseq-path result) "DIAC-0001")
+            ":logseq-path must contain the scenario ID")
+        (is (map? (:time result))                    "governed time must be present")))))

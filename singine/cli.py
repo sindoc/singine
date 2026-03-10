@@ -6,6 +6,7 @@ import subprocess
 import socket
 import argparse
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional
 
@@ -17,6 +18,13 @@ from .knowledge_graph import KnowledgeGraph
 from .logseq_url import get_page_metadata
 from .operating_model import get_operating_model
 from .context_enrichment import enrich_entity_with_context
+from .scenario_codex import (
+    SCENARIO_REGISTRY, ScenarioId, list_codes, describe_code
+)
+from .conversation_log import (
+    ConversationLog, make_default_turn, LogseqPageRenderer,
+    PrincipleOfLeastAction
+)
 
 
 def format_todo_table(todos: List[Todo], show_done: bool = False) -> str:
@@ -638,6 +646,515 @@ def cmd_cap_deploy(args):
     return 0
 
 
+# ============================================================================
+# Scenario commands
+# ============================================================================
+
+def _get_graph_path() -> Optional[Path]:
+    """Return the configured Logseq graph path, or None if not configured."""
+    try:
+        return Config().get_logseq_path()
+    except (FileNotFoundError, ValueError):
+        return None
+
+
+def cmd_codex(args):
+    """List all four-letter codes or describe a specific one."""
+    code = getattr(args, 'code', None)
+    if code:
+        code = code.upper()
+        print(describe_code(code))
+    else:
+        print("Singine Scenario Codex — Four-Letter Codes\n")
+        print(f"  {'CODE':<6}  {'NAME':<45}  {'URN PREFIX'}")
+        print("  " + "-" * 80)
+        for flc in list_codes():
+            urn = f"urn:singine:scenario:{flc.code}:NNNN"
+            print(f"  {flc.code:<6}  {flc.name:<45}  {urn}")
+        print()
+        print(f"  Total codes: {len(SCENARIO_REGISTRY)}")
+        print(f"  Collibra parent type: Business Asset (SCEN)")
+    return 0
+
+
+def cmd_scenario_ls(args):
+    """List existing scenarios."""
+    graph_path = _get_graph_path()
+    code = getattr(args, 'code', None)
+    if code:
+        code = code.upper()
+
+    if graph_path is None:
+        print("Warning: Logseq graph path not configured. No scenarios on disk.", file=sys.stderr)
+        print("Create ~/.singine/backend.config with [logseq] graph_path = /path/to/graph")
+        return 0
+
+    ids = ScenarioId.list_all(graph_path, code=code)
+
+    if not ids:
+        label = f" for code {code}" if code else ""
+        print(f"No scenarios found{label}.")
+        return 0
+
+    print(f"  {'ID':<12}  {'URN':<40}  {'Logseq page'}")
+    print("  " + "-" * 80)
+    for sid in ids:
+        print(f"  {str(sid):<12}  {sid.urn():<40}  {sid.logseq_path()}")
+    print(f"\n  Total: {len(ids)}")
+    return 0
+
+
+def cmd_scenario_new(args):
+    """Create a new scenario scaffold."""
+    code = args.code.upper()
+    description = args.description
+
+    if code not in SCENARIO_REGISTRY:
+        print(f"Error: unknown code {code!r}. Run 'singine codex' to list valid codes.",
+              file=sys.stderr)
+        return 1
+
+    graph_path = _get_graph_path()
+    if graph_path is None:
+        print("Error: Logseq graph path not configured.", file=sys.stderr)
+        return 1
+
+    sid = ScenarioId.next(code, graph_path)
+    out_path = sid.logseq_abs_path(graph_path)
+
+    # Create scaffold
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    created_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    scaffold = (
+        f"type:: scenario\n"
+        f"scenario-code:: {sid}\n"
+        f"urn:: {sid.urn()}\n"
+        f"collibra-asset:: {sid.collibra_id()}\n"
+        f"description:: {description}\n"
+        f"status:: pending\n"
+        f"created-at:: {created_at}\n"
+        f"tags:: scenario, {code}\n"
+        f"\n"
+        f"# {sid}: {SCENARIO_REGISTRY[code].name}\n"
+        f"\n"
+        f"> {description}\n"
+        f"\n"
+        f"<!-- Run: singine scenario run {sid} -->\n"
+    )
+    out_path.write_text(scaffold, encoding="utf-8")
+
+    print(f"Created: {sid}")
+    print(f"URN:     {sid.urn()}")
+    print(f"Path:    {out_path}")
+    return 0
+
+
+def cmd_scenario_show(args):
+    """Display scenario metadata."""
+    try:
+        sid = ScenarioId.parse(args.scenario_id)
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return 1
+
+    graph_path = _get_graph_path()
+    if graph_path is None:
+        print("Error: Logseq graph path not configured.", file=sys.stderr)
+        return 1
+
+    page_path = sid.logseq_abs_path(graph_path)
+    if not page_path.exists():
+        print(f"Error: scenario {sid} not found at {page_path}", file=sys.stderr)
+        return 1
+
+    info = sid.code_info()
+    print(f"  Scenario ID:  {sid}")
+    print(f"  URN:          {sid.urn()}")
+    print(f"  Code:         {info.code} — {info.name}")
+    print(f"  Collibra:     {sid.collibra_id()}")
+    print(f"  Logseq page:  {page_path}")
+    print()
+    # Print frontmatter lines (leading property lines)
+    content = page_path.read_text(encoding="utf-8")
+    for line in content.splitlines():
+        if '::' in line:
+            print(f"  {line}")
+        elif line.startswith('#') or not line:
+            break
+    return 0
+
+
+def cmd_scenario_run(args):
+    """Execute the scenario pipeline: generate 4 responses + PoLA selection."""
+    try:
+        sid = ScenarioId.parse(args.scenario_id)
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return 1
+
+    graph_path = _get_graph_path()
+    if graph_path is None:
+        print("Error: Logseq graph path not configured.", file=sys.stderr)
+        return 1
+
+    page_path = sid.logseq_abs_path(graph_path)
+    if not page_path.exists():
+        print(f"Error: scenario {sid} not found. Run: singine scenario new {sid.code} \"..\"",
+              file=sys.stderr)
+        return 1
+
+    # Read description from scaffold
+    content = page_path.read_text(encoding="utf-8")
+    description = ""
+    group_a = "Group A"
+    group_b = "Group B"
+    for line in content.splitlines():
+        if line.startswith("description::"):
+            description = line.split("::", 1)[1].strip()
+        elif line.startswith("group-a::"):
+            group_a = line.split("::", 1)[1].strip().strip("[]")
+        elif line.startswith("group-b::"):
+            group_b = line.split("::", 1)[1].strip().strip("[]")
+    if not description:
+        description = f"Scenario {sid}"
+    if group_a == "Group A":
+        group_a = "Engineering Team"
+    if group_b == "Group B":
+        group_b = "Product Team"
+
+    print(f"Running scenario {sid}…")
+    print(f"  Group A: {group_a}")
+    print(f"  Group B: {group_b}")
+    print(f"  Request: {description}")
+    print()
+
+    # Generate turn with 4 responses + PoLA
+    turn = make_default_turn(
+        scenario_id=sid,
+        request=description,
+        group_a_name=group_a,
+        group_b_name=group_b,
+    )
+
+    # Show metrics table
+    metrics = turn.metrics_list()
+    print("  Response Candidates:")
+    print(f"  {'R#':<4}  {'Strategy':<20}  {'S':<8}  {'Δ':<8}  {'η':<8}  {'L':<8}  {'Selected'}")
+    print("  " + "-" * 72)
+    for m in metrics:
+        sel = "✓" if m.selected else ""
+        print(
+            f"  {m.response_id:<4}  "
+            f"{m.strategy.value.replace('_',' ').title():<20}  "
+            f"{m.action_score:<8.2f}  "
+            f"{m.net_result:<8.2f}  "
+            f"{m.efficiency:<8.2f}  "
+            f"{m.lagrangian:<8.2f}  "
+            f"{sel}"
+        )
+    print()
+    print(PrincipleOfLeastAction.explain(metrics))
+    print()
+
+    # Write full Logseq page
+    log = ConversationLog(scenario_id=sid)
+    log.add_turn(turn)
+    renderer = LogseqPageRenderer()
+    out_path = renderer.render(log, graph_path)
+    print(f"Logseq page written: {out_path}")
+    return 0
+
+
+def cmd_scenario_log(args):
+    """Print the Logseq page content for a scenario."""
+    try:
+        sid = ScenarioId.parse(args.scenario_id)
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return 1
+
+    graph_path = _get_graph_path()
+    if graph_path is None:
+        print("Error: Logseq graph path not configured.", file=sys.stderr)
+        return 1
+
+    page_path = sid.logseq_abs_path(graph_path)
+    if not page_path.exists():
+        print(f"Error: no Logseq page for {sid}. Run: singine scenario run {sid}",
+              file=sys.stderr)
+        return 1
+
+    print(page_path.read_text(encoding="utf-8"))
+    return 0
+
+
+def cmd_scenario_diff(args):
+    """Show a diff between two scenario Logseq pages."""
+    try:
+        sid_a = ScenarioId.parse(args.scenario_id_a)
+        sid_b = ScenarioId.parse(args.scenario_id_b)
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return 1
+
+    graph_path = _get_graph_path()
+    if graph_path is None:
+        print("Error: Logseq graph path not configured.", file=sys.stderr)
+        return 1
+
+    path_a = sid_a.logseq_abs_path(graph_path)
+    path_b = sid_b.logseq_abs_path(graph_path)
+
+    for p, sid in [(path_a, sid_a), (path_b, sid_b)]:
+        if not p.exists():
+            print(f"Error: {sid} not found at {p}", file=sys.stderr)
+            return 1
+
+    import difflib
+    lines_a = path_a.read_text(encoding="utf-8").splitlines(keepends=True)
+    lines_b = path_b.read_text(encoding="utf-8").splitlines(keepends=True)
+    diff = difflib.unified_diff(
+        lines_a, lines_b,
+        fromfile=str(sid_a),
+        tofile=str(sid_b),
+    )
+    sys.stdout.writelines(diff)
+    return 0
+
+
+def cmd_push(args):
+    """Publish a scenario event to Kafka (or log to console in dry-run)."""
+    try:
+        sid = ScenarioId.parse(args.scenario_id)
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return 1
+
+    graph_path = _get_graph_path()
+    page_path = sid.logseq_abs_path(graph_path) if graph_path else None
+
+    event = {
+        "scenario-code": sid.code,
+        "scenario-id": str(sid),
+        "urn": sid.urn(),
+        "collibra-id": sid.collibra_id(),
+        "event-type": "scenario-published",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "dry-run": True,
+    }
+
+    if page_path and page_path.exists():
+        event["page-path"] = str(page_path)
+
+    print(f"[singine push] {sid}  (dry-run: no Kafka connection)")
+    print(json.dumps(event, indent=2))
+    return 0
+
+
+def cmd_pull(args):
+    """Consume latest events for a scenario code from Kafka (dry-run: show status)."""
+    code = args.code.upper() if hasattr(args, 'code') else None
+    if code and code not in SCENARIO_REGISTRY:
+        print(f"Error: unknown code {code!r}", file=sys.stderr)
+        return 1
+
+    graph_path = _get_graph_path()
+    label = f" ({code})" if code else ""
+    print(f"[singine pull{label}]  (dry-run: no Kafka connection)")
+
+    if graph_path:
+        ids = ScenarioId.list_all(graph_path, code=code)
+        print(f"Local scenarios{label}: {len(ids)}")
+        for sid in ids:
+            print(f"  {sid}")
+    else:
+        print("No Logseq graph configured; cannot show local scenarios.")
+    return 0
+
+
+def cmd_status(args):
+    """Show pending/running scenarios (like git status)."""
+    graph_path = _get_graph_path()
+    if graph_path is None:
+        print("No Logseq graph configured.", file=sys.stderr)
+        return 1
+
+    all_ids = ScenarioId.list_all(graph_path)
+    pending = []
+    published = []
+
+    for sid in all_ids:
+        page_path = sid.logseq_abs_path(graph_path)
+        content = page_path.read_text(encoding="utf-8") if page_path.exists() else ""
+        if "status:: pending" in content:
+            pending.append(sid)
+        else:
+            published.append(sid)
+
+    print("Singine scenario status")
+    print()
+    if pending:
+        print(f"Pending ({len(pending)}):")
+        for sid in pending:
+            print(f"  {sid}  [pending]")
+    if published:
+        print(f"\nPublished ({len(published)}):")
+        for sid in published:
+            print(f"  {sid}  [ok]")
+    if not all_ids:
+        print("  (no scenarios yet — run: singine scenario new DIAC \"...\")")
+    return 0
+
+
+# ============================================================================
+# make command
+# ============================================================================
+
+def cmd_make_list(args):
+    """
+    Create a list from Logseq pages via Virtual SQL.
+
+    Usage: singine make list <page1.md> [<page2.md> ...]
+
+    Queries the Virtual SQL logseq_pages table for each named page and renders
+    the result as a Logseq markdown list to stdout. Results are also persisted
+    to ~/.singine/singine.db.
+
+    If the Go binary is available on PATH it delegates to it; otherwise
+    falls back to a pure-Python implementation backed by SQLite.
+    """
+    import shutil
+
+    pages: list[str] = args.pages
+    if not pages:
+        print("Error: at least one page name required.", file=sys.stderr)
+        print("Usage: singine make list TLN.md Home.md")
+        return 1
+
+    # Attempt to delegate to Go binary (singine-go or ./singine built from cmd/singine)
+    go_bin = shutil.which("singine-go") or shutil.which("./singine-go")
+    if go_bin:
+        result = subprocess.run([go_bin, "make", "list"] + pages)
+        return result.returncode
+
+    # Pure-Python fallback via Virtual SQL (sqlite3 backend)
+    graph_path = _get_graph_path()
+    if graph_path is None:
+        print("Error: Logseq graph path not configured.", file=sys.stderr)
+        return 1
+
+    rows = _vsql_pages_for_names(graph_path, pages)
+
+    if not rows:
+        print("(no matching pages found)")
+        return 0
+
+    for row in rows:
+        name = row.get("page_name", "")
+        props = row.get("properties", {})
+        prop_str = "  ".join(f"{k}:: {v}" for k, v in props.items()) if props else ""
+        label = name.replace(".md", "")
+        line = f"- [[{label}]]"
+        if prop_str:
+            line += f"  {prop_str}"
+        print(line)
+
+    return 0
+
+
+def _vsql_pages_for_names(graph_path: Path, names: list[str]) -> list[dict]:
+    """
+    Pure-Python Virtual SQL: load named Logseq pages into SQLite and query them.
+
+    Creates/updates ~/.singine/singine.db with a logseq_pages table.
+    Returns list of row dicts with keys: page_name, title, alias, page_type,
+    content, properties (dict), created_at, updated_at.
+    """
+    import sqlite3
+    import hashlib
+    import time
+
+    db_path = Path.home() / ".singine" / "singine.db"
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+
+    # Create table if needed
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS logseq_pages (
+            page_name   TEXT PRIMARY KEY,
+            title       TEXT,
+            alias       TEXT,
+            page_type   TEXT,
+            content     TEXT,
+            properties  TEXT,
+            created_at  TEXT,
+            updated_at  TEXT
+        )
+    """)
+    conn.commit()
+
+    # Upsert pages from disk
+    pages_dir = graph_path / "pages"
+    now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    for name in names:
+        page_file = pages_dir / name
+        if not page_file.exists():
+            # Try without .md suffix
+            page_file = pages_dir / (name if name.endswith(".md") else name + ".md")
+        if not page_file.exists():
+            continue
+
+        raw = page_file.read_text(encoding="utf-8")
+        props: dict = {}
+        for line in raw.splitlines():
+            if "::" in line:
+                k, _, v = line.partition("::")
+                props[k.strip()] = v.strip()
+            elif line.startswith("#"):
+                break
+
+        title = props.get("title", name.replace(".md", ""))
+        alias = props.get("alias", "")
+        page_type = props.get("type", "")
+        props_json = json.dumps(props)
+
+        cur.execute("""
+            INSERT INTO logseq_pages
+                (page_name, title, alias, page_type, content, properties, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(page_name) DO UPDATE SET
+                title=excluded.title, alias=excluded.alias,
+                page_type=excluded.page_type, content=excluded.content,
+                properties=excluded.properties, updated_at=excluded.updated_at
+        """, (name, title, alias, page_type, raw, props_json, now_iso, now_iso))
+
+    conn.commit()
+
+    # Query
+    placeholders = ",".join("?" * len(names))
+    rows = cur.execute(
+        f"SELECT * FROM logseq_pages WHERE page_name IN ({placeholders})",
+        names
+    ).fetchall()
+
+    conn.close()
+
+    results = []
+    for row in rows:
+        d = dict(row)
+        try:
+            d["properties"] = json.loads(d.get("properties") or "{}")
+        except (json.JSONDecodeError, TypeError):
+            d["properties"] = {}
+        results.append(d)
+
+    return results
+
+
 def main():
     """Main entry point for the CLI."""
     parser = argparse.ArgumentParser(
@@ -759,6 +1276,110 @@ def main():
 
     cap_parser.set_defaults(func=lambda args: cap_parser.print_help() or 0)
 
+    # ------------------------------------------------------------------ codex
+    codex_parser = subparsers.add_parser(
+        'codex',
+        help='List or describe four-letter scenario codes (Collibra-aligned)'
+    )
+    codex_parser.add_argument(
+        'code',
+        nargs='?',
+        help='Four-letter code to describe (e.g. DIAC); omit to list all'
+    )
+    codex_parser.set_defaults(func=cmd_codex)
+
+    # ------------------------------------------------------------------ status
+    status_parser = subparsers.add_parser(
+        'status',
+        help='Show pending/running scenarios (like git status)'
+    )
+    status_parser.set_defaults(func=cmd_status)
+
+    # ------------------------------------------------------------------ push
+    push_parser = subparsers.add_parser(
+        'push',
+        help='Publish a scenario event to Kafka (or log to console in dry-run)'
+    )
+    push_parser.add_argument('scenario_id', help='Scenario ID, e.g. DIAC-0001')
+    push_parser.set_defaults(func=cmd_push)
+
+    # ------------------------------------------------------------------ pull
+    pull_parser = subparsers.add_parser(
+        'pull',
+        help='Consume latest events for a scenario code from Kafka'
+    )
+    pull_parser.add_argument('code', help='Four-letter code, e.g. DIAC')
+    pull_parser.set_defaults(func=cmd_pull)
+
+    # ------------------------------------------------------------------ scenario
+    scenario_parser = subparsers.add_parser(
+        'scenario',
+        help='Scenario lifecycle management (new, ls, show, run, log, diff)'
+    )
+    scenario_subparsers = scenario_parser.add_subparsers(
+        dest='scenario_subcommand', help='Scenario operations'
+    )
+
+    # scenario ls [CODE]
+    s_ls = scenario_subparsers.add_parser('ls', help='List scenarios')
+    s_ls.add_argument('code', nargs='?', help='Filter by four-letter code (e.g. DIAC)')
+    s_ls.set_defaults(func=cmd_scenario_ls)
+
+    # scenario new CODE "description"
+    s_new = scenario_subparsers.add_parser('new', help='Create a new scenario scaffold')
+    s_new.add_argument('code', help='Four-letter code (e.g. DIAC)')
+    s_new.add_argument('description', help='Short description of the scenario')
+    s_new.set_defaults(func=cmd_scenario_new)
+
+    # scenario show DIAC-0001
+    s_show = scenario_subparsers.add_parser('show', help='Display scenario metadata')
+    s_show.add_argument('scenario_id', help='Scenario ID, e.g. DIAC-0001')
+    s_show.set_defaults(func=cmd_scenario_show)
+
+    # scenario run DIAC-0001
+    s_run = scenario_subparsers.add_parser(
+        'run', help='Execute the scenario: generate 4 responses + PoLA selection'
+    )
+    s_run.add_argument('scenario_id', help='Scenario ID, e.g. DIAC-0001')
+    s_run.set_defaults(func=cmd_scenario_run)
+
+    # scenario log DIAC-0001
+    s_log = scenario_subparsers.add_parser('log', help='Show the Logseq page content')
+    s_log.add_argument('scenario_id', help='Scenario ID, e.g. DIAC-0001')
+    s_log.set_defaults(func=cmd_scenario_log)
+
+    # scenario diff DIAC-0001 DIAC-0002
+    s_diff = scenario_subparsers.add_parser('diff', help='Diff two scenario Logseq pages')
+    s_diff.add_argument('scenario_id_a', help='First scenario ID')
+    s_diff.add_argument('scenario_id_b', help='Second scenario ID')
+    s_diff.set_defaults(func=cmd_scenario_diff)
+
+    scenario_parser.set_defaults(func=lambda a: scenario_parser.print_help() or 0)
+
+    # ------------------------------------------------------------------ make
+    make_parser = subparsers.add_parser(
+        'make',
+        help='Create lists and artefacts from Logseq data via Virtual SQL'
+    )
+    make_subparsers = make_parser.add_subparsers(
+        dest='make_subcommand', help='make operations'
+    )
+
+    # make list <page1> [<page2> ...]
+    m_list = make_subparsers.add_parser(
+        'list',
+        help='Create a list from Logseq pages (queries Virtual SQL logseq_pages)'
+    )
+    m_list.add_argument(
+        'pages',
+        nargs='+',
+        help='Logseq page names, e.g. TLN.md Home.md'
+    )
+    m_list.set_defaults(func=cmd_make_list)
+
+    make_parser.set_defaults(func=lambda a: make_parser.print_help() or 0)
+
+    # ------------------------------------------------------------------ dispatch
     args = parser.parse_args()
 
     if not hasattr(args, 'func'):

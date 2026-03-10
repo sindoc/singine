@@ -21,6 +21,8 @@
      singine.edge.sync           ← edge node synchronisation
      singine.hf.publish          ← HuggingFace publish consumer
      singine.broker.dead         ← dead-letter queue
+     singine.scenario.raw        ← raw DIAC conversation-turn events
+     singine.scenario.base       ← processed metrics + selected response (PoLA applied)
 
    RabbitMQ exchanges:
      singine.transforms  (direct) ← OCR, wavelet, LaTeX→SVG jobs
@@ -56,7 +58,10 @@
    :edge-sync          "singine.edge.sync"
    :hf-publish         "singine.hf.publish"
    :broker-dead        "singine.broker.dead"
-   :dead-letter        "singine.broker.dead"})
+   :dead-letter        "singine.broker.dead"
+   :scenario-raw       "singine.scenario.raw"   ; raw DIAC conversation-turn events
+   :scenario-base      "singine.scenario.base"  ; processed metrics + selected response
+   })
 
 ;; ── RabbitMQ exchange registry ────────────────────────────────────────────────
 
