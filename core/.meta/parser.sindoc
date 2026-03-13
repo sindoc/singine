@@ -1,0 +1,43 @@
+#lang sindoc
+#version 1.0
+#namespace singine.meta.core.parser
+
+This file extends the root metamodel (singine/.meta/sindoc.sindoc) with
+parser-specific instructions for the Java implementation.
+
+The Java class singine.sindoc.SindocParser reads this file (and its parent)
+to configure its parsing behaviour. Parent rules are inherited; rules
+redefined here override the parent.
+
+@override timestamp
+  content: iso8601 | relative | empty
+  xml-element: timestamp
+  xml-attribute: value
+  xml-attribute: format
+
+@extend document
+  xml-attribute: source-file
+  xml-attribute: meta-root
+
+@rule char-range-arabic
+  pattern: [آ-ی]<text>
+  xml-element: line
+  xml-attribute: script
+  xml-attribute-value script: arabic
+
+@rule char-range-latin
+  pattern: [a-x]<text>
+  xml-element: line
+  xml-attribute: script
+  xml-attribute-value script: latin
+
+@meta output-root-element: document
+@meta output-encoding: UTF-8
+@meta meta-loader-class: singine.sindoc.MetaLoader
+@meta parser-class: singine.sindoc.SindocParser
+@meta bridge-namespace: singine.sindoc.parser
+
+--
+<timestamp/>
+--
+</>

@@ -28,3 +28,18 @@ venv/
 # Tmp
 today/
 *.x
+
+# Personal/organizational workspace directories (numbered buckets)
+00-*/
+01-*/
+02-*/
+03-*/
+04-*/
+05-*/
+06-*/
+07-*/
+08-*/
+09-*/
+
+# Empty placeholder directories
+analytics/
