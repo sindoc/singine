@@ -9,8 +9,10 @@
          org.apache.camel/camel-core      {:mvn/version "4.4.4"}
          ;; camel-mail: SMTP + IMAP4rev1 consumer/producer (via Jakarta Mail)
          org.apache.camel/camel-mail      {:mvn/version "4.4.4"}
-         ;; camel-http: HTTP producer/consumer (Jetty backend)
+         ;; camel-http: HTTP client producer
          org.apache.camel/camel-http      {:mvn/version "4.4.4"}
+         ;; camel-jetty: embedded Jetty HTTP server (consumer for jetty: URIs)
+         org.apache.camel/camel-jetty     {:mvn/version "4.4.4"}
          ;; camel-jackson: JSON marshal/unmarshal in routes
          org.apache.camel/camel-jackson   {:mvn/version "4.4.4"}
 
