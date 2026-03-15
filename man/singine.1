@@ -1,0 +1,93 @@
+.TH SINGINE 1 "2026-03-13" "singine 0.2.0" "User Commands"
+.SH NAME
+singine \- top-level command index for the Singine platform
+.SH SYNOPSIS
+.B singine
+[\fICOMMAND\fR] [\fIOPTIONS\fR]
+.SH DESCRIPTION
+.B singine
+is the top-level entry point for the Singine platform. This page is an index of
+top-level commands only. Each command has its own dedicated manpage for details,
+subcommands, options, and examples.
+.SH COMMANDS
+.TP
+.B context
+Inspect terminal context and sourced environment.
+.TP
+.B bridge
+SQLite and JDBC bridge operations.
+.TP
+.B jdbc-url
+Print the JDBC URL for the bridge database.
+.TP
+.B xml
+Generate XML request, response, and heatmap artifacts.
+.TP
+.B man
+Open a Singine manpage by topic.
+.TP
+.B install
+Install the launcher and bundled manpages.
+.TP
+.B runtime
+Inspect runtime capabilities and execute wrapped commands.
+.TP
+.B auth
+Authentication bootstrap and TOTP login commands.
+.TP
+.B idp
+Identity provider operations.
+.TP
+.B decide
+Send a governance decision request.
+.TP
+.B model
+Inspect Singine model objects and bridge surfaces.
+.TP
+.B activity
+Inspect, instantiate, and evaluate activity taxonomy entries.
+.TP
+.B singe
+Render governed identities from @mentions.
+.TP
+.B transfer
+File transfer and queue/stack helpers.
+.TP
+.B smtp
+SMTP test and send helpers.
+.SH TOPIC PAGES
+Use
+.B singine man
+with one of these topics:
+.IR singine-context ,
+.IR singine-bridge ,
+.IR singine-jdbc-url ,
+.IR singine-xml ,
+.IR singine-man ,
+.IR singine-install ,
+.IR singine-runtime ,
+.IR singine-auth ,
+.IR singine-idp ,
+.IR singine-decide ,
+.IR singine-model ,
+.IR singine-activity ,
+.IR singine-singe ,
+.IR singine-transfer ,
+or
+.IR singine-smtp .
+.SH SEE ALSO
+.BR singine-context (1),
+.BR singine-bridge (1),
+.BR singine-jdbc-url (1),
+.BR singine-xml (1),
+.BR singine-man (1),
+.BR singine-install (1),
+.BR singine-runtime (1),
+.BR singine-auth (1),
+.BR singine-idp (1),
+.BR singine-decide (1),
+.BR singine-model (1),
+.BR singine-activity (1),
+.BR singine-singe (1),
+.BR singine-transfer (1),
+.BR singine-smtp (1)

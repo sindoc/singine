@@ -1,12 +1,13 @@
-.PHONY: help status test serve repl javac
+.PHONY: help status test serve repl javac activity-edn
 
 help:
 	@printf "core/ commands:\n"
-	@printf "  make status  Show git status from the repo root\n"
-	@printf "  make test    Run the Clojure test suite\n"
-	@printf "  make serve   Start the local server\n"
-	@printf "  make repl    Open the development REPL\n"
-	@printf "  make javac   Compile Java helpers into classes/\n"
+	@printf "  make status        Show git status from the repo root\n"
+	@printf "  make test          Run the Clojure test suite\n"
+	@printf "  make serve         Start the local server\n"
+	@printf "  make repl          Open the development REPL\n"
+	@printf "  make javac         Compile Java helpers into classes/\n"
+	@printf "  make activity-edn  Print the activity taxonomy EDN\n"
 
 status:
 	git -C .. status -sb
@@ -22,3 +23,6 @@ repl:
 
 javac:
 	clojure -M:javac
+
+activity-edn:
+	@cat resources/singine/activity/taxonomy.edn
