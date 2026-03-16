@@ -1,0 +1,48 @@
+\documentclass[a4paper]{article}
+\usepackage{fontspec}
+\usepackage{bidi}
+\usepackage{xcolor}
+\usepackage[margin=2cm]{geometry}
+
+% Latin font -- SF NS (system font path)
+\newfontfamily\latinfont[
+  Path=/System/Library/Fonts/,
+  Ligatures=TeX,
+  Kerning=On,
+  Numbers=OldStyle
+]{SFNS.ttf}
+
+% Persian / Arabic font -- Amiri
+\newfontfamily\persianfont[
+  Path=/Users/skh/Library/Fonts/,
+  Script=Arabic,
+  Language=Persian,
+  Ligatures=Required,
+  RawFeature={+mark}
+]{Amiri-Regular.ttf}
+
+\definecolor{inkblack}{rgb}{0.08,0.08,0.10}
+\definecolor{manuredred}{rgb}{0.52,0.11,0.07}
+\definecolor{hairline}{rgb}{0.35,0.30,0.28}
+
+\pagestyle{empty}
+
+\begin{document}
+\begin{center}
+
+  % Latin name
+  {\latinfont\fontsize{90pt}{108pt}\selectfont
+   \textcolor{inkblack}{Singine}}
+
+  \vspace{6pt}
+  \textcolor{hairline}{\rule{0.7\linewidth}{0.4pt}}
+  \vspace{6pt}
+
+  % Persian name -- ZWNJ keeps morphemes distinct
+  \begin{RTL}
+    {\persianfont\fontsize{82pt}{98pt}\selectfont
+     \textcolor{manuredred}{سین‌جین}}
+  \end{RTL}
+
+\end{center}
+\end{document}

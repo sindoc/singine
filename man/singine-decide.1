@@ -1,0 +1,103 @@
+.TH SINGINE-DECIDE 1 "2026-03-16" "singine 0.2.0" "User Commands"
+.SH NAME
+singine-decide \- send a governance decision request to a Singine server
+.SH SYNOPSIS
+.B singine decide
+\fIID\fR [\fB--decision\fR \fITYPE\fR] [\fB--reason\fR \fITEXT\fR] [\fB--server\fR \fIURL\fR] [\fB--json\fR]
+.SH DESCRIPTION
+Posts a decision request for an asset or document ID to the Singine server's
+.I /decide
+endpoint and prints the returned decision envelope.
+.PP
+When the Singine server is not running, the command falls back automatically to
+writing a local JSON record at:
+.nf
+{cwd}/{ID}_decision.json
+.fi
+.PP
+This offline fallback ensures that governance decisions made during AI sessions
+are always persisted, even when the decision server is unavailable.
+The offline record has the same structure as the server response and can be
+ingested into the bridge later via
+.BR singine-bridge (1).
+.PP
+AI conversation sessions can be registered with a governance decision using the
+session ID as the document ID:
+.nf
+singine decide SESSION-ID --decision approve --reason "Session audit complete"
+.fi
+.SH OPTIONS
+.TP
+.B --decision
+One of
+.IR approve ,
+.IR reject ,
+.IR defer ,
+.IR escalate ,
+or
+.IR pending .
+.TP
+.B --reason
+Optional note attached to the decision.
+.TP
+.B --server \fIURL\fR
+Server base URL. Default is
+.IR http://localhost:8080 .
+.TP
+.B --json
+Emit raw JSON.
+.SH OFFLINE FALLBACK
+When the server at
+.I --server
+is unreachable, a decision record is written to:
+.nf
+{cwd}/{ID}_decision.json
+.fi
+.PP
+The offline record contains:
+.IP \(bu 2
+.B id
+\(em the document or session ID passed on the command line
+.IP \(bu 2
+.B decision
+\(em the decision type
+.IP \(bu 2
+.B reason
+\(em the optional rationale text
+.IP \(bu 2
+.B decided_at
+\(em ISO 8601 timestamp
+.IP \(bu 2
+.B server_url
+\(em the server URL that was attempted
+.IP \(bu 2
+.B fallback
+\(em
+.B true
+indicating offline mode
+.PP
+These JSON files can be ingested into the semantic bridge once the server comes
+online, or treated as the canonical record when no server is configured.
+.SH EXAMPLES
+.nf
+# Standard online decision.
+singine decide sind0c --decision approve --reason "validated source"
+
+# Offline-capable decision (falls back to JSON if server unreachable).
+singine decide doc-42 --decision defer --server http://localhost:8080 --json
+
+# Record a governance decision for a completed AI conversation session.
+singine decide 2026-03-16-china-debt-timeline \\
+  --decision approve \\
+  --reason "Dataset pipeline delivered and artefacts verified"
+
+# Record a pending decision for review.
+singine decide china-us-debt-timeline \\
+  --decision pending \\
+  --reason "Awaiting Collibra catalog registration"
+.fi
+.SH SEE ALSO
+.BR singine (1),
+.BR singine-ai (1),
+.BR singine-policy (1),
+.BR singine-bridge (1)

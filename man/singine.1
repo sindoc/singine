@@ -16,6 +16,10 @@ Inspect terminal context and sourced environment.
 .TP
 .B bridge
 SQLite and JDBC bridge operations.
+Merges local Singine, AI session, Silkpage, and Collibra data into a single
+queryable store.
+See
+.BR singine-bridge (1).
 .TP
 .B jdbc-url
 Print the JDBC URL for the bridge database.
@@ -25,12 +29,16 @@ Generate XML request, response, and heatmap artifacts.
 .TP
 .B man
 Open a Singine manpage by topic.
+See
+.BR singine-man (1).
 .TP
 .B install
 Install the launcher and bundled manpages.
 .TP
 .B runtime
 Inspect runtime capabilities and execute wrapped commands.
+See
+.BR singine-runtime (1).
 .TP
 .B auth
 Authentication bootstrap and TOTP login commands.
@@ -40,20 +48,28 @@ Identity provider operations.
 .TP
 .B decide
 Send a governance decision request.
+Falls back to a local JSON record when the Singine server is not running.
+See
+.BR singine-decide (1).
 .TP
 .B model
 Inspect Singine model objects and bridge surfaces.
 .TP
 .B policy
 Manage governed policy packs and policy-backed execution workflows.
+Covers Claude, Codex, and OpenAI-API systems.
+See
+.BR singine-policy (1).
 .TP
 .B ai
-AI provider passthrough and governance layer.
-Subproviders:
-.IR claude ,
-.IR collibra ,
-.IR openai .
-Records every session, command, and permission grant to EDN.
+Governed AI session recording, permission tracking, and session-data
+centralisation for Claude, Codex, and OpenAI.
+Every conversation is stored as a named session with a manifest, ordered
+interactions, and mandates granted during the session.
+Sessions can be listed, inspected, and synced into a local SQLite
+bridge for JDBC and downstream Singine access.
+See
+.BR singine-ai (1).
 .TP
 .B activity
 Inspect, instantiate, and evaluate activity taxonomy entries.
@@ -76,6 +92,81 @@ File transfer and queue/stack helpers.
 .TP
 .B smtp
 SMTP test and send helpers.
+.SH AI CONVERSATION DATA
+Singine records every AI conversation — regardless of provider — as a governed
+session. The following command sequence covers the full journey from listing
+sessions to centralising the data behind each conversation.
+.SS 1. Start a governed provider session
+.nf
+singine ai claude --model claude-sonnet-4-6
+singine ai codex --model gpt-5-codex
+singine ai openai --model gpt-4o
+.fi
+.PP
+Each session records a session id, provider, model, timestamps, a session URN,
+a provider object reference for later API mapping, ordered interactions, and
+mandates granted during the session.
+.SS 2. List all recorded sessions
+.nf
+singine ai session list
+.fi
+.PP
+Shows all recorded runtime sessions under
+.IR ~/.singine/ai/sessions/ .
+.SS 3. Inspect one session
+.nf
+singine ai session show SESSION-ID
+.fi
+.PP
+Prints the full session bundle:
+.IP \(bu 2
+manifest
+.IP \(bu 2
+interactions
+.IP \(bu 2
+mandates
+.SS 4. Check provider configuration
+.nf
+singine ai status
+singine ai status --json
+.fi
+.PP
+Reports configured AI providers.
+.SS 5. Centralise sessions into SQLite
+.nf
+# Sync the most recent session into a named bridge database
+singine ai last session data --db /tmp/singine-ai.db
+
+# Or open an interactive session that auto-syncs on close
+singine ai claude --model claude-sonnet-4-6 --db /tmp/singine-ai.db
+.fi
+.SS 6. Query centralised data via the bridge
+.nf
+singine bridge sources --db /tmp/singine-ai.db
+singine bridge search --db /tmp/singine-ai.db "SESSION-TOPIC"
+singine jdbc-url --db /tmp/singine-ai.db
+.fi
+.SS 7. Review governance decisions for a session
+.nf
+singine policy ai report --ai-system claude
+singine policy ai report --ai-system codex
+.fi
+.SH POLICY SYNC
+Singine's AI policy workflow is available through the top-level
+.B singine policy ai
+command family.
+The canonical flow is:
+.IP "1."
+sync a canonical policy pack from LDAP or LDIF sources into a dedicated policy
+repository with
+.BR "singine policy ai sync" ;
+.IP "2."
+evaluate Claude or OpenAI/Codex requests against that synced pack with
+.BR "singine policy ai evaluate" ;
+.IP "3."
+persist approvals for governed Collibra paths, repos, or lambda names when a
+change is sanctioned with
+.BR "singine policy ai approve" .
 .SH TOPIC PAGES
 Use
 .B singine man
@@ -100,31 +191,26 @@ with one of these topics:
 .IR singine-transfer ,
 or
 .IR singine-smtp .
-.SH POLICY SYNC
-Singine's AI policy workflow is available through the top-level
-.B singine policy ai
-command family.
-The canonical flow is:
-.IP "1."
-sync a canonical policy pack from LDAP or LDIF sources into a dedicated policy
-repository with
-.BR "singine policy ai sync" ;
-.IP "2."
-evaluate Claude or OpenAI/Codex requests against that synced pack with
-.BR "singine policy ai evaluate" ;
-.IP "3."
-persist approvals for governed Collibra paths, repos, or lambda names when a
-change is sanctioned with
-.BR "singine policy ai approve" .
 .SH EXAMPLES
 .nf
-# Sync one canonical policy pack that covers Claude and OpenAI-family systems.
-singine policy ai sync \\
-  --policy-repo /Users/skh/ws/git/github/sindoc/singine-policy \\
-  --ldap-ldif docs/examples/ldap-ai-groups.ldif \\
-  --systems claude codex openai-api chatgpt
+# Quick-start: start a governed Claude conversation.
+singine ai claude --model claude-sonnet-4-6
 
-# Evaluate a Claude read request against the shared policy pack.
+# See all recorded AI sessions.
+singine ai session list
+
+# Inspect one recorded conversation.
+singine ai session show SESSION-ID
+
+# Centralise the latest session into a bridge database.
+singine ai last session data --db /tmp/singine-ai.db
+singine jdbc-url --db /tmp/singine-ai.db
+
+# Inspect centralised sources.
+singine bridge sources --db /tmp/singine-ai.db
+singine bridge search --db /tmp/singine-ai.db "claude"
+
+# Evaluate a Claude request against the synced policy pack.
 singine policy ai evaluate \\
   --policy-repo /Users/skh/ws/git/github/sindoc/singine-policy \\
   --ai-system claude \\
@@ -132,42 +218,14 @@ singine policy ai evaluate \\
   --network-mode offline \\
   --execution-env local \\
   --operation read \\
-  --command-text "rg --files /Users/skh/ws/git/github/sindoc/singine/man" \\
   --path /Users/skh/ws/git/github/sindoc/singine/man/singine.1
-
-# Evaluate an OpenAI/Codex write request using the same synced policy pack.
-singine policy ai evaluate \\
-  --policy-repo /Users/skh/ws/git/github/sindoc/singine-policy \\
-  --ai-system codex \\
-  --environment dev \\
-  --network-mode offline \\
-  --execution-env local \\
-  --operation write \\
-  --repo-path /Users/skh/ws/git/github/sindoc/singine \\
-  --path /Users/skh/ws/git/github/sindoc/singine/man/singine.1 \\
-  --lambda-name singine.policy.sync
-
-# Persist approval for a governed Collibra repo or path.
-singine policy ai approve \\
-  --policy-repo /Users/skh/ws/git/github/sindoc/singine-policy \\
-  --ai-system codex \\
-  --environment dev \\
-  --network-mode lan \\
-  --execution-env docker \\
-  --operation execute \\
-  --command-text "docker compose -f docker/docker-compose.edge.yml up -d --build" \\
-  --repo-path /Users/skh/ws/collibra/edge \\
-  --resource-grant-kind repo \\
-  --granted-by singineer-dev \\
-  --reason "Approved Collibra Edge policy sync and validation run"
-
-# Inspect recent governance decisions for Claude and OpenAI/Codex.
-singine policy ai report --ai-system claude
-singine policy ai report --ai-system codex
 .fi
 .SH SEE ALSO
-.BR singine-context (1),
+.BR singine-ai (1),
 .BR singine-bridge (1),
+.BR singine-policy (1),
+.BR singine-decide (1),
+.BR singine-context (1),
 .BR singine-jdbc-url (1),
 .BR singine-xml (1),
 .BR singine-man (1),
@@ -175,10 +233,7 @@ singine policy ai report --ai-system codex
 .BR singine-runtime (1),
 .BR singine-auth (1),
 .BR singine-idp (1),
-.BR singine-decide (1),
 .BR singine-model (1),
-.BR singine-policy (1),
-.BR singine-ai (1),
 .BR singine-activity (1),
 .BR singine-singe (1),
 .BR singine-find (1),

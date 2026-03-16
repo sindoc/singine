@@ -1,0 +1,74 @@
+# Python / build artefacts
+__pycache__/
+singine/__pycache__/
+singine/lens/__pycache__/
+singine/*.pyc
+singine/**/*.pyc
+*.pyc
+*.egg-info/
+singine.egg-info/
+.eggs/
+dist/
+build/
+py/
+
+# Clojure / JVM
+core/
+jargsrc/
+classes/
+target/
+*.jar
+
+# Dev / workspace dirs (not needed by npm consumers)
+00-*/
+01-*/
+02-*/
+2020s/
+2026/
+artists/
+cortex/
+docker/
+docs/
+environments/
+github/
+io.lutino.mcp/
+man/
+nannyml/
+prod/
+profile-pics/
+proto/
+public_html/
+raw/
+regs/
+scenarios/
+schema/
+silkpage/
+soda/
+sound/
+terms/
+today/
+vscode/
+web/
+whatsapp/
+quickstart-resources/
+
+# Config / CI
+.github/
+.git/
+Makefile
+MANIFEST.in
+setup.py
+singine.egg-info/
+
+# Internal config / editor state
+**/.claude/
+singine/Makefile
+singine/README.md
+.meta/
+.vscode/
+CLAUDE.md
+
+# Misc
+*.swp
+.DS_Store
+node_modules/

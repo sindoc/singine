@@ -1,0 +1,79 @@
+.TH SINGINE-FIND 1 "2026-03-16" "singine 0.2.0" "User Commands"
+.SH NAME
+singine-find \- find filesystem paths related to a topic
+.SH SYNOPSIS
+.B singine find
+.B filesAboutTopic
+\fITOPIC\fR
+[\fB--root-dir\fR \fIDIR\fR]
+[\fB--max-depth\fR \fIN\fR]
+[\fB--type\fR \fIany|file|dir\fR]
+[\fB-0\fR|\fB--null\fR]
+[\fB--json\fR]
+.SH DESCRIPTION
+The
+.B find
+command is a first-class Singine filesystem discovery entry point.
+It applies the
+.B filesAboutTopic
+activity to search for file and directory names containing the given topic
+fragment, case-insensitively.
+.PP
+This command is intended to replace repeated shell use of
+.BR find (1) ,
+.BR grep (1) ,
+and related flags when the task is simply "show me files or modules about
+this topic".
+.PP
+When the Singine JVM filesystem activity classes are compiled under
+.I core/classes
+the CLI may route execution to the JVM-backed activity implementation.
+That path is also invokable directly with:
+.IP
+.nf
+java -cp ~/ws/git/github/sindoc/singine/core/classes \
+  singine.activity.fs.FilesystemActivityMain \
+  find filesAboutTopic singine --root-dir ~/ws/git
+.fi
+.SH ACTIVITY
+.TP
+.B filesAboutTopic
+Search from the selected root directory for filesystem paths whose basename
+contains the requested topic fragment.
+.SH OPTIONS
+.TP
+.B --root-dir \fIDIR\fR
+Directory to search from. Defaults to the current directory.
+.TP
+.B --max-depth \fIN\fR
+Maximum directory depth to traverse below the root directory. Defaults to 3.
+.TP
+.B --type \fIany|file|dir\fR
+Restrict matches to files, directories, or both. Defaults to
+.IR any .
+.TP
+.B -0 , --null
+Emit NUL-delimited paths for safe composition with commands such as
+.BR singine-mv (1)
+or
+.BR xargs (1).
+.TP
+.B --json
+Emit a JSON result with metadata and all matched paths.
+.SH EXAMPLES
+.nf
+singine find filesAboutTopic singine
+singine find filesAboutTopic silkpage --type dir
+singine find filesAboutTopic collibra --max-depth 5
+singine find filesAboutTopic javad --root-dir ~/ws/git --type dir
+singine find filesAboutTopic singine --root-dir ~/ws/git/github/sindoc --max-depth 6 --type dir
+singine find filesAboutTopic collibra --root-dir ~/Downloads --null | singine mv fileListTo ~/ws/collibra/raw/ --null --mkdir
+singine find filesAboutTopic xflow --null | singine mv fileListTo ~/ws/xflow/ --null --mkdir
+cd ~/ws/git/github/sindoc/singine/core && ant compile && ant javadoc-html
+cd ~/ws/git/github/sindoc/singine/core && ant javadoc-xml
+.fi
+.SH SEE ALSO
+.BR singine (1),
+.BR singine-mv (1),
+.BR find (1),
+.BR xargs (1)

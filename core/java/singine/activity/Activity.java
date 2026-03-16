@@ -51,23 +51,43 @@ public interface Activity {
 
     // ── Identity ──────────────────────────────────────────────────
 
-    /** Stable identifier — matches the EDN :activity/id key. */
+    /**
+     * Stable identifier for the activity definition.
+     *
+     * @return stable identifier matching the EDN {@code :activity/id} key
+     */
     String getId();
 
-    /** Human-readable name (English). */
+    /**
+     * Human-readable activity name.
+     *
+     * @return default English label for the activity
+     */
     String getName();
 
-    /** One-paragraph description of the activity's purpose. */
+    /**
+     * Narrative description suitable for generated specifications.
+     *
+     * @return one-paragraph description of the activity purpose
+     */
     String getDescription();
 
     // ── Classification ────────────────────────────────────────────
 
-    /** Taxonomy node classifying this activity. */
+    /**
+     * Taxonomy node classifying this activity.
+     *
+     * @return taxonomy node used for grouping and publication
+     */
     Taxonomy getTaxonomy();
 
     // ── Governance ────────────────────────────────────────────────
 
-    /** Policy that governs execution of actions from this template. */
+    /**
+     * Policy that governs actions instantiated from this template.
+     *
+     * @return governing policy
+     */
     Policy getPolicy();
 
     // ── Context ───────────────────────────────────────────────────
@@ -76,6 +96,8 @@ public interface Activity {
      * Default context map for actions instantiated from this template.
      * Actions may override individual keys but not remove required ones.
      * Keys are EDN-compatible namespaced strings.
+     *
+     * @return immutable default context map for generated actions
      */
     Map<String, Object> getDefaultContext();
 
@@ -103,6 +125,8 @@ public interface Activity {
      *   <policy ref="..."/>
      * </activity>
      * }</pre>
+     *
+     * @return XML fragment describing this activity template
      */
     String toXml();
 
@@ -118,6 +142,8 @@ public interface Activity {
      *  :activity/policy-id "..."
      *  :activity/context {}}
      * }</pre>
+     *
+     * @return EDN map representing this activity template
      */
     String toEdn();
 }

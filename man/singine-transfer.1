@@ -1,0 +1,53 @@
+.TH SINGINE-TRANSFER 1 "2026-03-13" "singine 0.2.0" "User Commands"
+.SH NAME
+singine-transfer \- file transfer, queues, stacks, and XML processing helpers
+.SH SYNOPSIS
+.B singine transfer
+\fISUBCOMMAND\fR [\fIOPTIONS\fR]
+.SH DESCRIPTION
+The
+.B transfer
+command groups operational helpers for moving files, invoking SSH and SFTP,
+maintaining simple persistent queues and stacks, and processing XML or JSON
+request/response payloads.
+.SH SUBCOMMANDS
+.TP
+.B sync
+Sync files via rsync or scp.
+.TP
+.B ssh
+Run a command over SSH.
+.TP
+.B sftp
+Upload or download a file over SFTP.
+.TP
+.B queue
+Persistent FIFO queue operations.
+.TP
+.B stack
+Persistent LIFO stack operations.
+.TP
+.B structure
+Inspect the structure of a queue, stack, or JSON state.
+.TP
+.B process-request
+Parse an XML request into a structured envelope.
+.TP
+.B generate-response
+Generate response variants from input.
+.TP
+.B project
+Project selected fields from JSON input.
+.TP
+.B analyze-result
+Compute a basic summary for a JSON result.
+.SH EXAMPLES
+.nf
+singine transfer queue push item-a
+singine transfer queue list
+singine transfer stack push item-a
+singine transfer ssh host.example.org --cmd "hostname"
+singine transfer process-request --xml request.xml
+.fi
+.SH SEE ALSO
+.BR singine (1)

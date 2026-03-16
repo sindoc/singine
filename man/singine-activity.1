@@ -1,4 +1,4 @@
-.TH SINGINE-ACTIVITY 1 "2026-03-15" "singine 0.2.0" "User Commands"
+.TH SINGINE-ACTIVITY 1 "2026-03-16" "singine 0.2.0" "User Commands"
 .SH NAME
 singine\-activity \- inspect, instantiate, and evaluate activity taxonomy entries
 .SH SYNOPSIS
@@ -39,6 +39,18 @@ The derived score is:
 .nf
 usage_cost_benefit_score = usage_value + business_value \- platform_cost
 .fi
+.PP
+AI conversations governed by
+.BR singine-ai (1)
+are a first-class activity type in this taxonomy.
+Each conversation session maps to an Activity (the conversation topic), a
+Policy (the permission and mandate record), and an Outcome (the artefacts
+delivered and the session outcome score).
+Use
+.B "singine ai session show ID"
+to retrieve the full activity record for a conversation, and
+.B "singine ai session export ID"
+to export it in JSON or EDN form.
 .SH COMMANDS
 .TP
 .B list
@@ -63,7 +75,8 @@ Print the usage-cost-benefit score for a completed outcome.
 Filter activities to a single domain (e.g.
 .IR emacs-orgmode-logseq ,
 .IR elia-electricity ,
-.IR data-production ).
+.IR data-production ,
+.IR ai-conversation ).
 .TP
 .B --json
 Emit raw JSON output.
@@ -90,9 +103,38 @@ LaTeX, SVG, and Logseq query artefacts are generated via:
 .nf
 singine xml matrix --db /tmp/sqlite.db --output-dir /tmp/singine-xml-matrix
 .fi
+.SH AI CONVERSATION ACTIVITIES
+AI conversations are recorded as activity instances.
+Each governed Claude Code session under
+.BR singine-ai (1)
+produces:
+.IP \(bu 2
+.B manifest.edn
+\(em the activity instance record (topic, artefacts, outcome type, outcome score)
+.IP \(bu 2
+.B permissions.edn
+\(em the policy record (every permission grant, denial, and conditional)
+.IP \(bu 2
+.B commands.edn
+\(em the ordered execution log (tool calls and their rationale)
+.PP
+These files live under:
+.nf
+singine/ai/sessions/{session-id}/
+.fi
+.PP
+To score a completed conversation activity:
+.nf
+# Retrieve the outcome from manifest.edn
+singine ai session show SESSION-ID --json | jq '.outcome'
+
+# Export and compute the score manually
+singine ai session export SESSION-ID | jq '.manifest.outcome'
+.fi
 .SH EXAMPLES
 .nf
 singine activity list
+singine activity list --domain ai-conversation --json
 singine activity list --domain emacs-orgmode-logseq --edn
 singine activity inspect activity-emacs-logseq-01 --xml
 singine activity run activity-dpdp-01 --input '{:env "dev"}'
@@ -106,6 +148,7 @@ activity taxonomy itself.  The logo is published at
 .IR sina.khakbaz.com/img/dpdp-logo.svg .
 .SH SEE ALSO
 .BR singine (1),
+.BR singine-ai (1),
 .BR singine-decide (1),
 .BR singine-model (1),
 .BR singine-xml (1),

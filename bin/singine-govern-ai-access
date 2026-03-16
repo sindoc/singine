@@ -1,0 +1,895 @@
+#!/usr/bin/env python3
+"""
+Govern AI-system access requests using a canonical Singine policy pack.
+
+This is the enforcement and telemetry companion to
+`bin/singine-canonify-ai-policies`.
+
+It evaluates requests against:
+- environment-sensitive trust rules
+- network-mode rules
+- path and repository resource rules
+- command hierarchy rules mapped to activity ids
+- persisted approvals for already-granted resources
+
+It stores decisions and counters in SQLite and emits decision artefacts in
+JSON, EDN, Markdown, and XML so they can later be published through Silkpage
+or queried through SQLite / Logseq / Emacs.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import shutil
+import sqlite3
+import subprocess
+import sys
+import uuid
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+HOME = Path.home()
+DEFAULT_DB = HOME / ".singine" / "ai-access-governance.sqlite3"
+DEFAULT_STATE_DIR = HOME / ".singine" / "ai-access-governance"
+DEFAULT_WORKSPACE_ROOT = HOME / "ws"
+DEFAULT_TRUST = {
+    "dev": ["claude", "codex"],
+    "prd": ["claude"],
+}
+DEFAULT_PATH_RULES = [
+    {
+        "path_prefix": str(DEFAULT_WORKSPACE_ROOT),
+        "operation": "read",
+        "decision": "allow",
+        "environments": ["dev", "prd"],
+        "systems": ["claude", "codex"],
+    }
+]
+DEFAULT_COMMAND_RULES = [
+    {
+        "id": "cmd-read-01",
+        "match": r"^(rg|find|ls|cat|sed|head|tail|wc|git\s+status|git\s+diff|git\s+show)\b",
+        "crud": "read",
+        "activity_id": "activity-singine-ai-access-read-01",
+        "requires_approval": False,
+    },
+    {
+        "id": "cmd-runtime-01",
+        "match": r"^singine\s+runtime\s+exec(-external)?\b",
+        "crud": "execute",
+        "activity_id": "activity-singine-ai-access-runtime-01",
+        "requires_approval": False,
+    },
+    {
+        "id": "cmd-docker-01",
+        "match": r"^(docker|docker\s+compose)\b",
+        "crud": "execute",
+        "activity_id": "activity-singine-ai-access-docker-01",
+        "requires_approval": False,
+    },
+    {
+        "id": "cmd-write-01",
+        "match": r"^(apply_patch|cp|mv|touch|mkdir|git\s+add|git\s+commit|python3\b.*singine)",
+        "crud": "write",
+        "activity_id": "activity-singine-ai-access-write-01",
+        "requires_approval": False,
+    },
+    {
+        "id": "cmd-delete-01",
+        "match": r"^(rm|rmdir|git\s+reset|git\s+checkout\s+--|find\b.*-delete)\b",
+        "crud": "delete",
+        "activity_id": "activity-singine-ai-access-delete-01",
+        "requires_approval": True,
+    },
+]
+DEFAULT_MAJOR_CHANGE = {
+    "min_files": 2,
+    "deletion_ratio": 0.10,
+    "min_large_deletions": 2,
+}
+
+
+def edn_quote(value: str) -> str:
+    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def to_edn(value: Any) -> str:
+    if value is None:
+        return "nil"
+    if value is True:
+        return "true"
+    if value is False:
+        return "false"
+    if isinstance(value, (int, float)):
+        return str(value)
+    if isinstance(value, str):
+        return edn_quote(value)
+    if isinstance(value, list):
+        return "[" + " ".join(to_edn(item) for item in value) + "]"
+    if isinstance(value, dict):
+        parts = []
+        for key, item in value.items():
+            key_text = str(key)
+            if re.fullmatch(r"[A-Za-z0-9_.:/-]+", key_text):
+                parts.append(f":{key_text} {to_edn(item)}")
+            else:
+                parts.append(f"{edn_quote(key_text)} {to_edn(item)}")
+        return "{" + " ".join(parts) + "}"
+    return edn_quote(str(value))
+
+
+def slugify(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-") or "item"
+
+
+def now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def ensure_parent(path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+
+def load_json(path: Optional[str]) -> Dict[str, Any]:
+    if not path:
+        return {}
+    return json.loads(Path(path).read_text())
+
+
+def run_op_item_create(vault: str, title: str, notes: str) -> Dict[str, Any]:
+    if shutil.which("op") is None:
+        return {"ok": False, "error": "op CLI not found"}
+    cmd = [
+        "op",
+        "item",
+        "create",
+        "--vault",
+        vault,
+        "--category",
+        "Secure Note",
+        "--title",
+        title,
+        f"notesPlain={notes}",
+        "tags=singine,approval,ai-access",
+    ]
+    proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    if proc.returncode != 0:
+        return {"ok": False, "error": proc.stderr.strip() or proc.stdout.strip()}
+    return {"ok": True, "stdout": proc.stdout.strip()}
+
+
+def read_session_context() -> Dict[str, Any]:
+    session_file = HOME / ".singine" / "session.json"
+    if not session_file.exists():
+        return {}
+    try:
+        session = json.loads(session_file.read_text())
+    except Exception:
+        return {}
+    token = session.get("access_token", "")
+    user = session.get("user", {})
+    return {
+        "idp_session_present": True,
+        "token_prefix": (token[:8] + "…") if token else "",
+        "user_urn": user.get("urn", ""),
+        "username": user.get("username", ""),
+    }
+
+
+def command_prefix(command: Sequence[str]) -> str:
+    if not command:
+        return ""
+    if len(command) >= 2 and command[0] in {"git", "docker", "singine"}:
+        return " ".join(command[:2])
+    return command[0]
+
+
+def classify_command(command: Sequence[str], command_rules: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
+    text = " ".join(command)
+    for rule in command_rules:
+        if re.search(rule["match"], text):
+            return rule
+    return {
+        "id": "cmd-default-01",
+        "match": ".*",
+        "crud": "execute",
+        "activity_id": "activity-singine-ai-access-exec-01",
+        "requires_approval": True,
+    }
+
+
+def default_activity_for_operation(operation: str) -> str:
+    mapping = {
+        "read": "activity-singine-ai-access-read-01",
+        "write": "activity-singine-ai-access-write-01",
+        "delete": "activity-singine-ai-access-delete-01",
+        "execute": "activity-singine-ai-access-exec-01",
+    }
+    return mapping.get(operation, "activity-singine-ai-access-exec-01")
+
+
+def detect_git_repo(path: Path) -> Optional[Path]:
+    current = path if path.is_dir() else path.parent
+    current = current.resolve()
+    while True:
+        if (current / ".git").exists():
+            return current
+        if current == current.parent:
+            return None
+        current = current.parent
+
+
+def resource_id(kind: str, value: str) -> str:
+    return f"urn:singine:resource:{kind}:{slugify(value)}"
+
+
+def is_subpath(path: Path, prefix: Path) -> bool:
+    try:
+        path.resolve().relative_to(prefix.resolve())
+        return True
+    except Exception:
+        return False
+
+
+def major_change(file_changes: Sequence[Dict[str, Any]], config: Dict[str, Any]) -> bool:
+    if len(file_changes) < int(config["min_files"]):
+        return False
+    large = 0
+    ratio_threshold = float(config["deletion_ratio"])
+    for change in file_changes:
+        before = float(change.get("before_lines", 0) or 0)
+        deleted = float(change.get("deleted_lines", 0) or 0)
+        if before <= 0:
+            continue
+        if (deleted / before) > ratio_threshold:
+            large += 1
+    return large >= int(config["min_large_deletions"])
+
+
+def normalize_request(args: argparse.Namespace) -> Dict[str, Any]:
+    payload = load_json(args.request_json)
+    command = payload.get("command") or args.command or []
+    if not command and getattr(args, "command_text", ""):
+        command = args.command_text.split()
+    if isinstance(command, str):
+        command = command.split()
+    paths = payload.get("paths") or args.path or []
+    file_changes = payload.get("file_changes") or []
+    env_name = payload.get("environment") or args.environment
+    network_mode = payload.get("network_mode") or args.network_mode
+    execution_env = payload.get("execution_env") or args.execution_env
+    return {
+        "request_id": payload.get("request_id") or f"req-{uuid.uuid4()}",
+        "ai_system": payload.get("ai_system") or args.ai_system,
+        "trust_level": payload.get("trust_level") or args.trust_level,
+        "environment": env_name,
+        "network_mode": network_mode,
+        "execution_env": execution_env,
+        "command": command,
+        "paths": paths,
+        "operation": payload.get("operation") or args.operation,
+        "repo_path": payload.get("repo_path") or args.repo_path,
+        "lambda_name": payload.get("lambda_name") or args.lambda_name,
+        "activity_id": payload.get("activity_id") or args.activity_id,
+        "file_changes": file_changes,
+        "notes": payload.get("notes") or args.notes or "",
+        "resource_grant_kind": payload.get("resource_grant_kind") or args.resource_grant_kind or "",
+    }
+
+
+class GovernanceStore:
+    def __init__(self, db_path: Path):
+        self.db_path = db_path
+        ensure_parent(db_path)
+        self.conn = sqlite3.connect(str(db_path))
+        self.conn.row_factory = sqlite3.Row
+        self._init()
+
+    def _init(self) -> None:
+        cur = self.conn.cursor()
+        cur.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS approvals (
+              id TEXT PRIMARY KEY,
+              created_at TEXT NOT NULL,
+              ai_system TEXT NOT NULL,
+              environment TEXT NOT NULL,
+              network_mode TEXT NOT NULL,
+              execution_env TEXT NOT NULL,
+              resource_kind TEXT NOT NULL,
+              resource_value TEXT NOT NULL,
+              command_prefix TEXT NOT NULL,
+              operation TEXT NOT NULL,
+              activity_id TEXT NOT NULL,
+              granted_by TEXT NOT NULL,
+              rationale TEXT NOT NULL,
+              op_result_json TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS decisions (
+              id TEXT PRIMARY KEY,
+              created_at TEXT NOT NULL,
+              ai_system TEXT NOT NULL,
+              trust_level TEXT NOT NULL,
+              environment TEXT NOT NULL,
+              network_mode TEXT NOT NULL,
+              execution_env TEXT NOT NULL,
+              command_text TEXT NOT NULL,
+              command_prefix TEXT NOT NULL,
+              operation TEXT NOT NULL,
+              activity_id TEXT NOT NULL,
+              repo_resource_id TEXT NOT NULL,
+              resource_ids_json TEXT NOT NULL,
+              decision TEXT NOT NULL,
+              rationale TEXT NOT NULL,
+              requires_approval INTEGER NOT NULL,
+              major_change INTEGER NOT NULL,
+              idp_context_json TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS invocation_counters (
+              scope TEXT NOT NULL,
+              key TEXT NOT NULL,
+              ai_system TEXT NOT NULL,
+              environment TEXT NOT NULL,
+              operation TEXT NOT NULL,
+              activity_id TEXT NOT NULL,
+              count INTEGER NOT NULL,
+              last_invoked_at TEXT NOT NULL,
+              PRIMARY KEY (scope, key, ai_system, environment, operation, activity_id)
+            );
+            """
+        )
+        self.conn.commit()
+
+    def add_approval(self, row: Dict[str, Any]) -> None:
+        self.conn.execute(
+            """
+            INSERT OR REPLACE INTO approvals (
+              id, created_at, ai_system, environment, network_mode, execution_env,
+              resource_kind, resource_value, command_prefix, operation, activity_id,
+              granted_by, rationale, op_result_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                row["id"],
+                row["created_at"],
+                row["ai_system"],
+                row["environment"],
+                row["network_mode"],
+                row["execution_env"],
+                row["resource_kind"],
+                row["resource_value"],
+                row["command_prefix"],
+                row["operation"],
+                row["activity_id"],
+                row["granted_by"],
+                row["rationale"],
+                json.dumps(row["op_result_json"]),
+            ),
+        )
+        self.conn.commit()
+
+    def matching_approval(
+        self,
+        ai_system: str,
+        environment: str,
+        network_mode: str,
+        execution_env: str,
+        operation: str,
+        command_prefix_value: str,
+        resources: Sequence[Tuple[str, str]],
+    ) -> Optional[Dict[str, Any]]:
+        cur = self.conn.cursor()
+        for kind, value in resources:
+            rows = cur.execute(
+                """
+                SELECT * FROM approvals
+                WHERE ai_system = ?
+                  AND environment = ?
+                  AND network_mode = ?
+                  AND execution_env = ?
+                  AND operation = ?
+                  AND command_prefix = ?
+                  AND resource_kind = ?
+                """,
+                (ai_system, environment, network_mode, execution_env, operation, command_prefix_value, kind),
+            ).fetchall()
+            for row in rows:
+                resource_value = row["resource_value"]
+                if kind == "path-prefix":
+                    if value.startswith(resource_value):
+                        return dict(row)
+                elif resource_value == value:
+                    return dict(row)
+        return None
+
+    def add_decision(self, row: Dict[str, Any]) -> None:
+        self.conn.execute(
+            """
+            INSERT OR REPLACE INTO decisions (
+              id, created_at, ai_system, trust_level, environment, network_mode,
+              execution_env, command_text, command_prefix, operation, activity_id,
+              repo_resource_id, resource_ids_json, decision, rationale, requires_approval,
+              major_change, idp_context_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                row["id"],
+                row["created_at"],
+                row["ai_system"],
+                row["trust_level"],
+                row["environment"],
+                row["network_mode"],
+                row["execution_env"],
+                row["command_text"],
+                row["command_prefix"],
+                row["operation"],
+                row["activity_id"],
+                row["repo_resource_id"],
+                json.dumps(row["resource_ids"]),
+                row["decision"],
+                row["rationale"],
+                int(bool(row["requires_approval"])),
+                int(bool(row["major_change"])),
+                json.dumps(row["idp_context"]),
+            ),
+        )
+        self.conn.commit()
+
+    def bump_counter(self, scope: str, key: str, ai_system: str, environment: str, operation: str, activity_id: str) -> None:
+        current = self.conn.execute(
+            """
+            SELECT count FROM invocation_counters
+            WHERE scope = ? AND key = ? AND ai_system = ? AND environment = ? AND operation = ? AND activity_id = ?
+            """,
+            (scope, key, ai_system, environment, operation, activity_id),
+        ).fetchone()
+        count = (current["count"] if current else 0) + 1
+        self.conn.execute(
+            """
+            INSERT OR REPLACE INTO invocation_counters (
+              scope, key, ai_system, environment, operation, activity_id, count, last_invoked_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (scope, key, ai_system, environment, operation, activity_id, count, now_iso()),
+        )
+        self.conn.commit()
+
+    def report(self, ai_system: Optional[str]) -> Dict[str, Any]:
+        cur = self.conn.cursor()
+        params: Tuple[Any, ...] = ()
+        where = ""
+        if ai_system:
+            where = "WHERE ai_system = ?"
+            params = (ai_system,)
+        approvals = [dict(row) for row in cur.execute(f"SELECT * FROM approvals {where} ORDER BY created_at DESC", params).fetchall()]
+        decisions = [dict(row) for row in cur.execute(f"SELECT * FROM decisions {where} ORDER BY created_at DESC LIMIT 50", params).fetchall()]
+        counters = [dict(row) for row in cur.execute(f"SELECT * FROM invocation_counters {where} ORDER BY count DESC", params).fetchall()]
+        return {"approvals": approvals, "decisions": decisions, "counters": counters}
+
+
+class PolicyPack:
+    def __init__(self, payload: Dict[str, Any]):
+        self.payload = payload
+        self.assets_by_id = {asset["id"]: asset for asset in payload.get("assets", [])}
+
+    def systems(self) -> List[str]:
+        result = set()
+        for asset in self.payload.get("assets", []):
+            if asset.get("asset_type") == "Technology Asset":
+                result.add(asset.get("external_ref") or asset.get("name"))
+        return sorted(value for value in result if value)
+
+    def permissions_for_system(self, system_name: str) -> Dict[str, List[str]]:
+        permissions: List[str] = []
+        privileges: List[str] = []
+        roles: List[str] = []
+        responsibilities: List[str] = []
+        system_asset_ids = {
+            asset["id"]
+            for asset in self.payload.get("assets", [])
+            if asset.get("asset_type") == "Technology Asset"
+            and (asset.get("external_ref") == system_name or asset.get("name") == system_name)
+        }
+        relevant_policy_ids = {
+            grant["policy_id"]
+            for grant in self.payload.get("grants", [])
+            if grant.get("system_id") in system_asset_ids
+        }
+        for grant in self.payload.get("grants", []):
+            if grant.get("policy_id") not in relevant_policy_ids:
+                continue
+            permission = self.assets_by_id.get(grant.get("permission_id"), {}).get("name")
+            privilege = self.assets_by_id.get(grant.get("privilege_id"), {}).get("name")
+            role = self.assets_by_id.get(grant.get("role_id"), {}).get("name")
+            responsibility = self.assets_by_id.get(grant.get("responsibility_id"), {}).get("name")
+            if permission:
+                permissions.append(permission)
+            if privilege:
+                privileges.append(privilege)
+            if role:
+                roles.append(role)
+            if responsibility:
+                responsibilities.append(responsibility)
+        return {
+            "permissions": sorted(set(permissions)),
+            "privileges": sorted(set(privileges)),
+            "roles": sorted(set(roles)),
+            "responsibilities": sorted(set(responsibilities)),
+        }
+
+
+def build_silkpage_xml(decision: Dict[str, Any]) -> str:
+    def esc(value: str) -> str:
+        return (
+            value.replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace('"', "&quot;")
+        )
+    resource_lines = "\n".join(
+        f'    <resource id="{esc(item["id"])}" kind="{esc(item["kind"])}">{esc(item["value"])}</resource>'
+        for item in decision["resources"]
+    )
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<decision xmlns="urn:singine:ai-access" xml:lang="en">\n'
+        f'  <id>{esc(decision["id"])}</id>\n'
+        f'  <ai-system>{esc(decision["ai_system"])}</ai-system>\n'
+        f'  <environment>{esc(decision["environment"])}</environment>\n'
+        f'  <network-mode>{esc(decision["network_mode"])}</network-mode>\n'
+        f'  <execution-env>{esc(decision["execution_env"])}</execution-env>\n'
+        f'  <decision-value>{esc(decision["decision"])}</decision-value>\n'
+        f'  <activity-id>{esc(decision["activity_id"])}</activity-id>\n'
+        f'  <command-prefix>{esc(decision["command_prefix"])}</command-prefix>\n'
+        f'  <rationale>{esc(decision["rationale"])}</rationale>\n'
+        '  <resources>\n'
+        f'{resource_lines}\n'
+        '  </resources>\n'
+        '</decision>\n'
+    )
+
+
+def build_markdown_decision(decision: Dict[str, Any]) -> str:
+    lines = [
+        f"# AI Access Decision {decision['id']}",
+        "",
+        f"- system: `{decision['ai_system']}`",
+        f"- environment: `{decision['environment']}`",
+        f"- network mode: `{decision['network_mode']}`",
+        f"- execution env: `{decision['execution_env']}`",
+        f"- decision: `{decision['decision']}`",
+        f"- activity id: `{decision['activity_id']}`",
+        f"- command prefix: `{decision['command_prefix']}`",
+        f"- rationale: {decision['rationale']}",
+        "",
+        "## Resources",
+    ]
+    for resource in decision["resources"]:
+        lines.append(f"- `{resource['kind']}`: `{resource['value']}`")
+    return "\n".join(lines) + "\n"
+
+
+def write_decision_files(base_dir: Path, decision: Dict[str, Any]) -> Dict[str, str]:
+    ensure_parent(base_dir / "placeholder")
+    stem = f"{decision['created_at'].replace(':', '-').replace('.', '-')}-{slugify(decision['id'])}"
+    json_path = base_dir / f"{stem}.json"
+    edn_path = base_dir / f"{stem}.edn"
+    md_path = base_dir / f"{stem}.md"
+    xml_path = base_dir / f"{stem}.xml"
+    json_path.write_text(json.dumps(decision, indent=2) + "\n")
+    edn_path.write_text(to_edn(decision) + "\n")
+    md_path.write_text(build_markdown_decision(decision))
+    xml_path.write_text(build_silkpage_xml(decision))
+    return {
+        "json": str(json_path),
+        "edn": str(edn_path),
+        "markdown": str(md_path),
+        "xml": str(xml_path),
+    }
+
+
+def evaluate_request(
+    request: Dict[str, Any],
+    pack: PolicyPack,
+    store: GovernanceStore,
+    state_dir: Path,
+    config: Dict[str, Any],
+) -> Dict[str, Any]:
+    ai_system = request["ai_system"]
+    env_name = request["environment"]
+    network_mode = request["network_mode"]
+    execution_env = request["execution_env"]
+    command = request["command"]
+    command_rule = classify_command(command, config["command_rules"])
+    command_prefix_value = command_prefix(command)
+    operation = request["operation"] or command_rule["crud"]
+    activity_id = request["activity_id"] or (
+        command_rule["activity_id"]
+        if operation == command_rule["crud"]
+        else default_activity_for_operation(operation)
+    )
+    path_values = [str(Path(path).expanduser().resolve()) for path in request["paths"]]
+    repo_path = request["repo_path"]
+    if not repo_path and path_values:
+        repo = detect_git_repo(Path(path_values[0]))
+        repo_path = str(repo) if repo else ""
+    repo_resource_id = resource_id("repo", repo_path) if repo_path else ""
+    lambda_name = request["lambda_name"]
+    resource_rows = []
+    approval_resources: List[Tuple[str, str]] = []
+    for path_value in path_values:
+        resource_rows.append({"kind": "path", "value": path_value, "id": resource_id("path", path_value)})
+        approval_resources.append(("path-prefix", path_value))
+    if repo_path:
+        resource_rows.append({"kind": "repo", "value": repo_path, "id": repo_resource_id})
+        approval_resources.append(("repo", repo_path))
+    if command_prefix_value:
+        resource_rows.append({"kind": "command-prefix", "value": command_prefix_value, "id": resource_id("command", command_prefix_value)})
+        approval_resources.append(("command-prefix", command_prefix_value))
+    if lambda_name:
+        resource_rows.append({"kind": "lambda", "value": lambda_name, "id": resource_id("lambda", lambda_name)})
+        approval_resources.append(("lambda", lambda_name))
+
+    explicit = store.matching_approval(
+        ai_system,
+        env_name,
+        network_mode,
+        execution_env,
+        operation,
+        command_prefix_value,
+        approval_resources,
+    )
+    permissions = pack.permissions_for_system(ai_system)
+    trusted_systems = config["trusted_systems"].get(env_name, [])
+    workspace_root = Path(config["workspace_root"]).expanduser().resolve()
+    all_paths_in_workspace = bool(path_values) and all(is_subpath(Path(path), workspace_root) for path in path_values)
+    is_major = major_change(request["file_changes"], config["major_change"])
+    has_write_privilege = any(item in permissions["privileges"] for item in ["workspace.access", "runtime.exec", "repository.access"])
+    has_network_permission = "network" in permissions["permissions"]
+    rationale = ""
+    decision = "prompt"
+
+    if explicit:
+        decision = "allow"
+        rationale = f"Explicit persisted approval matched resource scope `{explicit['resource_kind']}`."
+    elif ai_system not in trusted_systems:
+        decision = "prompt"
+        rationale = f"System `{ai_system}` is not in the trusted set for environment `{env_name}`."
+    elif operation == "delete":
+        decision = "prompt"
+        rationale = "Delete operations always require approval."
+    elif is_major:
+        decision = "prompt"
+        rationale = "Major change heuristic triggered: deletion ratio exceeded threshold across multiple files."
+    elif network_mode == "internet" and not has_network_permission:
+        decision = "prompt"
+        rationale = "Internet-facing execution requires explicit network permission or approval."
+    elif operation == "read" and all_paths_in_workspace:
+        decision = "allow"
+        rationale = f"Read access within trusted workspace root `{workspace_root}` is allowed for trusted systems."
+    elif execution_env == "docker" and repo_path and repo_path.startswith(str(DEFAULT_WORKSPACE_ROOT / "collibra" / "edge")) and has_write_privilege:
+        decision = "allow"
+        rationale = "Docker execution for the Collibra Edge repository is allowed for trusted systems with write/runtime privileges."
+    elif command_rule["requires_approval"]:
+        decision = "prompt"
+        rationale = "Command hierarchy marks this command prefix as approval-gated."
+    elif operation in {"write", "execute"} and has_write_privilege and env_name == "dev" and network_mode in {"offline", "lan"}:
+        decision = "allow"
+        rationale = "Trusted dev execution with matching privileges is allowed."
+    else:
+        decision = "prompt"
+        rationale = "Fallback policy requires approval because no narrower allow rule matched."
+
+    created_at = now_iso()
+    idp_context = read_session_context()
+    decision_row = {
+        "id": request["request_id"],
+        "created_at": created_at,
+        "ai_system": ai_system,
+        "trust_level": request["trust_level"],
+        "environment": env_name,
+        "network_mode": network_mode,
+        "execution_env": execution_env,
+        "command_text": " ".join(command),
+        "command_prefix": command_prefix_value,
+        "operation": operation,
+        "activity_id": activity_id,
+        "repo_resource_id": repo_resource_id,
+        "resource_ids": [row["id"] for row in resource_rows],
+        "resources": resource_rows,
+        "decision": decision,
+        "rationale": rationale,
+        "requires_approval": decision != "allow",
+        "major_change": is_major,
+        "idp_context": idp_context,
+        "pack_id": pack.payload.get("metadata", {}).get("pack_id", ""),
+        "permissions": permissions,
+        "notes": request["notes"],
+    }
+    store.add_decision(decision_row)
+    store.bump_counter("command", command_prefix_value or "(none)", ai_system, env_name, operation, activity_id)
+    for path_value in path_values:
+        store.bump_counter("path", path_value, ai_system, env_name, operation, activity_id)
+    if repo_path:
+        store.bump_counter("repo", repo_path, ai_system, env_name, operation, activity_id)
+    decision_row["artifacts"] = write_decision_files(state_dir / "decisions", decision_row)
+    return decision_row
+
+
+def approve_request(
+    request: Dict[str, Any],
+    state_dir: Path,
+    store: GovernanceStore,
+    granted_by: str,
+    rationale: str,
+    op_vault: str,
+) -> Dict[str, Any]:
+    command_prefix_value = command_prefix(request["command"])
+    operation = request["operation"] or classify_command(request["command"], DEFAULT_COMMAND_RULES)["crud"]
+    classified = classify_command(request["command"], DEFAULT_COMMAND_RULES)
+    activity_id = request["activity_id"] or (
+        classified["activity_id"]
+        if operation == classified["crud"]
+        else default_activity_for_operation(operation)
+    )
+    resource_kind = request["resource_grant_kind"] or ("path-prefix" if request["paths"] else "command-prefix")
+    if resource_kind == "path-prefix":
+        resource_value = str(Path((request["paths"] or [DEFAULT_WORKSPACE_ROOT])[0]).expanduser().resolve())
+    elif resource_kind == "repo":
+        resource_value = request["repo_path"] or ""
+    elif resource_kind == "lambda":
+        resource_value = request["lambda_name"] or ""
+    else:
+        resource_kind = "command-prefix"
+        resource_value = command_prefix_value
+    approval = {
+        "id": f"approval-{uuid.uuid4()}",
+        "created_at": now_iso(),
+        "ai_system": request["ai_system"],
+        "environment": request["environment"],
+        "network_mode": request["network_mode"],
+        "execution_env": request["execution_env"],
+        "resource_kind": resource_kind,
+        "resource_value": resource_value,
+        "command_prefix": command_prefix_value,
+        "operation": operation,
+        "activity_id": activity_id,
+        "granted_by": granted_by,
+        "rationale": rationale,
+        "op_result_json": {},
+    }
+    note_text = json.dumps(
+        {
+            "approval_id": approval["id"],
+            "ai_system": approval["ai_system"],
+            "environment": approval["environment"],
+            "resource_kind": approval["resource_kind"],
+            "resource_value": approval["resource_value"],
+            "command_prefix": approval["command_prefix"],
+            "operation": approval["operation"],
+            "granted_by": approval["granted_by"],
+            "rationale": approval["rationale"],
+        },
+        indent=2,
+    )
+    if op_vault:
+        approval["op_result_json"] = run_op_item_create(
+            op_vault,
+            f"AI access approval {approval['ai_system']} {approval['operation']} {approval['resource_kind']}",
+            note_text,
+        )
+    store.add_approval(approval)
+    files = write_decision_files(
+        state_dir / "approvals",
+        {
+            "id": approval["id"],
+            "created_at": approval["created_at"],
+            "ai_system": approval["ai_system"],
+            "environment": approval["environment"],
+            "network_mode": approval["network_mode"],
+            "execution_env": approval["execution_env"],
+            "command_prefix": approval["command_prefix"],
+            "activity_id": approval["activity_id"],
+            "decision": "approved",
+            "rationale": approval["rationale"],
+            "resources": [
+                {
+                    "kind": approval["resource_kind"],
+                    "value": approval["resource_value"],
+                    "id": resource_id(approval["resource_kind"], approval["resource_value"]),
+                }
+            ],
+        },
+    )
+    return {"ok": True, "approval": approval, "artifacts": files}
+
+
+def build_config(args: argparse.Namespace) -> Dict[str, Any]:
+    config = {
+        "trusted_systems": DEFAULT_TRUST,
+        "path_rules": DEFAULT_PATH_RULES,
+        "command_rules": DEFAULT_COMMAND_RULES,
+        "major_change": DEFAULT_MAJOR_CHANGE,
+        "workspace_root": str(DEFAULT_WORKSPACE_ROOT),
+    }
+    override = load_json(args.config_json)
+    for key in ["trusted_systems", "path_rules", "command_rules", "major_change", "workspace_root"]:
+        if key in override:
+            config[key] = override[key]
+    return config
+
+
+def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Govern AI-system access requests using Singine policy packs.")
+    parser.add_argument("--db", default=str(DEFAULT_DB), help="SQLite database path.")
+    parser.add_argument("--state-dir", default=str(DEFAULT_STATE_DIR), help="Directory for decision artefacts.")
+    parser.add_argument("--config-json", help="Optional JSON config overriding trusted systems and command rules.")
+    sub = parser.add_subparsers(dest="subcommand", required=True)
+
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("--request-json", help="Structured request JSON file.")
+    common.add_argument("--ai-system", help="AI system identifier, e.g. claude or codex.")
+    common.add_argument("--trust-level", default="trusted", help="Trust level label.")
+    common.add_argument("--environment", default="dev", help="Environment name, e.g. dev or prd.")
+    common.add_argument("--network-mode", default="offline", help="Network mode, e.g. offline, lan, internet.")
+    common.add_argument("--execution-env", default="local", help="Execution environment, e.g. local, docker, singine-isolated.")
+    common.add_argument("--command", nargs="+", help="Command tokens.")
+    common.add_argument("--command-text", help="Command as a single shell-like string.")
+    common.add_argument("--path", action="append", help="Path target, may be repeated.")
+    common.add_argument("--operation", help="CRUD-like operation label.")
+    common.add_argument("--repo-path", help="Repository root path.")
+    common.add_argument("--lambda-name", help="Singine lambda or internal execution name.")
+    common.add_argument("--activity-id", help="Override mapped activity id.")
+    common.add_argument("--notes", help="Free-form notes.")
+    common.add_argument("--resource-grant-kind", help="Approval scope kind: path-prefix, command-prefix, repo, lambda.")
+
+    p = sub.add_parser("evaluate", parents=[common], help="Evaluate a request and log the decision.")
+    p.add_argument("--policy-pack", required=True, help="Canonical policy-pack.json path.")
+
+    p = sub.add_parser("approve", parents=[common], help="Persist an approval so matching requests are auto-allowed.")
+    p.add_argument("--granted-by", default=os.environ.get("USER", "sysadmin"), help="Approver identity.")
+    p.add_argument("--reason", required=True, help="Approval rationale.")
+    p.add_argument("--op-vault", default="", help="Optional 1Password vault for approval logging.")
+
+    p = sub.add_parser("report", help="Show approvals, recent decisions, and invocation counters.")
+    p.add_argument("--ai-system", help="Filter by AI system.")
+    return parser.parse_args(argv)
+
+
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    args = parse_args(argv)
+    config = build_config(args)
+    state_dir = Path(args.state_dir).expanduser()
+    store = GovernanceStore(Path(args.db).expanduser())
+
+    if args.subcommand == "report":
+        print(json.dumps(store.report(args.ai_system), indent=2))
+        return 0
+
+    request = normalize_request(args)
+    if not request["ai_system"]:
+        raise SystemExit("--ai-system or request_json.ai_system is required")
+
+    if args.subcommand == "approve":
+        result = approve_request(request, state_dir, store, args.granted_by, args.reason, args.op_vault)
+        print(json.dumps(result, indent=2))
+        return 0
+
+    pack_payload = load_json(args.policy_pack)
+    if not pack_payload:
+        raise SystemExit("Policy pack could not be loaded.")
+    pack = PolicyPack(pack_payload)
+    decision = evaluate_request(request, pack, store, state_dir, config)
+    print(json.dumps(decision, indent=2))
+    return 0 if decision["decision"] == "allow" else 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,0 +1,30 @@
+.TH SINGINE-SINGE 1 "2026-03-13" "singine 0.2.0" "User Commands"
+.SH NAME
+singine-singe \- render governed @mentions and inspect the people registry
+.SH SYNOPSIS
+.B singine singe
+\fISUBCOMMAND\fR [\fIOPTIONS\fR]
+.SH DESCRIPTION
+The
+.B singe
+command resolves @mentions against the local people registry and renders them
+into display names, email addresses, URNs, or other governed identity forms.
+.SH SUBCOMMANDS
+.TP
+.B render
+Render a template string or stdin content, replacing @mentions.
+.TP
+.B people
+List all people in the registry.
+.TP
+.B who \fIMENTION\fR
+Resolve one @mention and print its details.
+.SH EXAMPLES
+.nf
+singine singe render "Ask @si to review this"
+singine singe render --fmt email "Contact @si and @stal"
+singine singe people --json
+singine singe who @si
+.fi
+.SH SEE ALSO
+.BR singine (1)

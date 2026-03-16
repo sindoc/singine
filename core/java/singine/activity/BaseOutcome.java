@@ -26,6 +26,16 @@ public class BaseOutcome implements Outcome {
 
     // ── Construction ──────────────────────────────────────────────
 
+    /**
+     * Create an immutable outcome record for a completed action.
+     *
+     * @param action originating action
+     * @param type outcome classification
+     * @param measurements measurement map captured during execution
+     * @param usageValue usage value component
+     * @param businessValue business value component
+     * @param platformCost platform cost component
+     */
     public BaseOutcome(Action action,
                        OutcomeType type,
                        Map<String, Object> measurements,

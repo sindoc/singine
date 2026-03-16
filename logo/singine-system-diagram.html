@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Singine System Component Diagram</title>
+  <style>
+    :root {
+      --bg: #f4efe8;
+      --panel: rgba(255, 252, 247, 0.84);
+      --panel-strong: #fffaf3;
+      --ink: #1d1917;
+      --muted: #655a4e;
+      --line: #d7c8b7;
+      --accent: #8d3526;
+      --accent-soft: rgba(141, 53, 38, 0.12);
+      --good: #244b3d;
+      --shadow: 0 18px 40px rgba(77, 54, 36, 0.12);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "IBM Plex Sans", "Avenir Next", "Segoe UI", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top right, rgba(255,255,255,0.75), transparent 28%),
+        radial-gradient(circle at bottom left, rgba(229,218,199,0.85), transparent 22%),
+        linear-gradient(135deg, #f7f2eb 0%, #efe7db 52%, #e7dccd 100%);
+    }
+    .page {
+      max-width: 1580px;
+      margin: 0 auto;
+      padding: 32px 24px 48px;
+    }
+    .hero {
+      display: grid;
+      grid-template-columns: 1.2fr 0.8fr;
+      gap: 18px;
+      margin-bottom: 24px;
+    }
+    .hero-card, .panel, .node-card {
+      background: var(--panel);
+      border: 1px solid rgba(124, 96, 70, 0.16);
+      border-radius: 32px;
+      box-shadow: var(--shadow);
+    }
+    .hero-card {
+      padding: 28px 30px 26px;
+    }
+    .eyebrow {
+      margin: 0 0 10px;
+      color: var(--accent);
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+    }
+    h1 {
+      margin: 0 0 12px;
+      font-size: clamp(42px, 7vw, 76px);
+      line-height: 0.95;
+      letter-spacing: -0.05em;
+    }
+    .subtitle {
+      margin: 0 0 18px;
+      max-width: 840px;
+      color: var(--muted);
+      font-size: 20px;
+      line-height: 1.45;
+    }
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 18px;
+    }
+    .metric {
+      padding: 14px 16px;
+      border-radius: 18px;
+      background: rgba(255,255,255,0.68);
+      border: 1px solid rgba(124, 96, 70, 0.14);
+    }
+    .metric strong {
+      display: block;
+      font-size: 28px;
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+    .metric span {
+      color: var(--muted);
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+    }
+    .capability-strip {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      justify-content: center;
+    }
+    .capability-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .capability-pill {
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      border: 1px solid rgba(141, 53, 38, 0.14);
+      font-size: 14px;
+      font-weight: 700;
+    }
+    .capability-pill span {
+      color: var(--muted);
+      margin-left: 6px;
+      font-weight: 600;
+    }
+    .content {
+      display: grid;
+      grid-template-columns: minmax(320px, 0.95fr) minmax(0, 2.05fr);
+      gap: 20px;
+      align-items: start;
+    }
+    .stack, .workspace {
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+    .panel {
+      padding: 20px;
+    }
+    .panel h2 {
+      margin: 0 0 8px;
+      font-size: 20px;
+      letter-spacing: -0.03em;
+    }
+    .panel p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+    .zone-list, .link-list, .node-grid {
+      display: grid;
+      gap: 14px;
+      margin-top: 16px;
+    }
+    .node-grid {
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    }
+    .zone-card, .link-card {
+      padding: 14px 16px;
+      border-radius: 18px;
+      background: rgba(255,255,255,0.6);
+      border: 1px solid rgba(124, 96, 70, 0.14);
+    }
+    .zone-card strong, .link-card strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 15px;
+    }
+    .zone-card span, .link-card span {
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.4;
+    }
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .toolbar-copy {
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.4;
+      max-width: 760px;
+    }
+    .toolbar-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    button {
+      appearance: none;
+      border: 1px solid rgba(29, 25, 23, 0.12);
+      background: rgba(255,255,255,0.72);
+      color: var(--ink);
+      border-radius: 999px;
+      padding: 10px 14px;
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    details > summary {
+      list-style: none;
+      cursor: pointer;
+    }
+    details > summary::-webkit-details-marker {
+      display: none;
+    }
+    .node-card {
+      overflow: hidden;
+    }
+    .node-card > summary {
+      padding: 18px 18px 14px;
+      border-bottom: 1px solid rgba(124, 96, 70, 0.12);
+    }
+    .node-topline {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .node-title {
+      margin: 0;
+      font-size: 24px;
+      line-height: 1.05;
+      letter-spacing: -0.04em;
+    }
+    .badge-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 7px 10px;
+      border-radius: 999px;
+      background: rgba(29, 25, 23, 0.05);
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .badge.accent {
+      background: var(--accent-soft);
+      color: var(--accent);
+    }
+    .node-summary {
+      margin: 0;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.45;
+    }
+    .node-body {
+      padding: 16px 18px 18px;
+      display: grid;
+      gap: 14px;
+    }
+    .node-section h4, .component-block h5 {
+      margin: 0 0 10px;
+      color: var(--accent);
+      font-size: 13px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+    .broadcast-item {
+      padding: 12px 14px;
+      border-radius: 16px;
+      background: rgba(141, 53, 38, 0.06);
+      border: 1px solid rgba(141, 53, 38, 0.12);
+      margin-bottom: 10px;
+    }
+    .broadcast-item strong {
+      display: block;
+      font-size: 15px;
+      margin-bottom: 4px;
+    }
+    .broadcast-item p {
+      margin: 0;
+      color: var(--muted);
+    }
+    .broadcast-meta {
+      color: var(--muted);
+      font-size: 13px;
+      margin-bottom: 6px;
+    }
+    .component-tree {
+      display: grid;
+      gap: 10px;
+    }
+    .component {
+      border-radius: 18px;
+      border: 1px solid rgba(124, 96, 70, 0.14);
+      background: rgba(255,255,255,0.76);
+      overflow: hidden;
+    }
+    .component.nested {
+      margin-top: 8px;
+      margin-left: 12px;
+      background: rgba(252,249,244,0.92);
+    }
+    .component > summary {
+      padding: 14px 16px;
+    }
+    .component-layer {
+      color: var(--accent);
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      margin-bottom: 6px;
+    }
+    .component h4 {
+      margin: 0 0 4px;
+      font-size: 16px;
+      line-height: 1.2;
+    }
+    .component-summary, .component-details, .interface-pill p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.4;
+    }
+    .component-body {
+      padding: 0 16px 16px;
+      display: grid;
+      gap: 12px;
+    }
+    .interface-list, .component-cap-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .interface-pill, .component-cap {
+      padding: 8px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      line-height: 1.35;
+      border: 1px solid rgba(124, 96, 70, 0.14);
+      background: rgba(255,255,255,0.8);
+    }
+    .interface-pill strong {
+      display: block;
+      margin-bottom: 3px;
+      font-size: 12px;
+    }
+    .interface-pill span {
+      display: block;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+    .component-cap {
+      background: rgba(36, 75, 61, 0.08);
+      border-color: rgba(36, 75, 61, 0.14);
+      color: var(--good);
+      font-weight: 700;
+    }
+    .footer-note {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    @media (max-width: 1080px) {
+      .hero, .content {
+        grid-template-columns: 1fr;
+      }
+      .summary-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <section class="hero">
+      <div class="hero-card">
+        <p class="eyebrow">System Model</p>
+        <h1>Singine System Component Diagram</h1>
+        <p class="subtitle">Distributed Singine nodes advertise trusted capabilities across laptops, servers, edge devices, and service hosts.</p>
+        <div class="summary-grid">
+          <div class="metric"><strong>4</strong><span>device profiles</span></div>
+          <div class="metric"><strong>4</strong><span>trusted nodes</span></div>
+          <div class="metric"><strong>5</strong><span>broadcast capabilities</span></div>
+        </div>
+      </div>
+      <div class="hero-card capability-strip">
+        <p class="eyebrow">Capability Broadcast</p>
+        <h2>Trusted Singine mesh</h2>
+        <p class="subtitle" style="font-size:17px;margin-bottom:0">Trusted nodes instantiate different Singine profiles and continuously advertise what they can safely do for adjacent peers.</p>
+        <div class="capability-list"><div class="capability-pill">Command execution <span>trusted-network</span></div><div class="capability-pill">Bridge query surface <span>trusted-network</span></div><div class="capability-pill">Runtime state reporting <span>trusted-network</span></div><div class="capability-pill">Identity bootstrap <span>trusted-network</span></div><div class="capability-pill">Content replication <span>federated</span></div></div>
+      </div>
+    </section>
+
+    <div class="content">
+      <aside class="stack">
+        <section class="panel">
+          <p class="eyebrow">Trust Zones</p>
+          <h2>Where Singine lives</h2>
+          <p>Nodes inherit device profiles, then advertise capabilities according to trust zone and runtime policy.</p>
+          <div class="zone-list"><div class="zone-card"><strong>Operator zone</strong><span>Human-operated devices where Singine starts from local CLI context.</span></div><div class="zone-card"><strong>Core services zone</strong><span>Persistent services that aggregate, index, and govern trusted requests.</span></div><div class="zone-card"><strong>Edge zone</strong><span>Peripheral devices or gateways close to local state and runtime signals.</span></div></div>
+        </section>
+
+        <section class="panel">
+          <p class="eyebrow">Link Matrix</p>
+          <h2>How trust moves</h2>
+          <p>These links are deployment relationships, separate from profile internals.</p>
+          <div class="link-list"><div class="link-card"><strong>authoring and bridge sync</strong><span>node_laptop → node_server · control · trusted</span></div><div class="link-card"><strong>query surfaces and topology state</strong><span>node_server → node_laptop · data · trusted</span></div><div class="link-card"><strong>capability announcement</strong><span>node_edge → node_gateway · discovery · trusted</span></div><div class="link-card"><strong>policy-filtered forwarding</strong><span>node_gateway → node_server · control · trusted</span></div><div class="link-card"><strong>trust and enrollment updates</strong><span>node_server → node_gateway · trust · trusted</span></div><div class="link-card"><strong>selected pack replication</strong><span>node_server → node_edge · replication · trusted</span></div></div>
+        </section>
+
+        <section class="panel">
+          <p class="eyebrow">Capabilities</p>
+          <h2>What nodes can announce</h2>
+          <div class="zone-list"><div class="zone-card"><strong>Command execution</strong><span>Execute bounded local actions through explicit policy and operator context. Exposure: trusted-network.</span></div><div class="zone-card"><strong>Bridge query surface</strong><span>Expose SQL, SPARQL, and GraphQL access over local indexed knowledge. Exposure: trusted-network.</span></div><div class="zone-card"><strong>Runtime state reporting</strong><span>Publish health, source coverage, and runtime topology snapshots. Exposure: trusted-network.</span></div><div class="zone-card"><strong>Identity bootstrap</strong><span>Announce identity, trust assertions, and authentication bootstrap surfaces. Exposure: trusted-network.</span></div><div class="zone-card"><strong>Content replication</strong><span>Replicate selected indices or knowledge packs into adjacent trusted nodes. Exposure: federated.</span></div></div>
+        </section>
+      </aside>
+
+      <main class="workspace">
+        <section class="panel">
+          <div class="toolbar">
+            <div class="toolbar-copy">
+              Expand a node to inspect the profile instantiated on that device. Each component is independently collapsible so the diagram can scale from topology view to subsystem detail.
+            </div>
+            <div class="toolbar-actions">
+              <button type="button" data-action="expand-nodes">Expand all nodes</button>
+              <button type="button" data-action="collapse-nodes">Collapse all nodes</button>
+              <button type="button" data-action="expand-components">Open all components</button>
+              <button type="button" data-action="collapse-components">Close all components</button>
+            </div>
+          </div>
+          <div class="node-grid"><details class="node-card" data-collapsible="node" open><summary><div class="node-topline"><h3 class="node-title">Operator laptop</h3><div class="badge-row"><span class="badge accent">laptop</span><span class="badge">Operator zone</span></div></div><div class="badge-row"><span class="badge">macOS or Linux workstation</span><span class="badge">Operator laptop</span></div><p class="node-summary">Primary authoring and inspection node with local bridge, CLI, and trust bootstrap workflows.</p></summary><div class="node-body"><section class="node-section"><h4>Broadcasts</h4><div class="broadcast-item"><strong>Bridge query surface</strong><div class="broadcast-meta">bridge-http · trusted mesh · on startup and on topology change</div><p>Advertises local query surfaces and indexed sources.</p></div><div class="broadcast-item"><strong>Command execution</strong><div class="broadcast-meta">trusted-api · trusted peers · policy gated</div><p>Announces bounded task execution availability.</p></div></section><section class="node-section"><h4>Profile components</h4><div class="component-tree"><details class="component" data-collapsible="component" open><summary><div class="component-layer">host</div><h4>Operator shell</h4><p class="component-summary">CLI entrypoint for trusted users running Singine locally.</p></summary><div class="component-body"><section class="component-block"><h5>Interfaces</h5><div class="interface-list"><div class="interface-pill"><strong>tty</strong><span>shell · bidirectional · local</span><p>Primary operator interaction surface.</p></div></div></section></div></details><details class="component" data-collapsible="component" open><summary><div class="component-layer">control</div><h4>Singine core</h4><p class="component-summary">Routes commands, enforces trust decisions, and coordinates local services.</p></summary><div class="component-body"><section class="component-block"><h5>Capabilities</h5><div class="component-cap-list"><div class="component-cap">Command execution</div><div class="component-cap">Bridge query surface</div><div class="component-cap">Runtime state reporting</div><div class="component-cap">Identity bootstrap</div></div></section></div></details><details class="component" data-collapsible="component"><summary><div class="component-layer">data</div><h4>Knowledge bridge</h4><p class="component-summary">Builds local SQLite, RDF, XML matrix, and multi-query representations.</p></summary><div class="component-body"><section class="component-block"><h5>Interfaces</h5><div class="interface-list"><div class="interface-pill"><strong>bridge-http</strong><span>HTTP · bidirectional · trusted</span><p>Shared query surface for adjacent trusted nodes.</p></div></div></section><section class="component-block"><h5>Capabilities</h5><div class="component-cap-list"><div class="component-cap">Bridge query surface</div><div class="component-cap">Content replication</div></div></section></div></details></div></section></div></details><details class="node-card" data-collapsible="node"><summary><div class="node-topline"><h3 class="node-title">Core server</h3><div class="badge-row"><span class="badge accent">server</span><span class="badge">Core services zone</span></div></div><div class="badge-row"><span class="badge">Linux service host</span><span class="badge">Server node</span></div><p class="node-summary">Central long-running node that aggregates knowledge, trust metadata, and query interfaces.</p></summary><div class="node-body"><section class="node-section"><h4>Broadcasts</h4><div class="broadcast-item"><strong>Runtime state reporting</strong><div class="broadcast-meta">trusted-api · trusted mesh · periodic heartbeat</div><p>Publishes topology and health snapshots.</p></div><div class="broadcast-item"><strong>Identity bootstrap</strong><div class="broadcast-meta">trusted-api · enrolling nodes · on request</div><p>Publishes trust bootstrap and enrollment metadata.</p></div><div class="broadcast-item"><strong>Content replication</strong><div class="broadcast-meta">trusted-api · approved replicas · scheduled</div><p>Offers replicated packs and indices to selected peers.</p></div></section><section class="node-section"><h4>Profile components</h4><div class="component-tree"><details class="component" data-collapsible="component" open><summary><div class="component-layer">host</div><h4>Service host</h4><p class="component-summary">Persistent service process, task scheduler, and local durable storage.</p></summary><div class="component-body"></div></details><details class="component" data-collapsible="component" open><summary><div class="component-layer">control</div><h4>Orchestrator</h4><p class="component-summary">Accepts trusted requests, coordinates job execution, and exposes topology state.</p></summary><div class="component-body"><section class="component-block"><h5>Interfaces</h5><div class="interface-list"><div class="interface-pill"><strong>trusted-api</strong><span>HTTPS · bidirectional · trusted</span><p>Stable ingress for trusted-node control traffic.</p></div></div></section><section class="component-block"><h5>Capabilities</h5><div class="component-cap-list"><div class="component-cap">Command execution</div><div class="component-cap">Runtime state reporting</div><div class="component-cap">Identity bootstrap</div></div></section></div></details><details class="component" data-collapsible="component"><summary><div class="component-layer">data</div><h4>Indexed knowledge plane</h4><p class="component-summary">Maintains bridge databases, RDF packs, and replicated content slices.</p></summary><div class="component-body"><section class="component-block"><h5>Capabilities</h5><div class="component-cap-list"><div class="component-cap">Bridge query surface</div><div class="component-cap">Content replication</div></div></section></div></details><details class="component" data-collapsible="component"><summary><div class="component-layer">identity</div><h4>Trust and auth services</h4><p class="component-summary">Manages TOTP bootstrap, trust assertions, and node enrollment metadata.</p></summary><div class="component-body"><section class="component-block"><h5>Capabilities</h5><div class="component-cap-list"><div class="component-cap">Identity bootstrap</div></div></section></div></details></div></section></div></details><details class="node-card" data-collapsible="node"><summary><div class="node-topline"><h3 class="node-title">Gateway appliance</h3><div class="badge-row"><span class="badge accent">gateway</span><span class="badge">Edge zone</span></div></div><div class="badge-row"><span class="badge">Container or appliance host</span><span class="badge">Gateway node</span></div><p class="node-summary">Policy-aware ingress and discovery node positioned between edge devices and core services.</p></summary><div class="node-body"><section class="node-section"><h4>Broadcasts</h4><div class="broadcast-item"><strong>Runtime state reporting</strong><div class="broadcast-meta">discovery-channel · trusted mesh · periodic heartbeat</div><p>Publishes discovered downstream node state.</p></div></section><section class="node-section"><h4>Profile components</h4><div class="component-tree"><details class="component" data-collapsible="component" open><summary><div class="component-layer">network</div><h4>Ingress broker</h4><p class="component-summary">Terminates trusted-node traffic and maps it to internal routes.</p></summary><div class="component-body"><section class="component-block"><h5>Interfaces</h5><div class="interface-list"><div class="interface-pill"><strong>discovery-channel</strong><span>HTTPS or MQTT · bidirectional · trusted</span><p>Capability advertisements and topology events.</p></div></div></section></div></details><details class="component" data-collapsible="component" open><summary><div class="component-layer">control</div><h4>Policy guard</h4><p class="component-summary">Applies network trust boundaries before forwarding requests or advertisements.</p></summary><div class="component-body"><section class="component-block"><h5>Capabilities</h5><div class="component-cap-list"><div class="component-cap">Runtime state reporting</div><div class="component-cap">Identity bootstrap</div></div></section></div></details></div></section></div></details><details class="node-card" data-collapsible="node"><summary><div class="node-topline"><h3 class="node-title">Edge device</h3><div class="badge-row"><span class="badge accent">edge</span><span class="badge">Edge zone</span></div></div><div class="badge-row"><span class="badge">Embedded Linux or small VM</span><span class="badge">Edge node</span></div><p class="node-summary">Localized execution node near raw state, files, or device runtime context.</p></summary><div class="node-body"><section class="node-section"><h4>Broadcasts</h4><div class="broadcast-item"><strong>Runtime state reporting</strong><div class="broadcast-meta">node-announcement · gateway and core · on startup and periodic heartbeat</div><p>Reports local runtime state and enabled adapters.</p></div><div class="broadcast-item"><strong>Command execution</strong><div class="broadcast-meta">node-announcement · approved controllers · policy gated</div><p>Reports narrowly scoped execution ability.</p></div></section><section class="node-section"><h4>Profile components</h4><div class="component-tree"><details class="component" data-collapsible="component" open><summary><div class="component-layer">host</div><h4>Host substrate</h4><p class="component-summary">OS process boundary, device files, scheduled jobs, and local storage.</p></summary><div class="component-body"><p class="component-details">Edge nodes privilege observability and narrow execution over large-scale indexing.</p><section class="component-block"><h5>Interfaces</h5><div class="interface-list"><div class="interface-pill"><strong>local-shell</strong><span>POSIX process · bidirectional · local</span><p>Local command execution surface for bounded tasks.</p></div></div></section></div></details><details class="component" data-collapsible="component" open><summary><div class="component-layer">control</div><h4>Singine control plane</h4><p class="component-summary">Policy checks, command routing, and capability advertisement.</p></summary><div class="component-body"><section class="component-block"><h5>Interfaces</h5><div class="interface-list"><div class="interface-pill"><strong>node-announcement</strong><span>HTTPS or message bus · outbound · trusted</span><p>Advertises node identity and currently enabled capabilities.</p></div></div></section><section class="component-block"><h5>Capabilities</h5><div class="component-cap-list"><div class="component-cap">Command execution</div><div class="component-cap">Runtime state reporting</div><div class="component-cap">Identity bootstrap</div></div></section></div></details><details class="component" data-collapsible="component"><summary><div class="component-layer">runtime</div><h4>Local adapters</h4><p class="component-summary">Adapters for filesystem state, sensor state, or local application context.</p></summary><div class="component-body"><p class="component-details">These adapters translate device-native state into queryable or broadcastable forms.</p></div></details></div></section></div></details></div>
+          <div class="footer-note">Source of truth: singine-system-diagram.xml. Schema: singine-system-diagram.rnc.</div>
+        </section>
+      </main>
+    </div>
+  </div>
+  <script>
+    (function () {
+      function setOpen(selector, open) {
+        document.querySelectorAll(selector).forEach(function (node) {
+          node.open = open;
+        });
+      }
+
+      document.querySelector('[data-action="expand-nodes"]').addEventListener('click', function () {
+        setOpen('details[data-collapsible="node"]', true);
+      });
+
+      document.querySelector('[data-action="collapse-nodes"]').addEventListener('click', function () {
+        setOpen('details[data-collapsible="node"]', false);
+      });
+
+      document.querySelector('[data-action="expand-components"]').addEventListener('click', function () {
+        setOpen('details[data-collapsible="component"]', true);
+      });
+
+      document.querySelector('[data-action="collapse-components"]').addEventListener('click', function () {
+        setOpen('details[data-collapsible="component"]', false);
+      });
+    })();
+  </script>
+</body>
+</html>

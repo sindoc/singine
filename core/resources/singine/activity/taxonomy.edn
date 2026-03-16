@@ -112,6 +112,54 @@
       :collibra/name       "Data Production Definition Protocol"
       :collibra/id         ""}}]}
 
+  ;; ── filesystem-operations ─────────────────────────────────────
+  {:category/id          "filesystem-operations"
+   :category/domain      "singine-core"
+   :category/name        "Filesystem Operations"
+   :category/labels      {:en "Filesystem Operations"
+                          :fr "Opérations sur le système de fichiers"
+                          :nl "Bestandssysteemoperaties"}
+   :category/description "Activities for secure local filesystem discovery
+                          and controlled file movement under Singine JVM
+                          policy control."
+
+   :category/activities
+
+   [{:activity/id          "activity-filesystem-find-01"
+     :activity/name        "Find Files About Topic"
+     :activity/description "Search local files and directories whose basename
+                            contains a requested topic fragment. Used by
+                            singine find filesAboutTopic."
+     :activity/subcategory "topic-discovery"
+     :activity/policy
+     {:policy/id       "policy-singine-filesystem-local-01"
+      :policy/decision "approved"
+      :policy/rationale "Approved for local filesystem search executed inside
+                         Singine's JVM control boundary."}
+     :activity/shell-init  ["~/.singine/activity.sh"]
+     :activity/outputs     [:json :xml :html]
+     :activity/collibra
+     {:collibra/asset-type "Business Process"
+      :collibra/name       "Find Files About Topic"
+      :collibra/id         ""}}
+
+    {:activity/id          "activity-filesystem-move-01"
+     :activity/name        "Move File List To Directory"
+     :activity/description "Move a stdin-provided list of files into a target
+                            directory. Used by singine mv fileListTo."
+     :activity/subcategory "controlled-move"
+     :activity/policy
+     {:policy/id       "policy-singine-filesystem-local-01"
+      :policy/decision "approved"
+      :policy/rationale "Approved for local filesystem moves executed inside
+                         Singine's JVM control boundary."}
+     :activity/shell-init  ["~/.singine/activity.sh"]
+     :activity/outputs     [:json :xml]
+     :activity/collibra
+     {:collibra/asset-type "Business Process"
+      :collibra/name       "Move File List To Directory"
+      :collibra/id         ""}}]}
+
   ;; ── elia-electricity ──────────────────────────────────────────
   {:category/id          "elia-electricity"
    :category/domain      "elia-electricity"

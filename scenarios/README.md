@@ -10,3 +10,7 @@ Use it to capture:
 - concept demonstrations that should eventually become tests or product flows
 
 Scenarios should stay small and legible so they can evolve into runnable assets later.
+
+Current scenario pack:
+
+- `knowyourai/` for named SPARQL examples that query the KnowYourAI RDF corpus through the local bridge
