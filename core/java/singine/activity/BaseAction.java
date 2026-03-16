@@ -28,6 +28,13 @@ public class BaseAction implements Action {
 
     // ── Construction ──────────────────────────────────────────────
 
+    /**
+     * Create a concrete action instance from an activity template.
+     *
+     * @param template originating activity template
+     * @param policy governing policy applied at execution time
+     * @param input immutable action input context
+     */
     public BaseAction(Activity template, Policy policy, Map<String, Object> input) {
         this.id       = UUID.randomUUID().toString();
         this.template = template;

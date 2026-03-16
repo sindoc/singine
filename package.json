@@ -1,0 +1,25 @@
+{
+  "name": "@sindoc/singine",
+  "version": "0.2.0",
+  "description": "singine bridge and local control command",
+  "license": "EPL-1.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sindoc/singine"
+  },
+  "keywords": ["singine", "sindoc", "xml", "collibra", "semantic", "bridge"],
+
+  "bin": {
+    "singine": "bin/singine.js"
+  },
+
+  "engines": {
+    "node": ">=18"
+  },
+
+  "//": "Requires Python 3.10+ on PATH. No Python packages are auto-installed.",
+
+  "scripts": {
+    "postinstall": "node bin/singine.js --version || true"
+  }
+}

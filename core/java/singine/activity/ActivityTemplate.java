@@ -13,7 +13,8 @@ import java.util.Map;
  *
  * Usage
  * ─────
- * Extend this class and implement the three abstract methods.
+ * Extend this class and implement the abstract identity and governance
+ * methods.
  * {@link #instantiate(Map)} creates a {@link BaseAction} by default;
  * override it if you need a custom Action type.
  *
@@ -28,6 +29,12 @@ import java.util.Map;
  * }</pre>
  */
 public abstract class ActivityTemplate implements Activity {
+
+    /**
+     * Protected constructor for subclass-based activity templates.
+     */
+    protected ActivityTemplate() {
+    }
 
     // ── Abstract identity ─────────────────────────────────────────
 
@@ -91,7 +98,12 @@ public abstract class ActivityTemplate implements Activity {
 
     // ── Helpers ───────────────────────────────────────────────────
 
-    /** XML-escape a string value. */
+    /**
+     * XML-escape a string value for generated fragments.
+     *
+     * @param s raw string value
+     * @return XML-escaped value
+     */
     protected static String esc(String s) {
         if (s == null) return "";
         return s.replace("&", "&amp;")
@@ -100,7 +112,12 @@ public abstract class ActivityTemplate implements Activity {
                 .replace("\"", "&quot;");
     }
 
-    /** EDN-escape a string value (escape backslash and double-quote). */
+    /**
+     * EDN-escape a string value.
+     *
+     * @param s raw string value
+     * @return EDN-escaped value with backslashes and quotes escaped
+     */
     protected static String ednStr(String s) {
         if (s == null) return "";
         return s.replace("\\", "\\\\").replace("\"", "\\\"");

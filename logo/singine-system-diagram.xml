@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-model href="singine-system-diagram.rnc" type="application/relax-ng-compact-syntax"?>
+<singine-system title="Singine System Component Diagram">
+  <subtitle>Distributed Singine nodes advertise trusted capabilities across laptops, servers, edge devices, and service hosts.</subtitle>
+
+  <capability-definitions>
+    <capability id="cap_exec" label="Command execution" exposure="trusted-network">Execute bounded local actions through explicit policy and operator context.</capability>
+    <capability id="cap_bridge" label="Bridge query surface" exposure="trusted-network">Expose SQL, SPARQL, and GraphQL access over local indexed knowledge.</capability>
+    <capability id="cap_state" label="Runtime state reporting" exposure="trusted-network">Publish health, source coverage, and runtime topology snapshots.</capability>
+    <capability id="cap_identity" label="Identity bootstrap" exposure="trusted-network">Announce identity, trust assertions, and authentication bootstrap surfaces.</capability>
+    <capability id="cap_replication" label="Content replication" exposure="federated">Replicate selected indices or knowledge packs into adjacent trusted nodes.</capability>
+  </capability-definitions>
+
+  <profiles>
+    <profile id="profile_edge" label="Edge node" class="edge">
+      <summary>Small-footprint Singine running near local sensors, local files, or device-specific runtime state.</summary>
+      <component id="edge_host" label="Host substrate" layer="host" default-open="true">
+        <summary>OS process boundary, device files, scheduled jobs, and local storage.</summary>
+        <details>Edge nodes privilege observability and narrow execution over large-scale indexing.</details>
+        <interface name="local-shell" direction="bidirectional" protocol="POSIX process" trust="local">Local command execution surface for bounded tasks.</interface>
+      </component>
+      <component id="edge_control" label="Singine control plane" layer="control" default-open="true">
+        <summary>Policy checks, command routing, and capability advertisement.</summary>
+        <interface name="node-announcement" direction="outbound" protocol="HTTPS or message bus" trust="trusted">Advertises node identity and currently enabled capabilities.</interface>
+        <capability-ref ref="cap_exec"/>
+        <capability-ref ref="cap_state"/>
+        <capability-ref ref="cap_identity"/>
+      </component>
+      <component id="edge_runtime" label="Local adapters" layer="runtime">
+        <summary>Adapters for filesystem state, sensor state, or local application context.</summary>
+        <details>These adapters translate device-native state into queryable or broadcastable forms.</details>
+      </component>
+    </profile>
+
+    <profile id="profile_laptop" label="Operator laptop" class="laptop">
+      <summary>Interactive Singine workstation for operators, local documents, and bridge inspection.</summary>
+      <component id="laptop_shell" label="Operator shell" layer="host" default-open="true">
+        <summary>CLI entrypoint for trusted users running Singine locally.</summary>
+        <interface name="tty" direction="bidirectional" protocol="shell" trust="local">Primary operator interaction surface.</interface>
+      </component>
+      <component id="laptop_core" label="Singine core" layer="control" default-open="true">
+        <summary>Routes commands, enforces trust decisions, and coordinates local services.</summary>
+        <capability-ref ref="cap_exec"/>
+        <capability-ref ref="cap_bridge"/>
+        <capability-ref ref="cap_state"/>
+        <capability-ref ref="cap_identity"/>
+      </component>
+      <component id="laptop_bridge" label="Knowledge bridge" layer="data">
+        <summary>Builds local SQLite, RDF, XML matrix, and multi-query representations.</summary>
+        <interface name="bridge-http" direction="bidirectional" protocol="HTTP" trust="trusted">Shared query surface for adjacent trusted nodes.</interface>
+        <capability-ref ref="cap_bridge"/>
+        <capability-ref ref="cap_replication"/>
+      </component>
+    </profile>
+
+    <profile id="profile_server" label="Server node" class="server">
+      <summary>Persistent Singine service node hosting indexing, API surfaces, and trust coordination.</summary>
+      <component id="server_service" label="Service host" layer="host" default-open="true">
+        <summary>Persistent service process, task scheduler, and local durable storage.</summary>
+      </component>
+      <component id="server_orchestrator" label="Orchestrator" layer="control" default-open="true">
+        <summary>Accepts trusted requests, coordinates job execution, and exposes topology state.</summary>
+        <interface name="trusted-api" direction="bidirectional" protocol="HTTPS" trust="trusted">Stable ingress for trusted-node control traffic.</interface>
+        <capability-ref ref="cap_exec"/>
+        <capability-ref ref="cap_state"/>
+        <capability-ref ref="cap_identity"/>
+      </component>
+      <component id="server_data" label="Indexed knowledge plane" layer="data">
+        <summary>Maintains bridge databases, RDF packs, and replicated content slices.</summary>
+        <capability-ref ref="cap_bridge"/>
+        <capability-ref ref="cap_replication"/>
+      </component>
+      <component id="server_identity" label="Trust and auth services" layer="identity">
+        <summary>Manages TOTP bootstrap, trust assertions, and node enrollment metadata.</summary>
+        <capability-ref ref="cap_identity"/>
+      </component>
+    </profile>
+
+    <profile id="profile_gateway" label="Gateway node" class="gateway">
+      <summary>Network-edge Singine node that federates discovery and limits trust propagation.</summary>
+      <component id="gateway_ingress" label="Ingress broker" layer="network" default-open="true">
+        <summary>Terminates trusted-node traffic and maps it to internal routes.</summary>
+        <interface name="discovery-channel" direction="bidirectional" protocol="HTTPS or MQTT" trust="trusted">Capability advertisements and topology events.</interface>
+      </component>
+      <component id="gateway_policy" label="Policy guard" layer="control" default-open="true">
+        <summary>Applies network trust boundaries before forwarding requests or advertisements.</summary>
+        <capability-ref ref="cap_state"/>
+        <capability-ref ref="cap_identity"/>
+      </component>
+    </profile>
+  </profiles>
+
+  <deployment id="trusted_mesh" label="Trusted Singine mesh">
+    <summary>Trusted nodes instantiate different Singine profiles and continuously advertise what they can safely do for adjacent peers.</summary>
+    <trust-zone id="zone_operator" label="Operator zone">Human-operated devices where Singine starts from local CLI context.</trust-zone>
+    <trust-zone id="zone_core" label="Core services zone">Persistent services that aggregate, index, and govern trusted requests.</trust-zone>
+    <trust-zone id="zone_edge" label="Edge zone">Peripheral devices or gateways close to local state and runtime signals.</trust-zone>
+
+    <node id="node_laptop" label="Operator laptop" profile-ref="profile_laptop" zone-ref="zone_operator" platform="macOS or Linux workstation">
+      <summary>Primary authoring and inspection node with local bridge, CLI, and trust bootstrap workflows.</summary>
+      <broadcast capability-ref="cap_bridge" audience="trusted mesh" channel="bridge-http" cadence="on startup and on topology change">Advertises local query surfaces and indexed sources.</broadcast>
+      <broadcast capability-ref="cap_exec" audience="trusted peers" channel="trusted-api" cadence="policy gated">Announces bounded task execution availability.</broadcast>
+    </node>
+
+    <node id="node_server" label="Core server" profile-ref="profile_server" zone-ref="zone_core" platform="Linux service host">
+      <summary>Central long-running node that aggregates knowledge, trust metadata, and query interfaces.</summary>
+      <broadcast capability-ref="cap_state" audience="trusted mesh" channel="trusted-api" cadence="periodic heartbeat">Publishes topology and health snapshots.</broadcast>
+      <broadcast capability-ref="cap_identity" audience="enrolling nodes" channel="trusted-api" cadence="on request">Publishes trust bootstrap and enrollment metadata.</broadcast>
+      <broadcast capability-ref="cap_replication" audience="approved replicas" channel="trusted-api" cadence="scheduled">Offers replicated packs and indices to selected peers.</broadcast>
+    </node>
+
+    <node id="node_gateway" label="Gateway appliance" profile-ref="profile_gateway" zone-ref="zone_edge" platform="Container or appliance host">
+      <summary>Policy-aware ingress and discovery node positioned between edge devices and core services.</summary>
+      <broadcast capability-ref="cap_state" audience="trusted mesh" channel="discovery-channel" cadence="periodic heartbeat">Publishes discovered downstream node state.</broadcast>
+    </node>
+
+    <node id="node_edge" label="Edge device" profile-ref="profile_edge" zone-ref="zone_edge" platform="Embedded Linux or small VM">
+      <summary>Localized execution node near raw state, files, or device runtime context.</summary>
+      <broadcast capability-ref="cap_state" audience="gateway and core" channel="node-announcement" cadence="on startup and periodic heartbeat">Reports local runtime state and enabled adapters.</broadcast>
+      <broadcast capability-ref="cap_exec" audience="approved controllers" channel="node-announcement" cadence="policy gated">Reports narrowly scoped execution ability.</broadcast>
+    </node>
+
+    <link from="node_laptop" to="node_server" kind="control" label="authoring and bridge sync" trust="trusted"/>
+    <link from="node_server" to="node_laptop" kind="data" label="query surfaces and topology state" trust="trusted"/>
+    <link from="node_edge" to="node_gateway" kind="discovery" label="capability announcement" trust="trusted"/>
+    <link from="node_gateway" to="node_server" kind="control" label="policy-filtered forwarding" trust="trusted"/>
+    <link from="node_server" to="node_gateway" kind="trust" label="trust and enrollment updates" trust="trusted"/>
+    <link from="node_server" to="node_edge" kind="replication" label="selected pack replication" trust="trusted"/>
+  </deployment>
+</singine-system>

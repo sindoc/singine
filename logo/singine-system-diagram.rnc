@@ -1,0 +1,105 @@
+default namespace = ""
+
+start = element singine-system {
+  title,
+  subtitle?,
+  capability-definitions,
+  profiles,
+  deployment
+}
+
+title = attribute title { text }
+
+subtitle = element subtitle { text }
+
+capability-definitions = element capability-definitions {
+  capability+
+}
+
+capability = element capability {
+  attribute id { xsd:ID },
+  attribute label { text },
+  attribute exposure { "local" | "trusted-network" | "federated" },
+  text
+}
+
+profiles = element profiles {
+  profile+
+}
+
+profile = element profile {
+  attribute id { xsd:ID },
+  attribute label { text },
+  attribute class { "edge" | "laptop" | "server" | "gateway" | "service" },
+  summary,
+  component+
+}
+
+summary = element summary { text }
+
+component = element component {
+  attribute id { xsd:ID },
+  attribute label { text },
+  attribute layer { "host" | "control" | "runtime" | "data" | "network" | "identity" },
+  attribute default-open { "true" | "false" }?,
+  summary,
+  details?,
+  interface*,
+  capability-ref*,
+  component*
+}
+
+details = element details { text }
+
+interface = element interface {
+  attribute name { text },
+  attribute direction { "inbound" | "outbound" | "bidirectional" },
+  attribute protocol { text },
+  attribute trust { "local" | "trusted" | "federated" },
+  text
+}
+
+capability-ref = element capability-ref {
+  attribute ref { xsd:IDREF }
+}
+
+deployment = element deployment {
+  attribute id { xsd:ID }?,
+  attribute label { text },
+  summary,
+  trust-zone+,
+  node+,
+  link*
+}
+
+trust-zone = element trust-zone {
+  attribute id { xsd:ID },
+  attribute label { text },
+  text
+}
+
+node = element node {
+  attribute id { xsd:ID },
+  attribute label { text },
+  attribute profile-ref { xsd:IDREF },
+  attribute zone-ref { xsd:IDREF },
+  attribute platform { text },
+  summary,
+  broadcast*
+}
+
+broadcast = element broadcast {
+  attribute capability-ref { xsd:IDREF },
+  attribute audience { text },
+  attribute channel { text },
+  attribute cadence { text },
+  text
+}
+
+link = element link {
+  attribute from { xsd:IDREF },
+  attribute to { xsd:IDREF },
+  attribute kind { "control" | "data" | "discovery" | "trust" | "replication" },
+  attribute label { text },
+  attribute trust { "local" | "trusted" | "federated" }
+}

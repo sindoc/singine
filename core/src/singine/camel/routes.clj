@@ -21,11 +21,13 @@
    URN: urn:singine:camel:routes"
   (:require [singine.camel.context :as ctx]
             [clojure.tools.logging :as log]
-            [clojure.string        :as str])
+            [clojure.string        :as str]
+            [clojure.java.shell    :as sh])
   (:import [org.apache.camel.builder RouteBuilder]
            [org.apache.camel Exchange Message]
            [org.apache.camel.model RouteDefinition]
-           [singine.cap CapabilityProbe]))
+           [singine.cap CapabilityProbe]
+           [java.lang ProcessBuilder ProcessBuilder$Redirect]))
 
 ;; ── Helper: build RouteBuilder from a Clojure function ───────────────────────
 
@@ -353,6 +355,56 @@
                          nil))))
           (end))))))
 
+;; ── /bridge route: singine.cortex.bridge ────────────────────────────────────
+;; Thin HTTP facade over the SQLite-backed cortex bridge.
+
+(defn bridge-route
+  "HTTP GET /bridge?action=sources|search|entity|sparql[&q=...][&entity=...][&limit=...]
+   Delegates to `python3 -m singine.cortex_bridge http`.
+
+   Environment:
+     SINGINE_CORTEX_DB  SQLite DB path (default /tmp/sqlite.db)"
+  [{:keys [http-port]
+    :or   {http-port 8080}}]
+  (let [from-uri (str "jetty:http://0.0.0.0:" http-port "/bridge"
+                      "?httpMethodRestrict=GET"
+                      "&enableCORS=true")
+        db-path  (or (System/getenv "SINGINE_CORTEX_DB") "/tmp/sqlite.db")]
+    (route-builder
+      (fn [^RouteBuilder rb]
+        (.. rb
+          (from from-uri)
+          (routeId "singine.cortex.bridge")
+          (process (proxy [org.apache.camel.Processor] []
+                     (process [ex]
+                       (let [^org.apache.camel.Exchange ex ex
+                             query     (or (.getHeader (.getIn ex) "CamelHttpQuery" String) "")
+                             params    (into {}
+                                             (keep (fn [part]
+                                                     (when-let [[_ k v] (re-matches #"([^=]+)=(.*)" part)]
+                                                       [k v])))
+                                             (remove str/blank? (str/split query #"&")))
+                             action    (get params "action" "sources")
+                             q         (get params "q")
+                             entity    (get params "entity")
+                             limit     (get params "limit" "20")
+                             base-cmd  ["python3" "-m" "singine.cortex_bridge"
+                                        "--db" db-path
+                                        "http" "--action" action "--limit" limit]
+                             cmd       (cond-> base-cmd
+                                         q      (into ["--query" q])
+                                         entity (into ["--entity" entity]))
+                             {:keys [exit out err]} (apply sh/sh cmd)
+                             body      (if (zero? exit)
+                                         out
+                                         (str "{\"ok\":false,\"error\":"
+                                              (pr-str (str/trim (or err "bridge command failed")))
+                                              "}"))]
+                         (.setBody (.getIn ex) body)
+                         (.setHeader (.getIn ex) "Content-Type" "application/json")
+                         nil))))
+          (end))))))
+
 ;; ── DIAC scenario ingest: singine.scenario.ingest ────────────────────────────
 ;; Consumes raw conversation-turn events from singine.scenario.raw,
 ;; processes them through the Python PoLA engine,
@@ -427,6 +479,50 @@
             (to to-uri)
             (end)))))))
 
+;; ── /decide route: singine.governance.decisions.create ───────────────────────
+;; POST /decide — issue a governance decision request for an asset by ID.
+;; Body (JSON): {"id":"<asset-id>","decision":"approve|reject|defer|escalate","reason":"..."}
+;; Returns:     {"ok":true,"urn":"urn:singine:decision:<id>:<ts>","id":"...","decision":"...","ts":"..."}
+
+(defn decide-route
+  "HTTP POST /decide — Rails: DecisionsController#create.
+   Accepts a JSON body with at minimum {\"id\":\"<asset-id>\"}.
+   Returns a decision URN and echoes the submitted fields.
+
+   config keys:
+     :http-port (default 8080)"
+  [{:keys [http-port]
+    :or   {http-port 8080}}]
+  (let [from-uri (str "jetty:http://0.0.0.0:" http-port "/decide"
+                      "?httpMethodRestrict=POST"
+                      "&enableCORS=true")]
+    (route-builder
+      (fn [^RouteBuilder rb]
+        (.. rb
+          (from from-uri)
+          (routeId "singine.governance.decisions.create")
+          (process (proxy [org.apache.camel.Processor] []
+                     (process [ex]
+                       (let [^org.apache.camel.Exchange ex ex
+                             raw-body  (str (or (.getBody (.getIn ex)) "{}"))
+                             ts        (str (java.time.Instant/now))
+                             ;; Best-effort parse of id, decision, reason from JSON body
+                             asset-id  (or (second (re-find #"\"id\"\s*:\s*\"([^\"]+)\"" raw-body)) "unknown")
+                             decision  (or (second (re-find #"\"decision\"\s*:\s*\"([^\"]+)\"" raw-body)) "pending")
+                             reason    (or (second (re-find #"\"reason\"\s*:\s*\"([^\"]+)\"" raw-body)) "")
+                             urn       (str "urn:singine:decision:" asset-id ":" ts)
+                             json      (str "{\"ok\":true"
+                                            ",\"urn\":\"" urn "\""
+                                            ",\"id\":\"" asset-id "\""
+                                            ",\"decision\":\"" decision "\""
+                                            ",\"reason\":\"" reason "\""
+                                            ",\"ts\":\"" ts "\""
+                                            ",\"platform\":\"singine\"}")]
+                         (.setBody (.getIn ex) json)
+                         (.setHeader (.getIn ex) "Content-Type" "application/json")
+                         nil))))
+          (end))))))
+
 ;; ── Collect all routes ────────────────────────────────────────────────────────
 
 (defn all-routes
@@ -442,6 +538,8 @@
    (edge-http-route         config)
    (health-route            config)
    (cap-route               config)
+   (bridge-route            config)
    (loc-route               config)
    (timez-route             config)
-   (scenario-ingest-route   config)])
+   (scenario-ingest-route   config)
+   (decide-route            config)])

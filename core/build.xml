@@ -8,6 +8,8 @@
 
   Targets:
     ant compile           — javac all Java sources → classes/
+    ant javadoc-html      — generate standard HTML Javadoc under target/javadoc-html/
+    ant javadoc-xml       — generate XML Javadoc via Saxonica xmldoclet
     ant test              — run Clojure test suite (full)
     ant test-mail         — run only tc-mail01..tc-mail05
     ant repl              — start Clojure REPL
@@ -29,6 +31,8 @@
     java.home.bin   (default: /usr/bin)
     clojure.bin     (default: /Users/skh/.local/clojure/bin/clojure)
     sqlite.jar      (computed from ~/.m2 by init target)
+    m2.classpath    (computed from ~/.m2 by init target)
+    xmldoclet.jar   (computed from ~/.m2 by init target)
 -->
 
 <project name="singine-core" default="all" basedir=".">
@@ -51,14 +55,24 @@
   <property name="mail.folder"   value="INBOX"/>
   <property name="mail.search"   value="invoice"/>
 
-  <!-- ── Init: detect sqlite-jdbc jar from local Maven cache ─────────────── -->
+  <!-- ── Init: detect dependency jars from local Maven cache ─────────────── -->
 
-  <target name="init" description="Detect sqlite-jdbc jar from ~/.m2">
+  <target name="init" description="Detect dependency jars and xmldoclet from ~/.m2">
     <exec executable="bash" outputproperty="sqlite.jar" failonerror="true">
       <arg value="-c"/>
       <arg value="find ${user.home}/.m2 -name 'sqlite-jdbc-*.jar' | sort | tail -1"/>
     </exec>
+    <exec executable="bash" outputproperty="m2.classpath" failonerror="true">
+      <arg value="-c"/>
+      <arg value="find ${user.home}/.m2/repository -name '*.jar' | sort | paste -sd ':' -"/>
+    </exec>
+    <exec executable="bash" outputproperty="xmldoclet.jar" failonerror="false">
+      <arg value="-c"/>
+      <arg value="find ${user.home}/.m2 -path '*com/saxonica/xmldoclet/*/xmldoclet-*.jar' | sort | tail -1"/>
+    </exec>
     <echo message="sqlite.jar = ${sqlite.jar}"/>
+    <echo message="m2.classpath detected from ~/.m2/repository"/>
+    <echo message="xmldoclet.jar = ${xmldoclet.jar}"/>
     <mkdir dir="${classes}"/>
     <mkdir dir="${target}"/>
   </target>
@@ -69,9 +83,27 @@
     <exec executable="bash" failonerror="true">
       <env key="PATH" value="/usr/bin:/bin"/>
       <arg value="-c"/>
-      <arg value="javac -d '${classes}' -cp '${classes}:${sqlite.jar}' $(find '${src.java}' -name '*.java' | sort)"/>
+      <arg value="javac -d '${classes}' -cp '${classes}:${m2.classpath}' $(find '${src.java}' -name '*.java' | sort)"/>
     </exec>
     <echo message="Java compilation complete → ${classes}"/>
+  </target>
+
+  <target name="javadoc-html" depends="compile" description="Generate standard HTML Javadoc">
+    <exec executable="bash" failonerror="true">
+      <arg value="-c"/>
+      <arg value="javadoc -quiet -classpath '${classes}:${m2.classpath}' -d '${target}/javadoc-html' -sourcepath '${src.java}' -subpackages singine.activity"/>
+    </exec>
+    <echo message="HTML Javadoc complete → ${target}/javadoc-html"/>
+  </target>
+
+  <target name="javadoc-xml" depends="compile" description="Generate XML Javadoc via Saxonica xmldoclet">
+    <fail unless="xmldoclet.jar"
+          message="xmldoclet jar not found in ~/.m2. Install com.saxonica:xmldoclet first, then rerun ant javadoc-xml."/>
+    <exec executable="bash" failonerror="true">
+      <arg value="-c"/>
+      <arg value="javadoc -quiet -classpath '${classes}:${m2.classpath}' -docletpath '${xmldoclet.jar}:${m2.classpath}' -doclet com.saxonica.xmldoclet.XmlDoclet -d '${target}/javadoc-xml' -sourcepath '${src.java}' -subpackages singine.activity"/>
+    </exec>
+    <echo message="XML Javadoc complete → ${target}/javadoc-xml"/>
   </target>
 
   <!-- ── Test: full Clojure test suite ────────────────────────────────────── -->

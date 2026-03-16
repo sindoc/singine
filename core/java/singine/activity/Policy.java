@@ -32,10 +32,18 @@ public interface Policy {
 
     // ── Identity ──────────────────────────────────────────────────
 
-    /** Stable identifier — matches the EDN :policy/id key. */
+    /**
+     * Stable identifier for the policy definition.
+     *
+     * @return stable identifier matching the EDN {@code :policy/id} key
+     */
     String getId();
 
-    /** Human-readable name. */
+    /**
+     * Human-readable policy label.
+     *
+     * @return policy name used in generated specs
+     */
     String getName();
 
     // ── Governance ────────────────────────────────────────────────
@@ -43,12 +51,16 @@ public interface Policy {
     /**
      * Governance decision: {@code "approved"}, {@code "denied"},
      * or {@code "conditional"}.
+     *
+     * @return resolved governance decision for this policy
      */
     String getDecision();
 
     /**
      * Human-readable rationale for the decision.
      * Required; maps to {@code singine decide --reason}.
+     *
+     * @return rationale explaining the governance decision
      */
     String getRationale();
 
@@ -81,6 +93,8 @@ public interface Policy {
      *   <rationale>...</rationale>
      * </policy>
      * }</pre>
+     *
+     * @return XML fragment describing this policy
      */
     String toXml();
 
@@ -92,6 +106,8 @@ public interface Policy {
      *  :policy/decision "approved"
      *  :policy/rationale "..."}
      * }</pre>
+     *
+     * @return EDN map describing this policy
      */
     String toEdn();
 }

@@ -1,0 +1,35 @@
+{
+  "request_id": "req-major-change-demo",
+  "ai_system": "codex",
+  "trust_level": "trusted",
+  "environment": "dev",
+  "network_mode": "offline",
+  "execution_env": "local",
+  "operation": "write",
+  "command": [
+    "git",
+    "commit",
+    "-am",
+    "large rewrite"
+  ],
+  "paths": [
+    "/Users/skh/ws/git/github/sindoc/singine/singine/command.py",
+    "/Users/skh/ws/git/github/sindoc/singine/singine/idp.py"
+  ],
+  "repo_path": "/Users/skh/ws/git/github/sindoc/singine",
+  "notes": "Demo request that should trigger the major-change heuristic.",
+  "file_changes": [
+    {
+      "path": "/Users/skh/ws/git/github/sindoc/singine/singine/command.py",
+      "before_lines": 1000,
+      "deleted_lines": 180,
+      "added_lines": 120
+    },
+    {
+      "path": "/Users/skh/ws/git/github/sindoc/singine/singine/idp.py",
+      "before_lines": 600,
+      "deleted_lines": 90,
+      "added_lines": 40
+    }
+  ]
+}

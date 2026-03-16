@@ -43,25 +43,43 @@ public interface Action {
 
     // ── Identity ──────────────────────────────────────────────────
 
-    /** Stable identifier — matches the EDN :action/id key. */
+    /**
+     * Stable identifier for this action instance.
+     *
+     * @return stable identifier matching the EDN {@code :action/id} key
+     */
     String getId();
 
     // ── Provenance ────────────────────────────────────────────────
 
-    /** The Activity template this action instantiates. */
+    /**
+     * Activity template from which this action was instantiated.
+     *
+     * @return originating activity template
+     */
     Activity getTemplate();
 
-    /** The Policy governing this execution. */
+    /**
+     * Policy that governed this action execution.
+     *
+     * @return governing policy
+     */
     Policy getPolicy();
 
     // ── State ─────────────────────────────────────────────────────
 
-    /** Current lifecycle status. */
+    /**
+     * Current lifecycle status of the action.
+     *
+     * @return action lifecycle status
+     */
     ActivityStatus getStatus();
 
     /**
      * Input context provided to this action.
      * Keys are EDN-compatible namespaced strings.
+     *
+     * @return immutable execution input map
      */
     Map<String, Object> getInput();
 
@@ -93,6 +111,8 @@ public interface Action {
      *   <policy ref="..."/>
      * </action>
      * }</pre>
+     *
+     * @return XML fragment describing this action
      */
     String toXml();
 
@@ -105,6 +125,8 @@ public interface Action {
      *  :action/template-id "..."
      *  :action/policy-id "..."}
      * }</pre>
+     *
+     * @return EDN map describing this action
      */
     String toEdn();
 }

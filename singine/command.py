@@ -174,6 +174,135 @@ def ensure_shell_paths(prefix: Path, shell_name: str) -> Dict[str, str]:
     return updated
 
 
+def install_ant_tool(json_output: bool = False) -> int:
+    existing = shutil.which("ant")
+    if existing:
+        payload = {"ok": True, "tool": "ant", "installed": False, "path": existing}
+        if json_output:
+            print_json(payload)
+        else:
+            print(f"ant already installed: {existing}")
+        return 0
+
+    brew = shutil.which("brew")
+    if not brew:
+        payload = {
+            "ok": False,
+            "tool": "ant",
+            "installed": False,
+            "error": "Homebrew is not available on PATH; cannot install ant automatically.",
+        }
+        if json_output:
+            print_json(payload)
+        else:
+            print(payload["error"], file=sys.stderr)
+        return 1
+
+    proc = subprocess.run([brew, "install", "ant"], capture_output=True, text=True, timeout=1800)
+    payload = {
+        "ok": proc.returncode == 0,
+        "tool": "ant",
+        "installed": proc.returncode == 0,
+        "stdout": proc.stdout,
+        "stderr": proc.stderr,
+        "path": shutil.which("ant"),
+    }
+    if json_output:
+        print_json(payload)
+    else:
+        if proc.stdout:
+            print(proc.stdout, end="")
+        if proc.stderr:
+            print(proc.stderr, end="", file=sys.stderr)
+        if payload["ok"] and payload["path"]:
+            print(f"ant installed: {payload['path']}")
+    return 0 if payload["ok"] else 1
+
+
+def install_xmldoclet_tool(json_output: bool = False) -> int:
+    existing = sorted((Path.home() / ".m2").glob("repository/com/saxonica/xmldoclet/*/xmldoclet-*.jar"))
+    if existing:
+        payload = {
+            "ok": True,
+            "tool": "xmldoclet",
+            "installed": False,
+            "path": str(existing[-1]),
+        }
+        if json_output:
+            print_json(payload)
+        else:
+            print(f"xmldoclet already installed: {payload['path']}")
+        return 0
+
+    mvn = shutil.which("mvn")
+    if not mvn:
+        brew = shutil.which("brew")
+        if not brew:
+            payload = {
+                "ok": False,
+                "tool": "xmldoclet",
+                "installed": False,
+                "error": "Maven is not available on PATH and Homebrew is not available to install it.",
+            }
+            if json_output:
+                print_json(payload)
+            else:
+                print(payload["error"], file=sys.stderr)
+            return 1
+
+        mvn_install = subprocess.run([brew, "install", "maven"], capture_output=True, text=True, timeout=1800)
+        if mvn_install.returncode != 0:
+            payload = {
+                "ok": False,
+                "tool": "xmldoclet",
+                "installed": False,
+                "error": "Failed to install Maven with Homebrew.",
+                "stdout": mvn_install.stdout,
+                "stderr": mvn_install.stderr,
+            }
+            if json_output:
+                print_json(payload)
+            else:
+                if mvn_install.stdout:
+                    print(mvn_install.stdout, end="")
+                if mvn_install.stderr:
+                    print(mvn_install.stderr, end="", file=sys.stderr)
+            return 1
+        mvn = shutil.which("mvn")
+
+    proc = subprocess.run(
+        [
+            mvn,
+            "dependency:get",
+            "-Dartifact=com.saxonica:xmldoclet:LATEST",
+            "-Dtransitive=true",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=1800,
+    )
+    existing = sorted((Path.home() / ".m2").glob("repository/com/saxonica/xmldoclet/*/xmldoclet-*.jar"))
+    payload = {
+        "ok": proc.returncode == 0 and bool(existing),
+        "tool": "xmldoclet",
+        "installed": proc.returncode == 0,
+        "path": str(existing[-1]) if existing else None,
+        "stdout": proc.stdout,
+        "stderr": proc.stderr,
+        "artifact": "com.saxonica:xmldoclet:LATEST",
+    }
+    if json_output:
+        print_json(payload)
+    else:
+        if proc.stdout:
+            print(proc.stdout, end="")
+        if proc.stderr:
+            print(proc.stderr, end="", file=sys.stderr)
+        if payload["ok"] and payload["path"]:
+            print(f"xmldoclet installed: {payload['path']}")
+    return 0 if payload["ok"] else 1
+
+
 def print_json(value: Any) -> None:
     print(json.dumps(value, indent=2))
 
@@ -301,6 +430,11 @@ def cmd_man(args: argparse.Namespace) -> int:
 
 
 def cmd_install(args: argparse.Namespace) -> int:
+    if getattr(args, "subject", "singine") == "ant":
+        return install_ant_tool(json_output=getattr(args, "json", False))
+    if getattr(args, "subject", "singine") == "xmldoclet":
+        return install_xmldoclet_tool(json_output=getattr(args, "json", False))
+
     prefix = Path(args.prefix).expanduser()
     launcher = install_launcher(prefix)
     install_manpages(prefix)
@@ -862,6 +996,390 @@ def cmd_singe_who(args: argparse.Namespace) -> int:
     return 0
 
 
+# ── singine ai ────────────────────────────────────────────────────────────────
+
+def _ai_dir() -> Path:
+    return REPO_ROOT / "ai"
+
+
+def _ai_sessions_dir() -> Path:
+    return _ai_dir() / "sessions"
+
+
+def _ai_mandates_dir() -> Path:
+    return _ai_dir() / "mandates"
+
+
+def _ai_config_dir() -> Path:
+    return _ai_dir() / "config"
+
+
+def _edn_str(text: str, key: str, default: str = "") -> str:
+    """Extract :key "string" from loose EDN text."""
+    import re
+    m = re.search(rf"{re.escape(key)}\s+\"([^\"]*)\"", text)
+    return m.group(1) if m else default
+
+
+def _edn_keyword(text: str, key: str, default: str = "") -> str:
+    """Extract :key :KEYWORD from loose EDN text."""
+    import re
+    m = re.search(rf"{re.escape(key)}\s+:(\S+)", text)
+    return m.group(1) if m else default
+
+
+def _edn_int(text: str, key: str, default: int = 0) -> int:
+    """Extract :key 42 from loose EDN text."""
+    import re
+    m = re.search(rf"{re.escape(key)}\s+(\d+)", text)
+    return int(m.group(1)) if m else default
+
+
+def _load_session(session_dir: Path) -> Dict[str, Any]:
+    """Load a session directory into a plain dict."""
+    s: Dict[str, Any] = {"id": session_dir.name, "dir": str(session_dir)}
+    manifest  = session_dir / "manifest.edn"
+    perms_f   = session_dir / "permissions.edn"
+    commands_f = session_dir / "commands.edn"
+    if manifest.exists():
+        t = _read_text(manifest)
+        s.update({
+            "provider":        _edn_keyword(t, ":session/provider"),
+            "model":           _edn_str(t, ":session/model"),
+            "status":          _edn_keyword(t, ":session/status"),
+            "started_at":      _edn_str(t, ":session/started-at"),
+            "ended_at":        _edn_str(t, ":session/ended-at"),
+            "topic":           _edn_str(t, ":session/topic"),
+            "user":            _edn_str(t, ":session/user"),
+            "command_count":   _edn_int(t, ":session/command-count"),
+            "outcome_type":    _edn_keyword(t, ":outcome/type"),
+            "outcome_summary": _edn_str(t, ":outcome/summary"),
+            "manifest_raw":    t,
+        })
+    if perms_f.exists():
+        import re
+        t = _read_text(perms_f)
+        s["permissions_granted"] = len(re.findall(r":permission/id", t))
+        s["permissions_denied"]  = len(re.findall(r":permission/id", _edn_str(t, ":permissions/denied", "")))
+        s["permissions_raw"] = t
+    if commands_f.exists():
+        s["commands_raw"] = _read_text(commands_f)
+    return s
+
+
+def cmd_ai_session_list(args: argparse.Namespace) -> int:
+    """List all recorded sessions in singine/ai/sessions/."""
+    sd = _ai_sessions_dir()
+    if not sd.exists():
+        print(f"[ai session list] no sessions directory: {sd}", file=sys.stderr)
+        return 1
+    sessions = sorted([d for d in sd.iterdir() if d.is_dir()])
+    if not sessions:
+        print("[ai session list] no sessions recorded")
+        return 0
+    loaded = [_load_session(s) for s in sessions]
+    if getattr(args, "json", False):
+        clean = [{k: v for k, v in s.items() if not k.endswith("_raw")} for s in loaded]
+        print(json.dumps(clean, indent=2))
+    else:
+        print(f"{'ID':<40} {'PROVIDER':<10} {'MODEL':<26} {'STATUS':<10} STARTED")
+        print("─" * 102)
+        for s in loaded:
+            print(
+                f"{s['id']:<40} {s.get('provider','?'):<10} "
+                f"{s.get('model','?'):<26} {s.get('status','?'):<10} "
+                f"{s.get('started_at','?')[:10]}"
+            )
+    return 0
+
+
+def cmd_ai_session_show(args: argparse.Namespace) -> int:
+    """Print manifest, permissions, and outcome for a session."""
+    session_dir = _ai_sessions_dir() / args.id
+    if not session_dir.exists():
+        print(f"[ai session show] unknown session: {args.id}", file=sys.stderr)
+        return 1
+    s = _load_session(session_dir)
+    if getattr(args, "json", False):
+        clean = {k: v for k, v in s.items() if not k.endswith("_raw")}
+        print(json.dumps(clean, indent=2))
+        return 0
+    print(f"\nSession  : {s['id']}")
+    print(f"  Provider : {s.get('provider','?')}  ({s.get('model','?')})")
+    print(f"  Status   : {s.get('status','?')}")
+    print(f"  User     : {s.get('user','?')}")
+    print(f"  Period   : {s.get('started_at','?')[:10]}  →  {s.get('ended_at','?')[:10]}")
+    print(f"  Topic    : {s.get('topic','?')[:80]}")
+    print(f"  Commands : {s.get('command_count','?')}")
+    print(f"  Outcome  : {s.get('outcome_type','?')} — {s.get('outcome_summary','')[:80]}")
+    print(f"  Perms    : {s.get('permissions_granted', 0)} granted / {s.get('permissions_denied', 0)} denied")
+    if getattr(args, "permissions", False) and "permissions_raw" in s:
+        print("\n── permissions.edn " + "─" * 58)
+        print(s["permissions_raw"])
+    elif "permissions_raw" in s:
+        print("\n  hint: use --permissions to show full permissions.edn")
+    return 0
+
+
+def cmd_ai_session_export(args: argparse.Namespace) -> int:
+    """Export a session in the requested format (json or edn)."""
+    session_dir = _ai_sessions_dir() / args.id
+    if not session_dir.exists():
+        print(f"[ai session export] unknown session: {args.id}", file=sys.stderr)
+        return 1
+    fmt = getattr(args, "fmt", "json")
+    if fmt == "edn":
+        for f in sorted(session_dir.glob("*.edn")):
+            print(f";; ── {f.name} " + "─" * (60 - len(f.name)))
+            print(_read_text(f))
+        return 0
+    s = _load_session(session_dir)
+    if not getattr(args, "raw", False):
+        s = {k: v for k, v in s.items() if not k.endswith("_raw")}
+    print(json.dumps(s, indent=2))
+    return 0
+
+
+def cmd_ai_mandate_list(args: argparse.Namespace) -> int:
+    """List all stored mandates in singine/ai/mandates/."""
+    md = _ai_mandates_dir()
+    if not md.exists():
+        print(f"[ai mandate list] no mandates directory: {md}", file=sys.stderr)
+        return 1
+    mandates = sorted(md.glob("*.edn"))
+    if not mandates:
+        print("[ai mandate list] no mandates stored")
+        return 0
+    if getattr(args, "json", False):
+        out = []
+        for m in mandates:
+            t = _read_text(m)
+            out.append({
+                "file":      m.name,
+                "id":        _edn_str(t, ":mandate/id"),
+                "grantor":   _edn_str(t, ":mandate/grantor"),
+                "grantee":   _edn_str(t, ":mandate/grantee"),
+                "status":    _edn_keyword(t, ":mandate/status"),
+                "issued_at": _edn_str(t, ":mandate/issued-at"),
+            })
+        print(json.dumps(out, indent=2))
+    else:
+        print(f"{'FILE':<30} {'GRANTOR':<12} {'STATUS':<12} ISSUED")
+        print("─" * 72)
+        for m in mandates:
+            t = _read_text(m)
+            print(
+                f"{m.name:<30} {_edn_str(t, ':mandate/grantor'):<12} "
+                f"{_edn_keyword(t, ':mandate/status'):<12} "
+                f"{_edn_str(t, ':mandate/issued-at')[:10]}"
+            )
+    return 0
+
+
+def cmd_ai_mandate_show(args: argparse.Namespace) -> int:
+    """Print a mandate's full permissions and status."""
+    import re
+    md = _ai_mandates_dir()
+    candidates: List[Path] = []
+    if md.exists():
+        candidates = list(md.glob(f"{args.id}*.edn"))
+        if not candidates:
+            candidates = [c for c in md.glob("*.edn") if args.id in c.stem]
+    if not candidates:
+        print(f"[ai mandate show] unknown mandate: {args.id}", file=sys.stderr)
+        return 1
+    m = candidates[0]
+    t = _read_text(m)
+    if getattr(args, "json", False):
+        perms = re.findall(
+            r':action "([^"]+)"\s+:resource "([^"]+)"\s+:decision "([^"]+)"', t
+        )
+        print(json.dumps({
+            "file":       m.name,
+            "id":         _edn_str(t, ":mandate/id"),
+            "grantor":    _edn_str(t, ":mandate/grantor"),
+            "status":     _edn_keyword(t, ":mandate/status"),
+            "issued_at":  _edn_str(t, ":mandate/issued-at"),
+            "expires_at": _edn_str(t, ":mandate/expires-at"),
+            "permissions": [
+                {"action": a, "resource": r, "decision": d} for a, r, d in perms
+            ],
+        }, indent=2))
+    else:
+        print(t)
+    return 0
+
+
+def cmd_ai_status(args: argparse.Namespace) -> int:
+    """Show provider configuration and enabled status."""
+    import re
+    providers_edn = _ai_config_dir() / "providers.edn"
+    if not providers_edn.exists():
+        print(f"[ai status] providers.edn not found: {providers_edn}", file=sys.stderr)
+        return 1
+    t = _read_text(providers_edn)
+    blocks = re.split(r"\{:provider/id", t)[1:]
+    providers = []
+    for block in blocks:
+        pid   = re.search(r'"([^"]+)"', block)
+        ptype = re.search(r":provider/type\s+:(\S+)", block)
+        pname = re.search(r":provider/name\s+\"([^\"]+)\"", block)
+        pendp = re.search(r":provider/endpoint\s+\"([^\"]*)\"", block)
+        pver  = re.search(r":provider/version\s+\"([^\"]+)\"", block)
+        penab = re.search(r":provider/enabled\s+(true|false)", block)
+        providers.append({
+            "id":       pid.group(1)   if pid   else "?",
+            "type":     ptype.group(1) if ptype else "?",
+            "name":     pname.group(1) if pname else "?",
+            "endpoint": pendp.group(1) if pendp else "",
+            "version":  pver.group(1)  if pver  else "?",
+            "enabled":  penab.group(1) == "true" if penab else False,
+        })
+    if getattr(args, "json", False):
+        print(json.dumps(providers, indent=2))
+        return 0
+    print(f"{'ID':<12} {'TYPE':<12} {'VERSION':<28} {'ON':<4} ENDPOINT")
+    print("─" * 85)
+    for p in providers:
+        tick = "✓" if p["enabled"] else "✗"
+        print(f"{p['id']:<12} {p['type']:<12} {p['version']:<28} {tick:<4} {p['endpoint']}")
+    return 0
+
+
+def cmd_ai_flush(args: argparse.Namespace) -> int:
+    """Flush session EDN files to disk; optionally git-commit."""
+    sd = _ai_sessions_dir()
+    if not sd.exists():
+        print(f"[ai flush] sessions dir not found: {sd}", file=sys.stderr)
+        return 1
+    session_id = getattr(args, "session", None)
+    if session_id:
+        targets = [sd / session_id]
+        if not targets[0].exists():
+            print(f"[ai flush] session not found: {session_id}", file=sys.stderr)
+            return 1
+    else:
+        targets = [d for d in sorted(sd.iterdir()) if d.is_dir()]
+    for t in targets:
+        edns = list(t.glob("*.edn"))
+        print(f"[ai flush] {t.name}  ({len(edns)} EDN files)")
+    if getattr(args, "commit", False):
+        files = [str(f) for tgt in targets for f in tgt.glob("*.edn")]
+        if files:
+            r = subprocess.run(["git", "add"] + files, cwd=REPO_ROOT,
+                               capture_output=True, text=True)
+            if r.returncode != 0:
+                print(f"[ai flush] git add failed: {r.stderr.strip()}", file=sys.stderr)
+                return 1
+            ids = ", ".join(t.name for t in targets)
+            msg = f"singine ai flush: {len(files)} EDN file(s) [{ids}]"
+            r = subprocess.run(["git", "commit", "-m", msg], cwd=REPO_ROOT,
+                               capture_output=True, text=True)
+            if r.returncode != 0:
+                print(f"[ai flush] git commit failed: {r.stderr.strip()}", file=sys.stderr)
+                return 1
+            print(f"[ai flush] committed: {msg}")
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# collibra — live REST API operations
+# ---------------------------------------------------------------------------
+
+def _collibra_ok(result: dict, args: argparse.Namespace) -> int:
+    """Print collibra result envelope and return exit code."""
+    if getattr(args, "json", True):
+        print_json(result)
+    else:
+        data = result.get("data", [])
+        if isinstance(data, list):
+            for item in data:
+                name = item.get("name") or item.get("displayName") or str(item)
+                print(name)
+        else:
+            print(str(data))
+    return 0 if result.get("ok") else 1
+
+
+def _collibra_err(exc: Exception) -> int:
+    print_json({"ok": False, "error": str(exc)})
+    return 1
+
+
+def cmd_collibra_env(args: argparse.Namespace) -> int:
+    """Validate Collibra environment configuration."""
+    from .collibra_rest import check_env
+    print_json(check_env())
+    return 0
+
+
+def cmd_collibra_fetch_community(args: argparse.Namespace) -> int:
+    from .collibra_rest import fetch_communities
+    try:
+        return _collibra_ok(
+            fetch_communities(name=getattr(args, "name", None), limit=args.limit), args
+        )
+    except Exception as exc:
+        return _collibra_err(exc)
+
+
+def cmd_collibra_fetch_domain(args: argparse.Namespace) -> int:
+    from .collibra_rest import fetch_domains
+    try:
+        return _collibra_ok(
+            fetch_domains(
+                community_id=getattr(args, "community", None),
+                domain_type=getattr(args, "type", None),
+                limit=args.limit,
+            ),
+            args,
+        )
+    except Exception as exc:
+        return _collibra_err(exc)
+
+
+def cmd_collibra_fetch_asset_type(args: argparse.Namespace) -> int:
+    from .collibra_rest import fetch_asset_types
+    try:
+        return _collibra_ok(fetch_asset_types(), args)
+    except Exception as exc:
+        return _collibra_err(exc)
+
+
+def cmd_collibra_fetch_view(args: argparse.Namespace) -> int:
+    from .collibra_rest import fetch_views
+    try:
+        return _collibra_ok(
+            fetch_views(location=getattr(args, "location", None), limit=args.limit), args
+        )
+    except Exception as exc:
+        return _collibra_err(exc)
+
+
+def cmd_collibra_fetch_workflow(args: argparse.Namespace) -> int:
+    from .collibra_rest import fetch_workflows
+    try:
+        return _collibra_ok(fetch_workflows(limit=args.limit), args)
+    except Exception as exc:
+        return _collibra_err(exc)
+
+
+def cmd_collibra_search(args: argparse.Namespace) -> int:
+    from .collibra_rest import search_assets
+    try:
+        return _collibra_ok(
+            search_assets(
+                query=args.query,
+                asset_type=getattr(args, "type", None),
+                domain_id=getattr(args, "domain", None),
+                limit=args.limit,
+            ),
+            args,
+        )
+    except Exception as exc:
+        return _collibra_err(exc)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="singine",
@@ -925,7 +1443,8 @@ def build_parser() -> argparse.ArgumentParser:
     man_parser.add_argument("--raw", action="store_true", help="Print the file path instead of opening man")
     man_parser.set_defaults(func=cmd_man)
 
-    install_parser = sub.add_parser("install", help="Install singine launcher and manpages into a prefix")
+    install_parser = sub.add_parser("install", help="Install singine or selected local tool dependencies")
+    install_parser.add_argument("subject", nargs="?", choices=["singine", "ant", "xmldoclet"], default="singine")
     install_parser.add_argument("--prefix", default=str(DEFAULT_PREFIX))
     install_parser.add_argument("--shell", choices=["bash", "sh", "all"], default="all")
     install_parser.add_argument("--json", action="store_true")
@@ -1014,6 +1533,9 @@ def build_parser() -> argparse.ArgumentParser:
     model_inspect_parser.add_argument("name")
     model_inspect_parser.set_defaults(func=cmd_model_inspect)
 
+    from .policy import add_policy_parser
+    add_policy_parser(sub)
+
     # ── singe — SINGE Is Not Generally Expansive (template + people) ────────
     singe_parser = sub.add_parser(
         "singe",
@@ -1051,8 +1573,73 @@ def build_parser() -> argparse.ArgumentParser:
         cmd_transfer_sync, cmd_transfer_ssh, cmd_transfer_sftp,
         cmd_transfer_queue, cmd_transfer_stack, cmd_transfer_structure,
         cmd_transfer_process_request, cmd_transfer_generate_response,
-        cmd_transfer_project, cmd_transfer_analyze_result,
+        cmd_transfer_project, cmd_transfer_analyze_result, cmd_transfer_move,
+        cmd_transfer_find,
     )
+
+    find_parser = sub.add_parser(
+        "find",
+        help="Find filesystem paths related to a topic",
+    )
+    find_parser.add_argument(
+        "activity",
+        choices=["filesAboutTopic"],
+        help="Activity to invoke. Use filesAboutTopic to search path names by topic.",
+    )
+    find_parser.add_argument("topic", help="Topic fragment to match in file or directory names")
+    find_parser.add_argument(
+        "--root-dir",
+        default=".",
+        help="Directory to search from (default: current directory)",
+    )
+    find_parser.add_argument(
+        "--max-depth",
+        type=int,
+        default=3,
+        help="Maximum directory depth to traverse below the root (default: 3)",
+    )
+    find_parser.add_argument(
+        "--type",
+        dest="path_type",
+        choices=["any", "file", "dir"],
+        default="any",
+        help="Restrict matches to files, directories, or either (default: any)",
+    )
+    find_parser.add_argument(
+        "-0", "--null",
+        action="store_true",
+        help="Emit NUL-delimited paths instead of newline-delimited paths",
+    )
+    find_parser.add_argument("--json", action="store_true", help="Emit JSON")
+    find_parser.set_defaults(func=cmd_transfer_find)
+
+    mv_parser = sub.add_parser(
+        "mv",
+        help="Move filesystem paths from stdin into a destination directory",
+    )
+    mv_parser.add_argument(
+        "activity",
+        choices=["fileListTo"],
+        help="Activity to invoke. Use fileListTo to move stdin-listed files into a directory.",
+    )
+    mv_parser.add_argument("dest_dir", help="Destination directory")
+    mv_parser.add_argument(
+        "-0", "--null",
+        action="store_true",
+        help="Read NUL-delimited paths from stdin instead of newline-delimited paths",
+    )
+    mv_parser.add_argument(
+        "--mkdir",
+        action="store_true",
+        help="Create the destination directory if it does not exist",
+    )
+    mv_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Report planned moves without changing the filesystem",
+    )
+    mv_parser.add_argument("--json", action="store_true", help="Emit JSON")
+    mv_parser.set_defaults(func=cmd_transfer_move)
 
     transfer_parser = sub.add_parser(
         "transfer",
@@ -1149,6 +1736,167 @@ def build_parser() -> argparse.ArgumentParser:
     smtp_send.add_argument("--subject", help="Subject line (default: 'singine smtp test')")
     smtp_send.add_argument("--body", help="Message body")
     smtp_send.set_defaults(func=cmd_smtp_send)
+
+    # ── ai ─────────────────────────────────────────────────────────────────────
+    ai_parser = sub.add_parser(
+        "ai",
+        help="AI provider passthrough and governance layer",
+        description=(
+            "Every interaction is mediated by the singine governance layer: "
+            "commands are recorded, permissions are checked and logged, "
+            "and sessions are serialised to git-managed EDN files for audit."
+        ),
+    )
+    ai_sub = ai_parser.add_subparsers(dest="ai_subcommand")
+    ai_parser.set_defaults(func=lambda a: (ai_parser.print_help(), 1)[1])
+
+    from .ai import (
+        cmd_ai_provider as cmd_ai_provider_shell,
+        cmd_ai_session_list as cmd_ai_session_list_json,
+        cmd_ai_session_show as cmd_ai_session_show_json,
+        cmd_ai_last_session_data as cmd_ai_last_session_data_json,
+    )
+
+    provider_parent = argparse.ArgumentParser(add_help=False)
+    provider_parent.add_argument("--model", default="default")
+    provider_parent.add_argument("--session", help="Reuse or pin a session id.")
+    provider_parent.add_argument("--mandate", help="Mandate file reference.")
+    provider_parent.add_argument("--root-dir", default=str(Path.home() / ".singine" / "ai"))
+    provider_parent.add_argument("--db", help="Optional SQLite path to sync on session close.")
+
+    for provider in ["claude", "codex", "openai"]:
+        provider_parser = ai_sub.add_parser(
+            provider,
+            parents=[provider_parent],
+            help=f"Open a governed {provider} session shell",
+        )
+        provider_parser.set_defaults(func=cmd_ai_provider_shell, provider=provider)
+
+    # ai session
+    ai_sess = ai_sub.add_parser("session", help="Manage recorded AI sessions")
+    sess_sub = ai_sess.add_subparsers(dest="session_subcommand")
+    ai_sess.set_defaults(func=lambda a: (ai_sess.print_help(), 1)[1])
+
+    sess_list = sess_sub.add_parser("list", help="List all recorded sessions")
+    sess_list.add_argument("--json", action="store_true", help="Machine-readable output")
+    sess_list.add_argument("--root-dir", default=str(Path.home() / ".singine" / "ai"))
+    sess_list.set_defaults(func=cmd_ai_session_list_json)
+
+    sess_show = sess_sub.add_parser("show", help="Show manifest, commands, and permissions")
+    sess_show.add_argument("session_id", help="Session ID")
+    sess_show.add_argument("--root-dir", default=str(Path.home() / ".singine" / "ai"))
+    sess_show.set_defaults(func=cmd_ai_session_show_json)
+
+    sess_export = sess_sub.add_parser("export", help="Export session in requested format")
+    sess_export.add_argument("id", help="Session ID")
+    fmt_grp = sess_export.add_mutually_exclusive_group()
+    fmt_grp.add_argument("--json", dest="fmt", action="store_const", const="json",
+                         default="json", help="Export as JSON (default)")
+    fmt_grp.add_argument("--edn",  dest="fmt", action="store_const", const="edn",
+                         help="Export raw EDN files")
+    sess_export.add_argument("--raw", action="store_true",
+                             help="Include raw EDN text in JSON export")
+    sess_export.set_defaults(func=cmd_ai_session_export)
+
+    # ai mandate
+    ai_mand = ai_sub.add_parser("mandate", help="Manage governance mandates")
+    mand_sub = ai_mand.add_subparsers(dest="mandate_subcommand")
+    ai_mand.set_defaults(func=lambda a: (ai_mand.print_help(), 1)[1])
+
+    mand_list = mand_sub.add_parser("list", help="List stored mandates")
+    mand_list.add_argument("--json", action="store_true")
+    mand_list.set_defaults(func=cmd_ai_mandate_list)
+
+    mand_show = mand_sub.add_parser("show", help="Print mandate permissions and status")
+    mand_show.add_argument("id", help="Mandate ID or filename stem (e.g. collibra-20260315)")
+    mand_show.add_argument("--json", action="store_true")
+    mand_show.set_defaults(func=cmd_ai_mandate_show)
+
+    # ai status
+    ai_status_p = ai_sub.add_parser("status", help="Check provider configuration")
+    ai_status_p.add_argument("--json", action="store_true")
+    ai_status_p.set_defaults(func=cmd_ai_status)
+
+    # ai flush
+    ai_flush_p = ai_sub.add_parser(
+        "flush", help="Flush session EDN files to disk; optionally git-commit"
+    )
+    ai_flush_p.add_argument("--session", metavar="ID",
+                            help="Session ID to flush (default: all sessions)")
+    ai_flush_p.add_argument("--commit", action="store_true",
+                            help="git-add and git-commit the session EDN files")
+    ai_flush_p.set_defaults(func=cmd_ai_flush)
+
+    # ai last session data
+    ai_last = ai_sub.add_parser("last", help="Commands for the latest recorded AI session")
+    last_sub = ai_last.add_subparsers(dest="last_subcommand")
+    ai_last.set_defaults(func=lambda a: (ai_last.print_help(), 1)[1])
+
+    ai_last_session = last_sub.add_parser("session", help="Inspect or sync the latest session")
+    ai_last_session_sub = ai_last_session.add_subparsers(dest="last_session_subcommand")
+    ai_last_session.set_defaults(func=lambda a: (ai_last_session.print_help(), 1)[1])
+
+    ai_last_session_data = ai_last_session_sub.add_parser(
+        "data",
+        help="Sync the latest recorded session into sqlite.db and print it",
+    )
+    ai_last_session_data.add_argument("--root-dir", default=str(Path.home() / ".singine" / "ai"))
+    ai_last_session_data.add_argument("--db", help="SQLite path (default: <root-dir>/sqlite.db)")
+    ai_last_session_data.set_defaults(func=cmd_ai_last_session_data_json)
+
+    # ── collibra — live Collibra REST operations ──────────────────────────────
+    collibra_parser = sub.add_parser(
+        "collibra",
+        help="Live Collibra REST API operations (requires COLLIBRA_BASE_URL + credentials)",
+    )
+    collibra_sub = collibra_parser.add_subparsers(dest="collibra_subcommand")
+    collibra_parser.set_defaults(func=lambda a: (collibra_parser.print_help(), 1)[1])
+
+    # singine collibra env
+    collibra_env = collibra_sub.add_parser("env", help="Validate Collibra environment config")
+    collibra_env.set_defaults(func=cmd_collibra_env)
+
+    # singine collibra fetch <resource>
+    collibra_fetch = collibra_sub.add_parser("fetch", help="Fetch a Collibra resource")
+    fetch_sub = collibra_fetch.add_subparsers(dest="fetch_resource")
+    collibra_fetch.set_defaults(func=lambda a: (collibra_fetch.print_help(), 1)[1])
+
+    fetch_community = fetch_sub.add_parser("community", help="Fetch Communities")
+    fetch_community.add_argument("--name", help="Filter by name prefix")
+    fetch_community.add_argument("--limit", type=int, default=50)
+    fetch_community.add_argument("--json", action="store_true", default=True)
+    fetch_community.set_defaults(func=cmd_collibra_fetch_community)
+
+    fetch_domain = fetch_sub.add_parser("domain", help="Fetch Domains")
+    fetch_domain.add_argument("--community", metavar="COMMUNITY_ID", help="Filter by community UUID")
+    fetch_domain.add_argument("--type", metavar="DOMAIN_TYPE", help="Filter by domain type name")
+    fetch_domain.add_argument("--limit", type=int, default=50)
+    fetch_domain.add_argument("--json", action="store_true", default=True)
+    fetch_domain.set_defaults(func=cmd_collibra_fetch_domain)
+
+    fetch_asset_type = fetch_sub.add_parser("asset-type", help="Fetch AssetTypes")
+    fetch_asset_type.add_argument("--json", action="store_true", default=True)
+    fetch_asset_type.set_defaults(func=cmd_collibra_fetch_asset_type)
+
+    fetch_view = fetch_sub.add_parser("view", help="Fetch Views (tableViewConfig)")
+    fetch_view.add_argument("--location", help="Filter by view location (e.g. catalog|reports)")
+    fetch_view.add_argument("--limit", type=int, default=100)
+    fetch_view.add_argument("--json", action="store_true", default=True)
+    fetch_view.set_defaults(func=cmd_collibra_fetch_view)
+
+    fetch_workflow = fetch_sub.add_parser("workflow", help="Fetch Workflow definitions")
+    fetch_workflow.add_argument("--limit", type=int, default=50)
+    fetch_workflow.add_argument("--json", action="store_true", default=True)
+    fetch_workflow.set_defaults(func=cmd_collibra_fetch_workflow)
+
+    # singine collibra search
+    collibra_search_p = collibra_sub.add_parser("search", help="Search Assets by name")
+    collibra_search_p.add_argument("query", help="Name search string")
+    collibra_search_p.add_argument("--type", metavar="ASSET_TYPE", help="AssetType publicId filter")
+    collibra_search_p.add_argument("--domain", metavar="DOMAIN_ID", help="Restrict to Domain UUID")
+    collibra_search_p.add_argument("--limit", type=int, default=25)
+    collibra_search_p.add_argument("--json", action="store_true", default=True)
+    collibra_search_p.set_defaults(func=cmd_collibra_search)
 
     return parser
 

@@ -1,0 +1,3 @@
+SELECT ?s ?label
+WHERE { ?s a skos:Concept ; rdfs:label ?label . }
+LIMIT 20

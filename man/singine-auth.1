@@ -1,0 +1,47 @@
+.TH SINGINE-AUTH 1 "2026-03-13" "singine 0.2.0" "User Commands"
+.SH NAME
+singine-auth \- authentication bootstrap and TOTP login commands
+.SH SYNOPSIS
+.B singine auth
+\fISUBCOMMAND\fR [\fIOPTIONS\fR]
+.SH DESCRIPTION
+The
+.B auth
+command provides local TOTP profile management and a login bootstrap that
+verifies a code before delegating to
+.BR singine-idp (1)
+for session handling.
+.SH SUBCOMMANDS
+.TP
+.B totp init
+Create a TOTP profile and optionally save it to a state file.
+.TP
+.B totp uri
+Print the provisioning URI for 1Password or Google Authenticator.
+.TP
+.B totp code
+Print the current one-time code for the loaded profile.
+.TP
+.B totp verify \fICODE\fR
+Verify a submitted one-time code locally.
+.TP
+.B login --code \fICODE\fR
+Verify a TOTP code and open a local Singine session.
+.SH FILES
+.TP
+.I ~/.singine/auth/totp.json
+Typical TOTP profile location.
+.TP
+.I ~/.singine/session.json
+Local session state written by login flows.
+.SH EXAMPLES
+.nf
+singine auth totp init --issuer Singine --account-name you@example.com --state ~/.singine/auth/totp.json
+singine auth totp uri --state ~/.singine/auth/totp.json --json
+singine auth totp code --state ~/.singine/auth/totp.json --json
+singine auth totp verify --state ~/.singine/auth/totp.json 123456
+singine auth login --state ~/.singine/auth/totp.json --code 123456
+.fi
+.SH SEE ALSO
+.BR singine (1),
+.BR singine-idp (1)

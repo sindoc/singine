@@ -31,15 +31,27 @@ public interface Outcome {
 
     // ── Identity ──────────────────────────────────────────────────
 
-    /** Stable identifier — matches the EDN :outcome/id key. */
+    /**
+     * Stable identifier for this outcome.
+     *
+     * @return stable identifier matching the EDN {@code :outcome/id} key
+     */
     String getId();
 
     // ── Provenance ────────────────────────────────────────────────
 
-    /** The action that produced this outcome. */
+    /**
+     * Action that produced this outcome.
+     *
+     * @return originating action
+     */
     Action getAction();
 
-    /** Classification of the result quality. */
+    /**
+     * Classification of the result quality.
+     *
+     * @return outcome classification
+     */
     OutcomeType getType();
 
     // ── Measurements ──────────────────────────────────────────────
@@ -48,6 +60,8 @@ public interface Outcome {
      * All measurements collected during the action.
      * Keys are namespaced EDN keywords represented as strings,
      * e.g. {@code ":metric/usage-volume"}, {@code ":collibra/id"}.
+     *
+     * @return measurement map used for downstream publication and scoring
      */
     Map<String, Object> getMeasurements();
 
@@ -57,6 +71,8 @@ public interface Outcome {
      * Usage value: a dimensionless score representing adoption,
      * volume of consumption, or frequency of access.
      * Higher is better.
+     *
+     * @return usage value component of the ultimate metric
      */
     double getUsageValue();
 
@@ -64,6 +80,8 @@ public interface Outcome {
      * Business value: the assessed benefit delivered to the consuming
      * business unit or process.  Expressed in the same unit as
      * {@link #getPlatformCost()}.
+     *
+     * @return business value component of the ultimate metric
      */
     double getBusinessValue();
 
@@ -71,6 +89,8 @@ public interface Outcome {
      * Platform cost: the total delivery and infrastructure cost
      * incurred to produce this outcome.
      * Lower is better.
+     *
+     * @return platform cost component of the ultimate metric
      */
     double getPlatformCost();
 
@@ -107,6 +127,8 @@ public interface Outcome {
      *   </ultimate-metric>
      * </outcome>
      * }</pre>
+     *
+     * @return XML fragment describing this outcome
      */
     String toXml();
 
@@ -121,6 +143,8 @@ public interface Outcome {
      *  :outcome/platform-cost 0.0
      *  :outcome/score 0.0}
      * }</pre>
+     *
+     * @return EDN map describing this outcome
      */
     String toEdn();
 }

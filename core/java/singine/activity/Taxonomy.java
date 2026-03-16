@@ -21,23 +21,41 @@ public interface Taxonomy {
 
     // ── Identity ──────────────────────────────────────────────────
 
-    /** Stable identifier — matches the EDN :taxonomy/id key. */
+    /**
+     * Stable identifier for the taxonomy node.
+     *
+     * @return stable identifier matching the EDN {@code :taxonomy/id} key
+     */
     String getId();
 
-    /** Human-readable name in the default locale (English). */
+    /**
+     * Human-readable taxonomy label in the default locale.
+     *
+     * @return default English label
+     */
     String getName();
 
     // ── Classification ────────────────────────────────────────────
 
-    /** Top-level domain, e.g. {@code "emacs-orgmode-logseq"}. */
+    /**
+     * Top-level domain grouping for this taxonomy node.
+     *
+     * @return domain identifier, e.g. {@code "emacs-orgmode-logseq"}
+     */
     String getDomain();
 
-    /** Category within the domain, e.g. {@code "integration"}. */
+    /**
+     * Category within the domain.
+     *
+     * @return category identifier, e.g. {@code "integration"}
+     */
     String getCategory();
 
     /**
      * Subcategory, e.g. {@code "api-exposure"}.
      * May be {@code null} when not applicable.
+     *
+     * @return optional subcategory identifier
      */
     String getSubcategory();
 
@@ -47,6 +65,8 @@ public interface Taxonomy {
      * Multilingual label map.
      * Keys are BCP 47 language tags ({@code "en"}, {@code "fr"}, {@code "nl"}).
      * At minimum the {@code "en"} key must be present.
+     *
+     * @return multilingual labels for publication surfaces
      */
     Map<String, String> getLabels();
 
@@ -61,6 +81,8 @@ public interface Taxonomy {
      *   <label lang="en">...</label>
      * </taxonomy>
      * }</pre>
+     *
+     * @return XML fragment describing this taxonomy node
      */
     String toXml();
 
@@ -73,6 +95,8 @@ public interface Taxonomy {
      *  :taxonomy/category "..."
      *  :taxonomy/labels {:en "..."}}
      * }</pre>
+     *
+     * @return EDN map describing this taxonomy node
      */
     String toEdn();
 }
