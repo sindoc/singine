@@ -1,0 +1,103 @@
+;; singine/ai/sessions/2026-03-15-activity-dpdp/permissions.edn
+;;
+;; Permissions granted during session 2026-03-15-activity-dpdp.
+;; All grants are conditional on user approval (Claude Code tool approval flow).
+;; ------------------------------------------------------------------
+
+{:permissions/session-id "2026-03-15-activity-dpdp"
+ :permissions/provider   :CLAUDE
+ :permissions/model      "claude-sonnet-4-6"
+ :permissions/granted-at "2026-03-15"
+
+ :permissions/granted
+
+ [;; Read access (automatically granted — standard)
+  {:permission/id       "perm-read-git"
+   :permission/action   "read"
+   :permission/resource "filesystem:/Users/skh/ws/git"
+   :permission/decision "granted"
+   :permission/rationale "Codebase exploration to understand existing structure."
+   :permission/scope    :session}
+
+  ;; Write access — singine Java sources
+  {:permission/id       "perm-write-singine-activity"
+   :permission/action   "write"
+   :permission/resource "filesystem:singine/core/java/singine/activity/"
+   :permission/decision "granted"
+   :permission/rationale "Create singine.activity Java interface hierarchy."
+   :permission/scope    :session}
+
+  {:permission/id       "perm-write-singine-ai"
+   :permission/action   "write"
+   :permission/resource "filesystem:singine/core/java/singine/ai/"
+   :permission/decision "granted"
+   :permission/rationale "Create singine.ai governance Java interface hierarchy."
+   :permission/scope    :session}
+
+  {:permission/id       "perm-write-singine-resources"
+   :permission/action   "write"
+   :permission/resource "filesystem:singine/core/resources/singine/activity/"
+   :permission/decision "granted"
+   :permission/rationale "Create EDN taxonomy canonical source file."
+   :permission/scope    :session}
+
+  {:permission/id       "perm-write-singine-ai-config"
+   :permission/action   "write"
+   :permission/resource "filesystem:singine/ai/"
+   :permission/decision "granted"
+   :permission/rationale "Create AI provider configs and session records."
+   :permission/scope    :session}
+
+  {:permission/id       "perm-write-singine-man"
+   :permission/action   "write"
+   :permission/resource "filesystem:singine/man/"
+   :permission/decision "granted"
+   :permission/rationale "Create singine-activity.1 man page."
+   :permission/scope    :session}
+
+  {:permission/id       "perm-write-silkpage-man"
+   :permission/action   "write"
+   :permission/resource "filesystem:silkpage/man/"
+   :permission/decision "granted"
+   :permission/rationale "Create silkpage.1 man page."
+   :permission/scope    :session}
+
+  {:permission/id       "perm-write-singine-claude-md"
+   :permission/action   "write"
+   :permission/resource "filesystem:singine/CLAUDE.md"
+   :permission/decision "granted"
+   :permission/rationale "Update CLAUDE.md with Activity Taxonomy section."
+   :permission/scope    :session}
+
+  {:permission/id       "perm-write-core-makefile"
+   :permission/action   "write"
+   :permission/resource "filesystem:singine/core/Makefile"
+   :permission/decision "granted"
+   :permission/rationale "Add activity-edn target."
+   :permission/scope    :session}
+
+  ;; Write access — sina.khakbaz.com (backlog repo)
+  {:permission/id       "perm-write-sina-docs"
+   :permission/action   "write"
+   :permission/resource "filesystem:backlog/imports/singine/web-and-publishing/public_html/sina/"
+   :permission/decision "granted"
+   :permission/rationale "Create DP(DP) logo SVG and SilkPage activity documentation pages."
+   :permission/scope    :session}
+
+  ;; Git commit permissions
+  {:permission/id       "perm-commit-singine"
+   :permission/action   "commit"
+   :permission/resource "git:github/sindoc/singine:feature/local-network-server"
+   :permission/decision "granted"
+   :permission/rationale "Commit activity taxonomy and singine ai design."
+   :permission/scope    :session}
+
+  {:permission/id       "perm-commit-backlog"
+   :permission/action   "commit"
+   :permission/resource "git:local/backlog:main"
+   :permission/decision "granted"
+   :permission/rationale "Commit sina.khakbaz.com activity docs and DP(DP) logo."
+   :permission/scope    :session}]
+
+ :permissions/denied []
+ :permissions/conditional []}

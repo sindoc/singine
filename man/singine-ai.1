@@ -1,0 +1,149 @@
+.TH SINGINE-AI 1 "2026-03-15" "singine 0.2.0" "User Commands"
+.SH NAME
+singine\-ai \- AI provider passthrough and governance layer
+.SH SYNOPSIS
+.B singine ai
+\fICOMMAND\fR [\fIPROVIDER\fR] [\fIOPTIONS\fR]
+.PP
+.B singine ai claude
+[\fB--model\fR \fIMODEL\fR] [\fB--session\fR \fIID\fR] [\fB--mandate\fR \fIFILE\fR]
+.PP
+.B singine ai collibra
+\fISUBCOMMAND\fR [\fIOPTIONS\fR]
+.PP
+.B singine ai openai
+[\fB--model\fR \fIMODEL\fR]
+.PP
+.B singine ai session
+\fISUBCOMMAND\fR [\fIOPTIONS\fR]
+.PP
+.B singine ai mandate
+\fISUBCOMMAND\fR [\fIOPTIONS\fR]
+.PP
+.B singine ai flush
+[\fB--session\fR \fIID\fR] [\fB--commit\fR]
+.PP
+.B singine ai status
+.SH DESCRIPTION
+.B singine ai
+is the governance passthrough for AI providers.
+Every interaction is mediated by the singine governance layer:
+commands are recorded, permissions are checked and logged,
+and sessions are serialised to git-managed EDN files for audit.
+.PP
+No provider is called directly.
+All calls go through an
+.I AiSession
+which enforces the permission model and records every command and outcome.
+.SS Provider back-ends
+.TP
+.B claude
+Anthropic Claude (claude-sonnet-4-6, claude-opus-4-6, claude-haiku-4-5).
+.TP
+.B collibra
+Collibra Data Governance Center.
+Acts as both a provider (catalog queries) and a mandate grantor.
+.TP
+.B openai
+OpenAI (GPT-4o, o3, Codex passthrough).
+.SH COMMANDS
+.TP
+.B session list
+List all recorded sessions in
+.IR singine/ai/sessions/ .
+.TP
+.B session show \fIID\fR
+Print the manifest, commands, and permissions for a session.
+.TP
+.B session export \fIID\fR [\fB--xml\fR|\fB--edn\fR|\fB--json\fR]
+Export a session in the requested format.
+.TP
+.B mandate import [\fB--from\fR \fIPROVIDER\fR]
+Import a mandate from a provider (Collibra) and store it in
+.IR singine/ai/mandates/ .
+.TP
+.B mandate list
+List all stored mandates.
+.TP
+.B mandate show \fIID\fR
+Print a mandate's permissions and status.
+.TP
+.B flush [\fB--session\fR \fIID\fR] [\fB--commit\fR]
+Flush the current (or named) session's EDN files to disk.
+With
+.B --commit
+also stages and commits them to git.
+.TP
+.B status
+Check connectivity and configuration for all enabled providers.
+.SH OPTIONS
+.TP
+.B --model \fIMODEL\fR
+Override the default model for the provider.
+.TP
+.B --session \fIID\fR
+Attach to or continue an existing session rather than starting a new one.
+.TP
+.B --mandate \fIFILE\fR
+Apply a pre-loaded mandate from an EDN file.
+.TP
+.B --commit
+When used with
+.BR flush ,
+automatically git-add and git-commit the session files.
+.SH CONFIGURATION
+Provider configurations live in
+.IR singine/ai/config/ :
+.PP
+.nf
+providers.edn   — provider registry
+claude.edn      — Anthropic Claude config + default permissions
+collibra.edn    — Collibra config + mandate settings
+openai.edn      — OpenAI/Codex config
+.fi
+.PP
+Credentials are NOT stored in config files.
+Use
+.B :credential/source
+references:
+.nf
+"env:ANTHROPIC_API_KEY"
+"file:~/.singine/auth/collibra.json"
+.fi
+.SH SESSION DIRECTORY LAYOUT
+.nf
+singine/ai/sessions/{session-id}/
+  manifest.edn     — session metadata and outcome
+  commands.edn     — ordered list of all commands
+  permissions.edn  — granted and denied permissions
+  outcomes.edn     — produced outcomes with taxonomy refs
+.fi
+.SH MANDATE DELEGATION
+Collibra can issue mandates that pre-authorise a scope of actions for
+the singine agent.  The delegation workflow is:
+.PP
+.nf
+1. Create a "Governance Policy" asset in Collibra
+2. singine ai mandate import --from collibra
+3. Review and git-commit: singine ai flush --commit
+4. Reference the mandate: singine ai claude --mandate collibra-{date}.edn
+.fi
+.SH PERMISSION MODEL
+Permissions are ODRL-aligned:
+.B action
+(read/write/commit/execute/api-call/delegate),
+.B resource
+(file path, URL, git ref, Collibra asset ID),
+.B decision
+(granted/denied/conditional).
+.PP
+Permissions granted in a session are flushed to:
+.I singine/ai/sessions/{session-id}/permissions.edn
+.PP
+All-session grants are accumulated in:
+.I singine/ai/permissions/granted.edn
+.SH SEE ALSO
+.BR singine (1),
+.BR singine-decide (1),
+.BR singine-activity (1),
+.BR singine-model (1)

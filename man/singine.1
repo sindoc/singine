@@ -1,4 +1,4 @@
-.TH SINGINE 1 "2026-03-13" "singine 0.2.0" "User Commands"
+.TH SINGINE 1 "2026-03-16" "singine 0.2.0" "User Commands"
 .SH NAME
 singine \- top-level command index for the Singine platform
 .SH SYNOPSIS
@@ -44,11 +44,32 @@ Send a governance decision request.
 .B model
 Inspect Singine model objects and bridge surfaces.
 .TP
+.B policy
+Manage governed policy packs and policy-backed execution workflows.
+.TP
+.B ai
+AI provider passthrough and governance layer.
+Subproviders:
+.IR claude ,
+.IR collibra ,
+.IR openai .
+Records every session, command, and permission grant to EDN.
+.TP
 .B activity
 Inspect, instantiate, and evaluate activity taxonomy entries.
 .TP
 .B singe
 Render governed identities from @mentions.
+.TP
+.B find
+Find filesystem paths related to a topic via the
+.I filesAboutTopic
+activity.
+.TP
+.B mv
+Move filesystem paths from stdin into a destination directory via the
+.I fileListTo
+activity.
 .TP
 .B transfer
 File transfer and queue/stack helpers.
@@ -70,11 +91,80 @@ with one of these topics:
 .IR singine-idp ,
 .IR singine-decide ,
 .IR singine-model ,
+.IR singine-policy ,
+.IR singine-ai ,
 .IR singine-activity ,
 .IR singine-singe ,
+.IR singine-find ,
+.IR singine-mv ,
 .IR singine-transfer ,
 or
 .IR singine-smtp .
+.SH POLICY SYNC
+Singine's AI policy workflow is available through the top-level
+.B singine policy ai
+command family.
+The canonical flow is:
+.IP "1."
+sync a canonical policy pack from LDAP or LDIF sources into a dedicated policy
+repository with
+.BR "singine policy ai sync" ;
+.IP "2."
+evaluate Claude or OpenAI/Codex requests against that synced pack with
+.BR "singine policy ai evaluate" ;
+.IP "3."
+persist approvals for governed Collibra paths, repos, or lambda names when a
+change is sanctioned with
+.BR "singine policy ai approve" .
+.SH EXAMPLES
+.nf
+# Sync one canonical policy pack that covers Claude and OpenAI-family systems.
+singine policy ai sync \\
+  --policy-repo /Users/skh/ws/git/github/sindoc/singine-policy \\
+  --ldap-ldif docs/examples/ldap-ai-groups.ldif \\
+  --systems claude codex openai-api chatgpt
+
+# Evaluate a Claude read request against the shared policy pack.
+singine policy ai evaluate \\
+  --policy-repo /Users/skh/ws/git/github/sindoc/singine-policy \\
+  --ai-system claude \\
+  --environment dev \\
+  --network-mode offline \\
+  --execution-env local \\
+  --operation read \\
+  --command-text "rg --files /Users/skh/ws/git/github/sindoc/singine/man" \\
+  --path /Users/skh/ws/git/github/sindoc/singine/man/singine.1
+
+# Evaluate an OpenAI/Codex write request using the same synced policy pack.
+singine policy ai evaluate \\
+  --policy-repo /Users/skh/ws/git/github/sindoc/singine-policy \\
+  --ai-system codex \\
+  --environment dev \\
+  --network-mode offline \\
+  --execution-env local \\
+  --operation write \\
+  --repo-path /Users/skh/ws/git/github/sindoc/singine \\
+  --path /Users/skh/ws/git/github/sindoc/singine/man/singine.1 \\
+  --lambda-name singine.policy.sync
+
+# Persist approval for a governed Collibra repo or path.
+singine policy ai approve \\
+  --policy-repo /Users/skh/ws/git/github/sindoc/singine-policy \\
+  --ai-system codex \\
+  --environment dev \\
+  --network-mode lan \\
+  --execution-env docker \\
+  --operation execute \\
+  --command-text "docker compose -f docker/docker-compose.edge.yml up -d --build" \\
+  --repo-path /Users/skh/ws/collibra/edge \\
+  --resource-grant-kind repo \\
+  --granted-by singineer-dev \\
+  --reason "Approved Collibra Edge policy sync and validation run"
+
+# Inspect recent governance decisions for Claude and OpenAI/Codex.
+singine policy ai report --ai-system claude
+singine policy ai report --ai-system codex
+.fi
 .SH SEE ALSO
 .BR singine-context (1),
 .BR singine-bridge (1),
@@ -87,7 +177,11 @@ or
 .BR singine-idp (1),
 .BR singine-decide (1),
 .BR singine-model (1),
+.BR singine-policy (1),
+.BR singine-ai (1),
 .BR singine-activity (1),
 .BR singine-singe (1),
+.BR singine-find (1),
+.BR singine-mv (1),
 .BR singine-transfer (1),
 .BR singine-smtp (1)

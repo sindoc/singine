@@ -1,0 +1,54 @@
+;; singine/ai/mandates/collibra-20260315.edn
+;;
+;; Mandate stub — Collibra governance delegation for singine.
+;;
+;; Status: PENDING
+;; This mandate will be activated once the Collibra instance URL is
+;; configured in singine/ai/config/collibra.edn and the admin
+;; creates the corresponding Governance Policy asset in Collibra.
+;;
+;; To activate:
+;;   1. Fill in :endpoint/base in collibra.edn
+;;   2. Create a "Governance Policy" asset in Collibra with name
+;;      "Singine AI Session Mandate 2026"
+;;   3. Export via: singine ai mandate import --from collibra
+;;   4. Git-commit this file with the Collibra asset ID filled in
+;; ------------------------------------------------------------------
+
+{:mandate/id            "urn:singine:mandate:collibra:20260315"
+ :mandate/grantor       "collibra"
+ :mandate/grantee       "singine"
+ :mandate/status        :PENDING
+
+ :mandate/issued-at     "2026-03-15T00:00:00Z"
+ :mandate/expires-at    nil
+
+ ;; Fill in after creating the asset in Collibra:
+ :mandate/collibra-asset-id ""
+ :mandate/collibra-asset-type "Governance Policy"
+
+ ;; The scope of permissions this mandate pre-authorises:
+ :mandate/permissions
+
+ [{:action "read"    :resource "collibra:catalog:*"
+   :decision "granted"
+   :rationale "Read-only access to Collibra catalog for asset lookup."}
+
+  {:action "read"    :resource "singine:activity:taxonomy"
+   :decision "granted"
+   :rationale "Collibra delegates authority to read the activity taxonomy."}
+
+  {:action "write"   :resource "collibra:asset:singine-*"
+   :decision "conditional"
+   :rationale "Write to Collibra assets prefixed singine- requires confirmation."}
+
+  {:action "api-call" :resource "collibra:rest:GET"
+   :decision "granted"
+   :rationale "GET calls to Collibra REST API are pre-approved."}
+
+  {:action "api-call" :resource "collibra:graphql:query"
+   :decision "granted"
+   :rationale "GraphQL queries to Collibra knowledge graph are pre-approved."}]
+
+ :mandate/activity-taxonomy-ref "singine/core/resources/singine/activity/taxonomy.edn"
+ :mandate/sbvr-rules-ref        nil}
