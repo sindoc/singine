@@ -1,0 +1,274 @@
+.TH SINGINE-DOMAIN 1 "2026-03-17" "singine 0.2.0" "User Commands"
+.SH NAME
+singine-domain \- master data, event log, governed transactions, and reference data over SQLite
+.SH SYNOPSIS
+.B singine domain
+.I FAMILY
+.I COMMAND
+[\fIOPTIONS\fR]
+.SH DESCRIPTION
+.B singine domain
+is the domain-layer CLI surface for the Humble IDP Java module.
+It reads and writes the same SQLite database as the Java
+.I idp.db
+package, making every store accessible from the command line for
+inspection, seeding, and governance workflows without starting the JVM.
+.PP
+The domain layer is structured around four command families derived from
+the Singine metamodel and Collibra bridge asset types:
+.TP
+.B schema
+Bootstrap and inspect the SQLite schema.
+Run
+.B schema init
+before any other command on a fresh database.
+.TP
+.B master
+CRUD operations for Collibra-aligned master data records.
+Types are drawn directly from the
+.I collibra_bridge.asset_types
+surface of
+.BR "singine model catalog" :
+.I BusinessTerm,
+.I BusinessCapability,
+.I BusinessProcess,
+.I DataCategory.
+.TP
+.B event
+Append-only domain event log.
+Event types span identity lifecycle
+.RI ( IDENTITY_LOGIN ,
+.IR IDENTITY_TOKEN_ISSUED ,
+\(el),
+AI session lifecycle
+.RI ( AI_SESSION_STARTED ,
+.IR AI_SESSION_CLOSED ,
+\(el),
+governance events
+.RI ( GOVERNANCE_DECISION_RECORDED ,
+.IR GOVERNANCE_MANDATE_ISSUED ,
+\(el),
+and catalog state transitions
+.RI ( CATALOG_ASSET_REGISTERED ,
+\(el).
+.TP
+.B tx
+Governed transaction lifecycle.
+Transaction types cover policy evaluation
+.RI ( POLICY_EVALUATION ,
+.IR POLICY_APPROVAL ),
+governance decisions
+.RI ( GOVERNANCE_DECISION ),
+mandate lifecycle
+.RI ( MANDATE_GRANT ,
+.IR MANDATE_REVOKE ),
+and authentication flows
+.RI ( AUTH_LOGIN ,
+.IR AUTH_TOKEN_EXCHANGE ,
+\(el).
+Status transitions follow the lifecycle:
+.IR PENDING \(->
+.IR APPROVED / REJECTED \(->
+.IR COMPLETED / FAILED .
+.TP
+.B refdata
+Reference data code sets.
+Sourced from the Singine
+.I reference_data
+model family:
+.I scenario\-codes
+(four-letter scenario codes),
+.I iata\-codes
+(airport/country mapping),
+.I unicode\-mapping
+(Collibra-aligned character reference data).
+.SH DATABASE
+All commands take a
+.B --db
+option pointing at the SQLite file.
+The same file can be used by the Java
+.I idp.db
+layer and by this CLI simultaneously, as SQLite supports concurrent readers.
+.PP
+When
+.B --db
+is omitted, an in-memory database is used
+.RI ( :memory: )
+which is useful for dry-run inspection but does not persist.
+.PP
+To use a shared persistent store:
+.nf
+export SINGINE_DOMAIN_DB=/tmp/humble-idp.db
+singine domain schema init --db $SINGINE_DOMAIN_DB
+.fi
+.SH SUBCOMMANDS
+.SS schema
+.TP
+.B init \fR[\fB--db\fR \fIPATH\fR]
+Create all domain tables (idempotent \(em safe to run on an existing database).
+.TP
+.B tables \fR[\fB--db\fR \fIPATH\fR] [\fB--json\fR]
+List tables present in the domain database.
+.SS master
+.TP
+.B list \fB--type\fR \fITYPE\fR [\fB--db\fR \fIPATH\fR] [\fB--json\fR]
+List all records of the given Collibra asset type.
+.TP
+.B find \fB--type\fR \fITYPE\fR \fB--name\fR \fIFRAGMENT\fR [\fB--db\fR \fIPATH\fR] [\fB--json\fR]
+Find records whose name contains
+.IR FRAGMENT .
+.TP
+.B add \fB--type\fR \fITYPE\fR \fB--name\fR \fINAME\fR [\fB--id\fR \fIUUID\fR] [\fB--collibra-id\fR \fIID\fR] [\fB--db\fR \fIPATH\fR] [\fB--json\fR]
+Insert or update a master data record.
+.SS event
+.TP
+.B log [\fB--db\fR \fIPATH\fR] [\fB--subject-id\fR \fIID\fR] [\fB--event-type\fR \fITYPE\fR] [\fB--limit\fR \fIN\fR] [\fB--json\fR]
+Show recent events, optionally filtered by subject or type.
+.TP
+.B append \fB--event-type\fR \fITYPE\fR \fB--subject-id\fR \fIID\fR [\fB--actor-id\fR \fIID\fR] [\fB--payload\fR \fIJSON\fR] [\fB--db\fR \fIPATH\fR] [\fB--json\fR]
+Manually inject a domain event.
+Useful for recording external lifecycle transitions
+(e.g. offline governance decisions) into the event log.
+.SS tx
+.TP
+.B list [\fB--db\fR \fIPATH\fR] [\fB--status\fR \fISTATUS\fR] [\fB--type\fR \fITYPE\fR] [\fB--subject-id\fR \fIID\fR] [\fB--json\fR]
+List governed transactions with optional filters.
+.TP
+.B create \fB--type\fR \fITYPE\fR \fB--subject-id\fR \fIID\fR [\fB--ai-system\fR \fINAME\fR] [\fB--policy-pack-ref\fR \fIPATH\fR] [\fB--reason\fR \fITEXT\fR] [\fB--db\fR \fIPATH\fR] [\fB--json\fR]
+Create a new governed transaction in PENDING state.
+.TP
+.B update \fB--tx-id\fR \fIID\fR \fB--status\fR \fISTATUS\fR [\fB--db\fR \fIPATH\fR] [\fB--json\fR]
+Transition a transaction to a new lifecycle status.
+Terminal statuses (APPROVED, REJECTED, COMPLETED, FAILED) stamp
+.I completed_at
+automatically.
+.SS refdata
+.TP
+.B list [\fB--db\fR \fIPATH\fR] [\fB--code-set\fR \fINAME\fR] [\fB--json\fR]
+List code sets (no filter) or entries within a code set.
+.TP
+.B add \fB--code-set\fR \fINAME\fR \fB--code\fR \fICODE\fR \fB--label\fR \fITEXT\fR [\fB--description\fR \fITEXT\fR] [\fB--collibra-id\fR \fIID\fR] [\fB--db\fR \fIPATH\fR] [\fB--json\fR]
+Add or update a reference data entry.
+The
+.RI ( code\-set ,\ code )
+pair is the natural key; an existing entry is updated on conflict.
+.SH COLLIBRA ALIGNMENT
+Every domain record carries a
+.I CollibraRef
+composed of:
+.IP \(bu 2
+.B collibraId
+\(em stable Collibra asset UUID (empty string for unregistered assets)
+.IP \(bu 2
+.B assetType
+\(em one of the 17 Collibra asset types surfaced by
+.B "singine model catalog"
+.IP \(bu 2
+.B name
+\(em the Collibra asset name
+.PP
+Use
+.B "singine collibra"
+to push registered records to a live Collibra instance.
+.SH EXAMPLES
+.nf
+# Initialise a shared domain database.
+singine domain schema init --db /tmp/humble-idp.db
+
+# Seed electricity balancing master data.
+singine domain master add --type BusinessTerm \\
+  --name "Electricity Balancing" \\
+  --collibra-id "coll-elba-001" \\
+  --db /tmp/humble-idp.db
+
+singine domain master add --type BusinessCapability \\
+  --name "Grid Operations" \\
+  --db /tmp/humble-idp.db
+
+singine domain master add --type BusinessProcess \\
+  --name "Electricity Balancing Process" \\
+  --db /tmp/humble-idp.db
+
+# List all business terms.
+singine domain master list --type BusinessTerm --db /tmp/humble-idp.db
+
+# Find capabilities matching "Grid".
+singine domain master find --type BusinessCapability \\
+  --name "Grid" --db /tmp/humble-idp.db --json
+
+# Record a governance decision event.
+singine domain event append \\
+  --event-type GOVERNANCE_DECISION_RECORDED \\
+  --subject-id electricity-balancing \\
+  --actor-id system \\
+  --payload '{"decision":"approved","reason":"Semantic Model 1 baseline"}' \\
+  --db /tmp/humble-idp.db
+
+# Show recent events for a subject.
+singine domain event log \\
+  --subject-id electricity-balancing \\
+  --limit 10 \\
+  --db /tmp/humble-idp.db
+
+# Create a policy evaluation transaction (mirrors singine policy ai evaluate).
+singine domain tx create \\
+  --type POLICY_EVALUATION \\
+  --subject-id electricity-balancing \\
+  --ai-system claude \\
+  --policy-pack-ref /path/to/policy-pack.json \\
+  --reason "Semantic Model 1 aligned with cost-benefit objective" \\
+  --db /tmp/humble-idp.db
+
+# Approve the transaction.
+singine domain tx update \\
+  --tx-id <UUID> \\
+  --status APPROVED \\
+  --db /tmp/humble-idp.db
+
+# List all pending transactions.
+singine domain tx list --status PENDING --db /tmp/humble-idp.db
+
+# Seed scenario-codes reference data.
+singine domain refdata add \\
+  --code-set scenario-codes \\
+  --code ELBA \\
+  --label "Electricity Balancing" \\
+  --db /tmp/humble-idp.db
+
+# Browse IATA codes.
+singine domain refdata list \\
+  --code-set iata-codes \\
+  --db /tmp/humble-idp.db
+
+# Show all code sets.
+singine domain refdata list --db /tmp/humble-idp.db
+.fi
+.SH INTEGRATION WITH JAVA LAYER
+The SQLite database written by
+.B singine domain
+is binary-compatible with the Java
+.I idp.db
+package (same schema, same column names and ISO-8601 timestamps).
+A typical workflow:
+.PP
+.nf
+# 1. Bootstrap schema from the CLI.
+singine domain schema init --db /tmp/humble-idp.db
+
+# 2. Seed reference and master data.
+singine domain refdata add --db /tmp/humble-idp.db ...
+singine domain master add --db /tmp/humble-idp.db ...
+
+# 3. Run the Java application against the same file.
+java -jar humble-idp-java.jar --db /tmp/humble-idp.db
+
+# 4. Inspect the event log produced by the Java layer.
+singine domain event log --db /tmp/humble-idp.db --limit 20
+.fi
+.SH SEE ALSO
+.BR singine (1),
+.BR singine-model (1),
+.BR singine-policy (1),
+.BR singine-decide (1),
+.BR singine-bridge (1),
+.BR singine-collibra (1)
