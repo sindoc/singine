@@ -1,0 +1,415 @@
+.TH SINGINE-EDGE 1 "2026-03-17" "singine 0.2.0" "User Commands"
+.SH NAME
+singine-edge \- build, deploy, and manage the Collibra edge server stack
+.SH SYNOPSIS
+.B singine edge
+.I FAMILY
+[\fICOMMAND\fR]
+[\fIOPTIONS\fR]
+.SH DESCRIPTION
+.B singine edge
+is the lifecycle management surface for the Collibra edge server stack at
+.IR ~/ws/git/github/sindoc/collibra/edge/ .
+It orchestrates three container images, a docker compose stack, and a Claude
+API artifact-generation agent through a single command hierarchy.
+.PP
+The stack is built on a
+.B CentOS 7 LTS
+base image and provides:
+.TP
+.B CentOS 7 LTS base image
+.RI ( sindoc-collibra-edge-base )
+Java 11, EPEL tooling, and a non-root
+.I edge
+user.  All other images derive FROM this base.
+.TP
+.B Collibra DGC Edge node
+.RI ( sindoc-collibra-edge )
+Runs the Collibra Data Governance Center Edge JAR.  Registers with the
+central Collibra DGC instance and activates configured capabilities
+(CONNECT, CATALOG, LINEAGE, PROFILING, SITE, WORKFLOW).
+.TP
+.B Edge Site server
+.RI ( sindoc-collibra-edge-site )
+A lightweight Java HTTP server implementing the Collibra Edge Site REST API
+contract
+.RI ( /api/edge/v1/\fI*\fR ).
+Hosts static and dynamic web content under
+.IR /site/ .
+Registers itself with Collibra DGC using a site registration key.
+.TP
+.B CDN proxy
+.RI ( sindoc-collibra-cdn )
+nginx TLS-terminating reverse proxy.  Routes external HTTPS traffic to the
+edge site server and the DGC edge node.  Caches CDN-eligible responses.
+.PP
+The stack root is
+.I ~/ws/git/github/sindoc/collibra/edge/
+by default.
+Override with the environment variable
+.BR COLLIBRA_EDGE_DIR .
+.SH COMMAND FAMILIES
+.TP
+.B build
+Build one or all container images.  Delegates to the stack
+.BR Makefile .
+.TP
+.B push
+Tag and push images to a container registry.
+.TP
+.B up / down
+Start or stop the compose stack.
+.TP
+.B logs
+Tail container log output.
+.TP
+.B status
+Show images, running containers, and governance decision URN in one view.
+.TP
+.B install
+Full install: build all images, prepare the agent Python virtualenv, and
+register a governance decision.  Idempotent.
+.TP
+.B deploy
+.B install
+followed by
+.BR "up --detach" .
+Brings the full stack to a running state from scratch.
+.TP
+.B agent
+Manage the Claude API edge-agent that generates Kubernetes, OpenShift, and
+Collibra configuration artifacts for RHEL 7.7\(en7.9 hosts.
+.SH SUBCOMMANDS
+.SS build
+.TP
+.B singine edge build [\fB--target\fR \fITARGET\fR] [\fB--tag\fR \fITAG\fR] [\fB--no-cache\fR] [\fB--json\fR]
+Build container image(s).
+.RS
+.TP
+.B --target \fITARGET\fR
+Which image to build.
+.I TARGET
+is one of
+.IR base ,
+.IR collibra-edge ,
+.IR cdn ,
+.I all
+(default:
+.IR all ).
+.TP
+.B --tag \fITAG\fR
+Docker image tag.  Default:
+.IR local .
+.TP
+.B --no-cache
+Pass
+.B --no-cache
+to the Docker build.
+.TP
+.B --json
+Emit a JSON envelope with build outcome and metadata.
+.RE
+.SS push
+.TP
+.B singine edge push \fB--registry\fR \fIREGISTRY\fR [\fB--target\fR \fITARGET\fR] [\fB--tag\fR \fITAG\fR] [\fB--json\fR]
+Tag local images and push to a container registry.
+.RS
+.TP
+.B --registry \fIREGISTRY\fR
+Registry hostname, e.g.
+.IR registry.example.com .
+Required.
+.TP
+.B --target \fITARGET\fR
+Which image(s) to push.  Same values as
+.B build
+(default:
+.IR all ).
+.TP
+.B --tag \fITAG\fR
+Tag to push (default:
+.IR local ).
+.RE
+.SS up
+.TP
+.B singine edge up [\fB--detach\fR] [\fB--json\fR]
+Start the edge stack via
+.BR docker\ compose\ up .
+With
+.B --detach
+.RI ( -d ),
+runs containers in the background.
+.SS down
+.TP
+.B singine edge down [\fB--json\fR]
+Stop and remove all stack containers via
+.BR docker\ compose\ down .
+.SS logs
+.TP
+.B singine edge logs [\fB--service\fR \fISERVICE\fR] [\fB--follow\fR]
+Print or tail container logs.
+.B --service
+restricts output to
+.I collibra-edge
+or
+.IR cdn .
+.B --follow
+.RI ( -f )
+streams live output.
+.SS status
+.TP
+.B singine edge status [\fB--json\fR]
+Show a combined view of:
+.IP \(bu 2
+Local Docker images matching
+.IR sindoc-collibra* :
+name, tag, size, age.
+.IP \(bu 2
+Running compose services: name, state, health.
+.IP \(bu 2
+Governance decision URN from
+.IR ~/.singine/decisions/edge-agent.json .
+.SS install
+.TP
+.B singine edge install [\fB--tag\fR \fITAG\fR] [\fB--json\fR]
+Full install in three steps:
+.IP 1. 4
+.B build
+\(em build all images with the given tag.
+.IP 2. 4
+.B agent prepare
+\(em create the Python virtualenv and install dependencies.
+.IP 3. 4
+.B agent install
+\(em register a governance decision via
+.B singine decide edge-agent
+(with offline fallback).
+.PP
+Idempotent.  Re-running after a partial failure resumes from the failed step.
+.SS deploy
+.TP
+.B singine edge deploy [\fB--tag\fR \fITAG\fR] [\fB--json\fR]
+Equivalent to
+.B install
+followed by
+.BR "up --detach" .
+The canonical one-command bring-up for a fresh environment.
+.SS agent
+.TP
+.B singine edge agent \fICOMMAND\fR [\fIOPTIONS\fR]
+Manage the Claude API edge-agent under
+.IR edge/agent/ .
+.RS
+.TP
+.B validate [\fB--json\fR]
+Smoke-test all six agent tools without making an Anthropic API call.
+Confirms
+.I tools.py
+and
+.I edge_agent.py
+are structurally healthy.
+.TP
+.B run \fB--task\fR \fITASK\fR [\fB--output-dir\fR \fIDIR\fR] [\fB--json\fR]
+Run the agent with a natural-language task.  Requires
+.B ANTHROPIC_API_KEY
+to be set.  Generated artifacts are written to
+.I edge/agent/output/
+by default.  Override with
+.BR --output-dir .
+.TP
+.B install [\fB--json\fR]
+Prepare agent virtualenv and register governance decision.
+Equivalent to
+.BR "make -C edge/agent install" .
+.TP
+.B status [\fB--json\fR]
+Print virtualenv path, Python version, anthropic package version, artifact
+count, and governance decision URN.
+.RE
+.SH EDGE SITE
+The edge site server
+.RI ( sindoc-collibra-edge-site )
+implements the Collibra Edge Site REST API and serves web content.
+.PP
+.B REST API surface
+.PP
+.nf
+GET  /health
+GET  /api/edge/v1/status
+POST /api/edge/v1/register
+GET  /api/edge/v1/capabilities
+POST /api/edge/v1/capabilities/{type}/invoke
+.fi
+.PP
+.B Supported capability types
+.PP
+.TP
+.B connect
+JDBC data source connectivity for on-premises data sampling.
+.TP
+.B catalog
+Asset metadata push to the central Collibra catalog.
+.TP
+.B lineage
+Technical lineage collection from on-premises pipelines.
+.TP
+.B profiling
+On-premises data profiling and classification.
+.TP
+.B site
+Static and dynamic web content served under
+.IR /site/ .
+Does not require a DGC connection.
+.TP
+.B workflow
+On-premises workflow step execution triggered by Collibra DGC.
+.PP
+The Java interface contract for the edge site is in
+.I edge/java/src/main/java/io/sindoc/collibra/edge/
+and is built with:
+.PP
+.nf
+./gradlew javadoc jar
+.fi
+.SH ENVIRONMENT
+.TP
+.B COLLIBRA_EDGE_DIR
+Override the default stack root
+.RI ( ~/ws/git/github/sindoc/collibra/edge/ ).
+.TP
+.B COLLIBRA_EDGE_HOSTNAME
+FQDN of the edge node.  Required by
+.B docker compose
+and by the edge site server.
+.TP
+.B COLLIBRA_DGC_URL
+Base URL of the central Collibra DGC instance.  Required for DGC registration.
+.TP
+.B COLLIBRA_EDGE_SITE_ID
+Stable identifier for the edge site registration.
+.TP
+.B COLLIBRA_EDGE_REG_KEY
+Registration key issued by Collibra DGC.  Kept in
+.I .env
+(gitignored).
+.TP
+.B ANTHROPIC_API_KEY
+Required by
+.B singine edge agent run .
+.TP
+.B SINGINE_SESSION_TOKEN
+Included in
+.B singine runtime exec-external
+payloads for audit tracing.
+.SH FILES
+.TP
+.I ~/ws/git/github/sindoc/collibra/edge/
+Stack root.  All paths below are relative to this directory.
+.TP
+.I Makefile
+Top-level build/deploy/clean targets.
+.TP
+.I docker-compose.yml
+Defines the
+.IR cdn ,
+.IR collibra-edge ,
+and
+.I edge-site
+services.
+.TP
+.I .env.example
+Copy to
+.I .env
+and populate before running the stack.
+.TP
+.I image/base/Dockerfile
+CentOS 7 LTS base: Java 11, EPEL, non-root
+.I edge
+user.
+.TP
+.I image/collibra-edge/Dockerfile
+Collibra DGC Edge node.  Requires
+.I collibra-edge.jar
+from the Collibra Customer Portal.
+.TP
+.I image/edge-site/Dockerfile
+Collibra-compatible edge site server.  Hosts the Edge Site REST API and
+optional web content.
+.TP
+.I image/cdn/Dockerfile
+nginx CDN proxy with TLS termination.
+.TP
+.I java/
+Java interface layer
+.RI ( io.sindoc.collibra.edge ).
+Build with
+.BR "./gradlew javadoc jar" .
+.TP
+.I agent/
+Claude API edge-agent.  See
+.BR singine-edge-agent (1).
+.TP
+.I ~/.singine/decisions/edge-agent.json
+Governance decision record (offline fallback).
+.SH PREREQUISITES
+.TP
+.B Before running \(fqsingine edge build\(fq
+Docker must be installed and the Docker daemon must be running.
+.TP
+.B Before running \(fqsingine edge up\(fq or \(fqsingine edge deploy\(fq
+.RS
+.IP \(bu 2
+.I image/collibra-edge/collibra-edge.jar
+\(em download from the Collibra Customer Portal
+.RI ( productresources.collibra.com ).
+.IP \(bu 2
+.I certs/server.crt
+and
+.I certs/server.key
+\(em TLS certificate and key for the CDN.
+.IP \(bu 2
+.I .env
+\(em copy from
+.I .env.example
+and set
+.B COLLIBRA_EDGE_HOSTNAME
+and
+.BR COLLIBRA_DGC_URL .
+.RE
+.TP
+.B Before running \(fqsingine edge agent run\(fq
+.B ANTHROPIC_API_KEY
+must be set to a valid Anthropic API key.
+.SH EXAMPLES
+.nf
+# One-command bring-up from a clean environment.
+singine edge deploy
+
+# Build only the CDN image with a release tag.
+singine edge build --target cdn --tag v1.2.0
+
+# Push all images to a private registry.
+singine edge push --registry registry.example.com --tag v1.2.0
+
+# Check what is running and the governance decision.
+singine edge status --json
+
+# Tail CDN logs.
+singine edge logs --service cdn --follow
+
+# Validate agent tools without an API call.
+singine edge agent validate
+
+# Generate a Kubernetes Deployment for Collibra edge on RHEL 7.9.
+export ANTHROPIC_API_KEY=sk-ant-...
+singine edge agent run \\
+  --task "Generate a Collibra edge Deployment and firewalld zone for RHEL 7.9" \\
+  --output-dir /tmp/edge-out
+.fi
+.SH SEE ALSO
+.BR singine (1),
+.BR singine-edge-agent (1),
+.BR singine-domain (1),
+.BR singine-decide (1),
+.BR singine-runtime (1),
+.BR docker-compose (1)

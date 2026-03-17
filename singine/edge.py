@@ -90,7 +90,7 @@ def _make(targets: List[str], cwd: Path, extra_vars: Optional[Dict[str, str]] = 
 
 # ── Build ─────────────────────────────────────────────────────────────────────
 
-VALID_TARGETS = ("base", "collibra-edge", "cdn", "all")
+VALID_TARGETS = ("base", "collibra-edge", "edge-site", "cdn", "all")
 
 
 def cmd_edge_build(args: argparse.Namespace) -> int:
@@ -138,6 +138,7 @@ def cmd_edge_push(args: argparse.Namespace) -> int:
     images = {
         "base":          "sindoc-collibra-edge-base",
         "collibra-edge": "sindoc-collibra-edge",
+        "edge-site":     "sindoc-collibra-edge-site",
         "cdn":           "sindoc-collibra-cdn",
     }
 
@@ -323,6 +324,30 @@ def cmd_edge_deploy(args: argparse.Namespace) -> int:
 
 # ── Agent subcommands ─────────────────────────────────────────────────────────
 
+def cmd_edge_javadoc(args: argparse.Namespace) -> int:
+    """Build Javadoc for the edge Java interface layer."""
+    edge = _edge_dir()
+    java_dir = edge / "java"
+    if not java_dir.exists():
+        msg = f"Java module not found: {java_dir}"
+        if args.json:
+            print(json.dumps(_envelope(False, "edge javadoc", error=msg)))
+        else:
+            print(f"[edge javadoc] ERROR: {msg}", file=sys.stderr)
+        return 1
+    print(f"[edge javadoc] building Javadoc in {java_dir}")
+    result = subprocess.run(["./gradlew", "javadoc"], cwd=str(java_dir), text=True)
+    ok = result.returncode == 0
+    out_dir = java_dir / "build/docs/javadoc"
+    if args.json:
+        print(json.dumps(_envelope(ok, "edge javadoc", output_dir=str(out_dir), exit_code=result.returncode)))
+    elif ok:
+        print(f"[edge javadoc] done: {out_dir}")
+    else:
+        print(f"[edge javadoc] FAILED (exit {result.returncode})", file=sys.stderr)
+    return result.returncode
+
+
 def cmd_edge_agent_validate(args: argparse.Namespace) -> int:
     agent = _agent_dir()
     print("[edge agent validate] running tool smoke-test …")
@@ -436,6 +461,14 @@ def add_edge_parser(sub: argparse._SubParsersAction) -> None:
     p.add_argument("--tag", default="local", help="Image tag (default: local)")
     p.add_argument("--json", action="store_true")
     p.set_defaults(func=cmd_edge_install)
+
+    # ── javadoc ───────────────────────────────────────────────────────────────
+    p = edge_sub.add_parser(
+        "javadoc",
+        help="Build Javadoc for the edge Java interface layer (edge/java/)",
+    )
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_edge_javadoc)
 
     # ── deploy ────────────────────────────────────────────────────────────────
     p = edge_sub.add_parser(
