@@ -2,8 +2,9 @@
 
 Provides full lifecycle management of the Collibra edge stack that lives in
 ``~/ws/git/github/sindoc/collibra/edge/``.  All heavy lifting delegates to
-the stack's own Makefile and docker compose file; singine acts as the
-sanctioned execution gate and wraps results in a structured envelope.
+the stack's own Makefile, docker compose files, and shell scripts; singine
+acts as the sanctioned execution gate and wraps results in a structured
+envelope.
 
 Command families
 ----------------
@@ -22,6 +23,16 @@ Command families
 
 ``singine edge deploy``
     install + up — bring the full stack to a running state.
+
+``singine edge k8s``
+    Deploy the **real Collibra Edge** onto a Kubernetes cluster using the
+    site-specific installer bundle (installer/).  Sub-commands:
+
+    prereqs   — verify helm/kubectl/jq/yq and cluster reachability
+    install   — run scripts/install-edge-k8s.sh (Helm chart deployment)
+    uninstall — tear down the Helm release and namespace
+    status    — show pod health and Helm release in namespace collibra-edge
+    logs      — stream pod logs from a named edge component
 
 ``singine edge agent``
     Run, validate, or install the Claude API edge-agent that generates
@@ -419,6 +430,417 @@ def cmd_edge_agent_status(args: argparse.Namespace) -> int:
     return result.returncode
 
 
+# ── k8s ───────────────────────────────────────────────────────────────────────
+
+_K8S_NAMESPACE = "collibra-edge"
+
+_K8S_PREREQS = ("helm", "kubectl", "jq", "yq")
+
+
+def _installer_dir() -> Path:
+    return _edge_dir() / "installer"
+
+
+def cmd_edge_k8s_prereqs(args: argparse.Namespace) -> int:
+    """Check that all K8s prerequisites are satisfied."""
+    use_json = args.json
+    results: List[Dict[str, Any]] = []
+    ok = True
+
+    # 1. Tool availability
+    for tool in _K8S_PREREQS:
+        r = subprocess.run(["which", tool], capture_output=True, text=True)
+        found = r.returncode == 0
+        if not found:
+            ok = False
+        results.append({"check": f"tool:{tool}", "ok": found,
+                         "detail": r.stdout.strip() if found else "not found"})
+
+    # 2. Kubernetes cluster reachable
+    r = subprocess.run(["kubectl", "cluster-info"], capture_output=True, text=True)
+    k8s_ok = r.returncode == 0
+    if not k8s_ok:
+        ok = False
+    results.append({"check": "kubernetes-cluster", "ok": k8s_ok,
+                     "detail": "reachable" if k8s_ok else
+                     "not reachable — enable Docker Desktop Kubernetes: Settings → Kubernetes → Enable Kubernetes"})
+
+    # 3. Installer bundle present
+    installer = _installer_dir()
+    bundle_ok = (installer / "site-values.yaml").exists() and \
+                (installer / "collibra-edge-helm-chart").exists()
+    if not bundle_ok:
+        ok = False
+    results.append({"check": "installer-bundle", "ok": bundle_ok,
+                     "detail": str(installer) if bundle_ok else
+                     f"missing — extract installer TGZ to {installer}"})
+
+    if use_json:
+        print(json.dumps(_envelope(ok, "edge k8s prereqs", checks=results)))
+    else:
+        for item in results:
+            icon = "✓" if item["ok"] else "✗"
+            print(f"[edge k8s prereqs] {icon}  {item['check']:<30} {item['detail']}")
+        if not ok:
+            print("[edge k8s prereqs] FAILED — resolve the issues above before running install",
+                  file=sys.stderr)
+    return 0 if ok else 1
+
+
+def cmd_edge_k8s_install(args: argparse.Namespace) -> int:
+    """Deploy the real Collibra Edge onto Kubernetes via Helm."""
+    edge = _edge_dir()
+    script = edge / "scripts" / "install-edge-k8s.sh"
+    use_json = args.json
+
+    if not script.exists():
+        msg = f"Install script not found: {script}"
+        if use_json:
+            print(json.dumps(_envelope(False, "edge k8s install", error=msg)))
+        else:
+            print(f"[edge k8s install] ERROR: {msg}", file=sys.stderr)
+        return 1
+
+    cmd = ["bash", str(script)]
+    if args.dry_run:
+        cmd.append("--dry-run")
+
+    print(f"[edge k8s install] dry_run={args.dry_run}")
+    result = subprocess.run(cmd, text=True)
+    ok = result.returncode == 0
+    if use_json:
+        print(json.dumps(_envelope(ok, "edge k8s install",
+                                   dry_run=args.dry_run,
+                                   exit_code=result.returncode)))
+    return result.returncode
+
+
+def cmd_edge_k8s_uninstall(args: argparse.Namespace) -> int:
+    """Helm uninstall + delete namespace."""
+    edge = _edge_dir()
+    script = edge / "scripts" / "install-edge-k8s.sh"
+    use_json = args.json
+
+    if not script.exists():
+        msg = f"Install script not found: {script}"
+        if use_json:
+            print(json.dumps(_envelope(False, "edge k8s uninstall", error=msg)))
+        else:
+            print(f"[edge k8s uninstall] ERROR: {msg}", file=sys.stderr)
+        return 1
+
+    print("[edge k8s uninstall] removing Helm release and namespace …")
+    result = subprocess.run(["bash", str(script), "--uninstall"], text=True)
+    ok = result.returncode == 0
+    if use_json:
+        print(json.dumps(_envelope(ok, "edge k8s uninstall",
+                                   exit_code=result.returncode)))
+    return result.returncode
+
+
+def cmd_edge_k8s_status(args: argparse.Namespace) -> int:
+    """Show pod health and Helm release status in the collibra-edge namespace."""
+    ns = args.namespace
+    use_json = args.json
+
+    # kubectl context
+    ctx_r = subprocess.run(
+        ["kubectl", "config", "current-context"],
+        capture_output=True, text=True,
+    )
+    context = ctx_r.stdout.strip() if ctx_r.returncode == 0 else "unknown"
+
+    # helm release status
+    helm_r = subprocess.run(
+        ["helm", "status", "collibra-edge", "-n", ns, "--output", "json"],
+        capture_output=True, text=True,
+    )
+    helm_ok = helm_r.returncode == 0
+    try:
+        helm_data: Any = json.loads(helm_r.stdout) if helm_ok else {}
+    except json.JSONDecodeError:
+        helm_data = {}
+    helm_status = helm_data.get("info", {}).get("status", "not installed") if isinstance(helm_data, dict) else "not installed"
+    helm_version = helm_data.get("chart", {}).get("metadata", {}).get("version", "") if isinstance(helm_data, dict) else ""
+
+    # kubectl get pods
+    pods_r = subprocess.run(
+        ["kubectl", "get", "pods", "-n", ns,
+         "--no-headers",
+         "-o", "custom-columns=NAME:.metadata.name,READY:.status.containerStatuses[*].ready,STATUS:.status.phase,RESTARTS:.status.containerStatuses[*].restartCount,AGE:.metadata.creationTimestamp"],
+        capture_output=True, text=True,
+    )
+    pod_lines = [l for l in pods_r.stdout.strip().splitlines() if l]
+
+    if use_json:
+        print(json.dumps(_envelope(
+            helm_ok or pods_r.returncode == 0,
+            "edge k8s status",
+            context=context,
+            namespace=ns,
+            helm_status=helm_status,
+            helm_version=helm_version,
+            pods=pod_lines,
+        )))
+    else:
+        print(f"[edge k8s status] context      : {context}")
+        print(f"[edge k8s status] namespace    : {ns}")
+        print(f"[edge k8s status] helm release : collibra-edge  {helm_status}  {helm_version}")
+        print(f"[edge k8s status] pods:")
+        if pod_lines:
+            for line in pod_lines:
+                print(f"                    {line}")
+        else:
+            print("                    (none — namespace may not exist yet)")
+    return 0
+
+
+def cmd_edge_k8s_logs(args: argparse.Namespace) -> int:
+    """Stream pod logs for a named Collibra Edge component."""
+    ns = args.namespace
+    component = args.component
+
+    # Label selector varies by component
+    label_map = {
+        "edge-proxy":          "app=edge-proxy",
+        "edge-controller":     "app=edge-controller",
+        "edge-cd":             "app=edge-cd",
+        "edge-session-manager":"app=edge-session-manager",
+        "otel-agent":          "app.kubernetes.io/name=opentelemetry-collector",
+    }
+    selector = label_map.get(component, f"app={component}")
+
+    cmd = ["kubectl", "logs", "-n", ns, "-l", selector,
+           "--prefix", "--tail", str(args.tail)]
+    if args.follow:
+        cmd.append("-f")
+
+    return subprocess.run(cmd, text=True).returncode
+
+
+# ── Cloud mode up ─────────────────────────────────────────────────────────────
+
+def cmd_edge_cloud(args: argparse.Namespace) -> int:
+    """Start the edge stack in cloud mode (docker-compose.cloud.yml → lutino.collibra.com)."""
+    edge = _edge_dir()
+    compose_file = edge / "docker-compose.cloud.yml"
+    env_file = edge / ".env"
+    use_json = args.json
+
+    if not compose_file.exists():
+        msg = f"Cloud compose file not found: {compose_file}"
+        if use_json:
+            print(json.dumps(_envelope(False, "edge cloud", error=msg)))
+        else:
+            print(f"[edge cloud] ERROR: {msg}", file=sys.stderr)
+        return 1
+
+    cmd = ["docker", "compose", "-f", str(compose_file)]
+    if env_file.exists():
+        cmd += ["--env-file", str(env_file)]
+    cmd += ["up", "-d"]
+
+    print(f"[edge cloud] starting cloud stack → lutino.collibra.com")
+    result = subprocess.run(cmd, cwd=str(edge), text=True)
+    ok = result.returncode == 0
+    if use_json:
+        print(json.dumps(_envelope(ok, "edge cloud", exit_code=result.returncode)))
+    elif ok:
+        print("[edge cloud] stack up — test with: singine edge test")
+    else:
+        print(f"[edge cloud] FAILED (exit {result.returncode})", file=sys.stderr)
+    return result.returncode
+
+
+# ── Test suite ────────────────────────────────────────────────────────────────
+
+def cmd_edge_test(args: argparse.Namespace) -> int:
+    """Run a full test suite against the running edge stack.
+
+    Checks:
+      - Containers healthy (via docker compose ps)
+      - GET /health
+      - GET /api/edge/v1/status  (validates dgcUrl, siteId, capabilities)
+      - GET /api/edge/v1/capabilities  (validates all three are READY)
+      - GET /api/edge/v1/pulse  (validates pulse endpoint exists)
+      - POST /api/edge/v1/pulse  (manual trigger)
+      - POST /api/edge/v1/capabilities/catalog/invoke
+      - POST /api/edge/v1/capabilities/connect/invoke
+      - POST /api/edge/v1/capabilities/site/invoke
+      - GET  /site/  (static content)
+    """
+    import urllib.request
+    import urllib.error
+    import ssl
+
+    base_url = args.url.rstrip("/")
+    use_json = args.json
+    skip_tls = args.skip_tls_verify
+    edge = _edge_dir()
+
+    results: List[Dict[str, Any]] = []
+    overall_ok = True
+
+    # TLS context (skip verify for self-signed dev certs)
+    ctx = ssl.create_default_context()
+    if skip_tls:
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+
+    def _http(method: str, path: str, body: Optional[bytes] = None) -> tuple:
+        """Return (status_code, parsed_json_or_None, error_str_or_None)."""
+        url = base_url + path
+        try:
+            req = urllib.request.Request(
+                url,
+                data=body,
+                method=method,
+                headers={"Content-Type": "application/json", "Accept": "application/json"},
+            )
+            with urllib.request.urlopen(req, context=ctx, timeout=10) as resp:
+                raw = resp.read().decode("utf-8")
+                try:
+                    return resp.status, json.loads(raw), None
+                except json.JSONDecodeError:
+                    return resp.status, raw, None
+        except urllib.error.HTTPError as e:
+            return e.code, None, str(e)
+        except Exception as exc:
+            return 0, None, str(exc)
+
+    def _check(name: str, ok: bool, detail: str = "") -> None:
+        nonlocal overall_ok
+        if not ok:
+            overall_ok = False
+        results.append({"test": name, "ok": ok, "detail": detail})
+        if not use_json:
+            icon = "✓" if ok else "✗"
+            suffix = f"  {detail}" if detail and not ok else ""
+            print(f"  {icon}  {name}{suffix}")
+
+    # ── 0. Containers running ─────────────────────────────────────────────────
+    if not use_json:
+        print(f"\n[edge test] base_url={base_url}  skip_tls={skip_tls}")
+        print(f"[edge test] ── Container health ──────────────────────────")
+
+    for compose_file in ["docker-compose.cloud.yml", "docker-compose.dev.yml", "docker-compose.yml"]:
+        cf = edge / compose_file
+        if not cf.exists():
+            continue
+        r = subprocess.run(
+            ["docker", "compose", "-f", str(cf), "ps", "--format", "json"],
+            capture_output=True, text=True,
+        )
+        if r.returncode == 0 and r.stdout.strip():
+            try:
+                raw_services = r.stdout.strip().splitlines()
+                services = []
+                for line in raw_services:
+                    try:
+                        obj = json.loads(line)
+                        if isinstance(obj, list):
+                            services.extend(obj)
+                        else:
+                            services.append(obj)
+                    except json.JSONDecodeError:
+                        pass
+                for svc in services:
+                    name = svc.get("Service") or svc.get("Name", "?")
+                    health = svc.get("Health", "")
+                    state = svc.get("State", "?")
+                    is_ok = health == "healthy" or (state == "running" and health == "")
+                    _check(f"container:{name}", is_ok, f"state={state} health={health}")
+            except Exception:
+                pass
+            break
+
+    # ── 1. Health ─────────────────────────────────────────────────────────────
+    if not use_json:
+        print(f"[edge test] ── API endpoints ─────────────────────────────")
+
+    status, body, err = _http("GET", "/health")
+    health_ok = status == 200 and isinstance(body, dict) and body.get("status") == "UP"
+    _check("GET /health → UP", health_ok, err or (str(status) if not health_ok else ""))
+
+    # ── 2. Status ─────────────────────────────────────────────────────────────
+    status, body, err = _http("GET", "/api/edge/v1/status")
+    status_ok = status == 200 and isinstance(body, dict) and body.get("status") == "READY"
+    site_id = body.get("siteId", "") if isinstance(body, dict) else ""
+    dgc_url = body.get("dgcUrl", "") if isinstance(body, dict) else ""
+    _check("GET /api/edge/v1/status → READY", status_ok,
+           err or (f"status={body.get('status') if isinstance(body, dict) else 'unknown'}" if not status_ok else ""))
+    _check("status.siteId present", bool(site_id), site_id or "missing")
+    _check("status.dgcUrl present", bool(dgc_url), dgc_url or "missing")
+    _check("status.pulseState present",
+           isinstance(body, dict) and "pulseState" in body,
+           "pulseState field missing" if not (isinstance(body, dict) and "pulseState" in body) else body.get("pulseState", ""))
+
+    # ── 3. Capabilities ───────────────────────────────────────────────────────
+    status, body, err = _http("GET", "/api/edge/v1/capabilities")
+    caps_ok = status == 200 and isinstance(body, list) and len(body) > 0
+    _check("GET /api/edge/v1/capabilities → list", caps_ok, err or "")
+    if caps_ok:
+        cap_types = {c.get("type") for c in body if isinstance(c, dict)}
+        for expected in ("site", "connect", "catalog"):
+            ready = any(
+                c.get("type") == expected and c.get("status") == "READY"
+                for c in body if isinstance(c, dict)
+            )
+            _check(f"capability:{expected} → READY", ready, "not found or not READY" if not ready else "")
+
+    # ── 4. Pulse endpoint ─────────────────────────────────────────────────────
+    status, body, err = _http("GET", "/api/edge/v1/pulse")
+    pulse_ok = status == 200 and isinstance(body, dict) and "pulseState" in body
+    _check("GET /api/edge/v1/pulse", pulse_ok, err or "")
+
+    status, body, err = _http(
+        "POST", "/api/edge/v1/pulse", body=b"{}"
+    )
+    pulse_post_ok = status == 200 and isinstance(body, dict) and body.get("pulseState") == "PULSING"
+    _check("POST /api/edge/v1/pulse → PULSING", pulse_post_ok, err or "")
+
+    # ── 5. Capability invocations ─────────────────────────────────────────────
+    for cap in ("catalog", "connect", "site"):
+        payload = json.dumps({"action": "ping", "params": {}}).encode()
+        status, body, err = _http(
+            "POST", f"/api/edge/v1/capabilities/{cap}/invoke", body=payload
+        )
+        invoke_ok = (
+            status == 200
+            and isinstance(body, dict)
+            and body.get("success") is True
+        )
+        _check(f"POST /api/edge/v1/capabilities/{cap}/invoke", invoke_ok, err or "")
+
+    # ── 6. Static site content ────────────────────────────────────────────────
+    status, body, err = _http("GET", "/site/")
+    site_ok = status == 200
+    _check("GET /site/ → 200", site_ok, err or str(status) if not site_ok else "")
+
+    # ── Summary ───────────────────────────────────────────────────────────────
+    passed = sum(1 for r in results if r["ok"])
+    total = len(results)
+
+    if use_json:
+        print(json.dumps(_envelope(
+            overall_ok, "edge test",
+            base_url=base_url,
+            passed=passed,
+            total=total,
+            results=results,
+        )))
+    else:
+        print(f"\n[edge test] {'PASSED' if overall_ok else 'FAILED'}  {passed}/{total} checks")
+        if not overall_ok:
+            failed = [r for r in results if not r["ok"]]
+            print(f"[edge test] Failed checks:")
+            for r in failed:
+                print(f"  ✗  {r['test']}  {r.get('detail', '')}")
+            return 1
+
+    return 0 if overall_ok else 1
+
+
 # ── Parser registration ───────────────────────────────────────────────────────
 
 def add_edge_parser(sub: argparse._SubParsersAction) -> None:
@@ -468,7 +890,7 @@ def add_edge_parser(sub: argparse._SubParsersAction) -> None:
     p = edge_sub.add_parser("logs", help="Stream or print container logs")
     p.add_argument(
         "--service",
-        choices=["collibra-edge", "cdn"],
+        choices=["edge-site", "collibra-edge", "cdn"],
         default=None,
         help="Limit to a specific service (default: all)",
     )
@@ -518,6 +940,102 @@ def add_edge_parser(sub: argparse._SubParsersAction) -> None:
     p.add_argument("--tag", default="local", help="Image tag (default: local)")
     p.add_argument("--json", action="store_true")
     p.set_defaults(func=cmd_edge_deploy)
+
+    # ── cloud ─────────────────────────────────────────────────────────────────
+    p = edge_sub.add_parser(
+        "cloud",
+        help="Start the edge stack in cloud mode (docker-compose.cloud.yml → lutino.collibra.com)",
+    )
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_edge_cloud)
+
+    # ── test ──────────────────────────────────────────────────────────────────
+    p = edge_sub.add_parser(
+        "test",
+        help="Run the full edge API test suite against the running stack",
+    )
+    p.add_argument(
+        "--url",
+        default="https://localhost",
+        metavar="URL",
+        help="Base URL of the edge CDN (default: https://localhost)",
+    )
+    p.add_argument(
+        "--skip-tls-verify", "-k",
+        action="store_true",
+        dest="skip_tls_verify",
+        help="Skip TLS certificate verification (for self-signed certs, default: True)",
+        default=True,
+    )
+    p.add_argument("--json", action="store_true", help="Emit JSON envelope with full test results")
+    p.set_defaults(func=cmd_edge_test)
+
+    # ── k8s ───────────────────────────────────────────────────────────────────
+    k8s_parser = edge_sub.add_parser(
+        "k8s",
+        help="Deploy the real Collibra Edge onto Kubernetes (Docker Desktop, EKS, GKE, AKS)",
+    )
+    k8s_parser.set_defaults(func=lambda a: (k8s_parser.print_help(), 1)[1])
+    k8s_sub = k8s_parser.add_subparsers(dest="edge_k8s_action")
+
+    p = k8s_sub.add_parser(
+        "prereqs",
+        help="Verify helm/kubectl/jq/yq are installed and the K8s cluster is reachable",
+    )
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_edge_k8s_prereqs)
+
+    p = k8s_sub.add_parser(
+        "install",
+        help="Deploy Collibra Edge via Helm into the collibra-edge namespace",
+    )
+    p.add_argument(
+        "--dry-run",
+        action="store_true",
+        dest="dry_run",
+        help="Validate charts and print what would be installed without making changes",
+    )
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_edge_k8s_install)
+
+    p = k8s_sub.add_parser(
+        "uninstall",
+        help="Helm uninstall collibra-edge and delete the namespace",
+    )
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_edge_k8s_uninstall)
+
+    p = k8s_sub.add_parser(
+        "status",
+        help="Show Helm release status and pod health in the collibra-edge namespace",
+    )
+    p.add_argument(
+        "--namespace", "-n",
+        default=_K8S_NAMESPACE,
+        help=f"Kubernetes namespace (default: {_K8S_NAMESPACE})",
+    )
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_edge_k8s_status)
+
+    p = k8s_sub.add_parser(
+        "logs",
+        help="Stream logs from a Collibra Edge pod component",
+    )
+    p.add_argument(
+        "component",
+        choices=["edge-proxy", "edge-controller", "edge-cd",
+                 "edge-session-manager", "otel-agent"],
+        help="Which edge component to stream logs from",
+    )
+    p.add_argument(
+        "--namespace", "-n",
+        default=_K8S_NAMESPACE,
+        help=f"Kubernetes namespace (default: {_K8S_NAMESPACE})",
+    )
+    p.add_argument("--follow", "-f", action="store_true", help="Follow log output")
+    p.add_argument("--tail", type=int, default=100, metavar="N",
+                   help="Number of lines to show from end (default: 100)")
+    p.set_defaults(func=cmd_edge_k8s_logs)
 
     # ── agent ─────────────────────────────────────────────────────────────────
     agent_parser = edge_sub.add_parser(
