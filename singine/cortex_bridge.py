@@ -493,6 +493,64 @@ class BridgeDB:
     def graphql(self, query: str) -> Dict[str, Any]:
         return execute_graphql(self, query)
 
+    def latest_changes(
+        self,
+        *,
+        limit: int = 20,
+        realm: Optional[str] = None,
+        source_kind: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        rows = self.conn.execute(
+            """
+            SELECT e.iri,
+                   e.label,
+                   e.entity_type,
+                   e.path,
+                   e.mtime,
+                   src.name AS source_name,
+                   src.kind AS source_kind,
+                   src.root_path AS source_root_path,
+                   src.metadata_json AS source_metadata_json,
+                   substr(COALESCE(f.text, ''), 1, 280) AS snippet
+            FROM entities e
+            JOIN sources src ON src.source_id = e.source_id
+            LEFT JOIN fragments f
+              ON f.entity_id = e.entity_id
+             AND f.seq = (
+                   SELECT MIN(f2.seq)
+                   FROM fragments f2
+                   WHERE f2.entity_id = e.entity_id
+               )
+            WHERE (? IS NULL OR src.kind = ?)
+            ORDER BY COALESCE(e.mtime, '') DESC, src.name, e.label
+            LIMIT ?
+            """,
+            (source_kind, source_kind, limit * 5),
+        ).fetchall()
+        payload = [dict(row) for row in rows]
+        filtered = [row for row in payload if realm is None or classify_realm(row) == realm]
+        return filtered[:limit]
+
+
+def classify_realm(row: Dict[str, Any]) -> str:
+    metadata_json = row.get("source_metadata_json") or "{}"
+    try:
+        metadata = json.loads(metadata_json)
+    except Exception:
+        metadata = {}
+    source_name = (row.get("source_name") or "").lower()
+    source_kind = (row.get("source_kind") or "").lower()
+    family = str(metadata.get("family") or "").lower()
+    root_path = (row.get("source_root_path") or "").lower()
+
+    if family in {"knowyourai"} or "knowyourai" in source_name:
+        return "external-graph"
+    if source_kind in {"filesystem"} or "silkpage" in source_name or "/ws/git/" in root_path:
+        return "filesystem"
+    if family in {"singine", "claude", "codex"} or source_kind in {"logseq-graph", "logseq-api", "agent-home", "rdf-knowledge-pack"}:
+        return "internal-graph"
+    return "internal-graph"
+
 
 def ingest_file_entity(db: BridgeDB, source_id: str, source_name: str, path: Path, root_path: Path) -> str:
     stat = path.stat()
@@ -1169,7 +1227,18 @@ def execute_graphql(db: BridgeDB, query: str) -> Dict[str, Any]:
             payload["rows"] = result["rows"]
         return {"data": {"sparql": payload}}
 
-    raise ValueError("Unsupported GraphQL shape. Supported roots: sources, search, entity, sparql.")
+    latest_match = re.search(r'latestChanges\s*\(([^)]*)\)\s*\{([^}]*)\}', compact)
+    if latest_match:
+        args = parse_graphql_arguments(latest_match.group(1))
+        rows = db.latest_changes(
+            limit=int(args.get("limit", "20")),
+            realm=args.get("realm"),
+            source_kind=args.get("sourceKind"),
+        )
+        fields = graphql_fields(latest_match.group(2))
+        return {"data": {"latestChanges": project_rows(rows, fields)}}
+
+    raise ValueError("Unsupported GraphQL shape. Supported roots: sources, search, entity, sparql, latestChanges.")
 
 
 def make_parser() -> argparse.ArgumentParser:
@@ -1195,13 +1264,20 @@ def make_parser() -> argparse.ArgumentParser:
     graphql = sub.add_parser("graphql", help="Run a GraphQL-shaped query over the bridge")
     graphql.add_argument("query")
 
+    latest = sub.add_parser("latest-changes", help="List the most recently modified entities across bridge realms")
+    latest.add_argument("--limit", type=int, default=20)
+    latest.add_argument("--realm", choices=["internal-graph", "external-graph", "filesystem"])
+    latest.add_argument("--source-kind", help="Filter by exact source kind")
+
     sub.add_parser("jdbc-url", help="Print the JDBC URL for the bridge database")
 
     http = sub.add_parser("http", help="JSON wrapper for server-side delegation")
-    http.add_argument("--action", choices=["sources", "search", "entity", "sparql", "graphql"], required=True)
+    http.add_argument("--action", choices=["sources", "search", "entity", "sparql", "graphql", "latest-changes"], required=True)
     http.add_argument("--query")
     http.add_argument("--entity")
     http.add_argument("--limit", type=int, default=20)
+    http.add_argument("--realm", choices=["internal-graph", "external-graph", "filesystem"])
+    http.add_argument("--source-kind")
 
     return parser
 
@@ -1238,6 +1314,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         if args.command == "graphql":
             print(json.dumps(db.graphql(args.query), indent=2))
             return 0
+        if args.command == "latest-changes":
+            print(json.dumps(db.latest_changes(limit=args.limit, realm=args.realm, source_kind=args.source_kind), indent=2))
+            return 0
         if args.command == "http":
             if args.action == "sources":
                 payload = {"ok": True, "sources": db.list_sources()}
@@ -1245,6 +1324,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 payload = {"ok": True, "results": db.search(args.query or "", limit=args.limit)}
             elif args.action == "entity":
                 payload = {"ok": True, "result": db.entity(args.entity or "")}
+            elif args.action == "latest-changes":
+                payload = {
+                    "ok": True,
+                    "results": db.latest_changes(limit=args.limit, realm=args.realm, source_kind=args.source_kind),
+                }
             elif args.action == "graphql":
                 payload = {"ok": True, "result": db.graphql(args.query or "")}
             else:

@@ -245,6 +245,8 @@ def query_bridge(
     query: Optional[str] = None,
     entity: Optional[str] = None,
     limit: int = 20,
+    realm: Optional[str] = None,
+    source_kind: Optional[str] = None,
     timeout: int = 10,
 ) -> Dict[str, Any]:
     params = {"action": action, "limit": str(limit)}
@@ -252,6 +254,10 @@ def query_bridge(
         params["q"] = query
     if entity:
         params["entity"] = entity
+    if realm:
+        params["realm"] = realm
+    if source_kind:
+        params["source-kind"] = source_kind
     url = f"{base_url.rstrip('/')}/bridge?{urlencode(params)}"
     result = _http_get(url, timeout=timeout)
     result["action"] = action

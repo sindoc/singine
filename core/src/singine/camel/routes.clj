@@ -359,7 +359,7 @@
 ;; Thin HTTP facade over the SQLite-backed cortex bridge.
 
 (defn bridge-route
-  "HTTP GET /bridge?action=sources|search|entity|sparql[&q=...][&entity=...][&limit=...]
+  "HTTP GET /bridge?action=sources|search|entity|sparql|graphql|latest-changes[&q=...][&entity=...][&limit=...][&realm=...][&source-kind=...]
    Delegates to `python3 -m singine.cortex_bridge http`.
 
    Environment:
@@ -388,12 +388,16 @@
                              q         (get params "q")
                              entity    (get params "entity")
                              limit     (get params "limit" "20")
+                             realm     (get params "realm")
+                             source-kind (get params "source-kind")
                              base-cmd  ["python3" "-m" "singine.cortex_bridge"
                                         "--db" db-path
                                         "http" "--action" action "--limit" limit]
                              cmd       (cond-> base-cmd
                                          q      (into ["--query" q])
-                                         entity (into ["--entity" entity]))
+                                         entity (into ["--entity" entity])
+                                         realm  (into ["--realm" realm])
+                                         source-kind (into ["--source-kind" source-kind]))
                              {:keys [exit out err]} (apply sh/sh cmd)
                              body      (if (zero? exit)
                                          out
