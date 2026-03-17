@@ -1,0 +1,109 @@
+.TH SINGINE-SERVER 1 "2026-03-17" "singine 0.2.0" "User Commands"
+.SH NAME
+singine-server \- inspect and query the local Singine HTTP server surface
+.SH SYNOPSIS
+.B singine server inspect
+[\fB--host\fR \fIHOST\fR] [\fB--port\fR \fIPORT\fR] [\fB--environment-type\fR \fIlocal|edge|docker\fR] [\fB--json\fR]
+.PP
+.B singine server health
+[\fB--host\fR \fIHOST\fR] [\fB--port\fR \fIPORT\fR] [\fB--timeout\fR \fISECONDS\fR] [\fB--json\fR]
+.PP
+.B singine server bridge
+[\fB--host\fR \fIHOST\fR] [\fB--port\fR \fIPORT\fR] [\fB--action\fR \fIsources|search|entity|sparql\fR]
+[\fB--query\fR \fITEXT\fR] [\fB--entity\fR \fIIRI\fR] [\fB--limit\fR \fIN\fR] [\fB--json\fR]
+.PP
+.B singine server test-case
+[\fICASE_ROOT\fR]
+[\fB--host\fR \fIHOST\fR]
+[\fB--port\fR \fIPORT\fR]
+[\fB--logseq-url\fR \fIURL\fR]
+[\fB--run\fR]
+[\fB--json\fR]
+.SH DESCRIPTION
+The
+.B server
+command family is the simple local edge interface for Singine.
+It reports the default HTTP shape of the Clojure/Camel server and queries the
+same endpoints that iOS clients, edge tooling, and Docker-packaged local
+services use:
+.IP \(bu 2
+\fB/health\fR for readiness
+.IP \(bu 2
+\fB/bridge\fR for SQLite-backed bridge queries
+.IP \(bu 2
+\fB/cap\fR, \fB/messages\fR, and \fB/timez\fR as the adjacent HTTP surface
+.PP
+\fBinspect\fR also reports git awareness, Docker packaging, Java interface
+paths, activity taxonomy location, and the Ant/SilkPage/xmldoclet publication
+pipeline so one command can describe the full Singine architecture boundary.
+The Java activity inspection is recursive, so nested packages such as
+\fIsingine.activity.photo\fR are included in the reported interface list and in
+snapshot output.
+.SH COMMANDS
+.TP
+.B inspect
+Show the default host/port profile, environment type, docker files, git branch,
+activity taxonomy path, Java interface roots, and migration paths such as
+\fI/tmp/sqlite.db\fR and \fI/tmp/singine-xml-matrix\fR.
+This is also the quickest way to verify that nested JVM activity packages are
+visible before rendering XML/Javadoc publication output.
+.TP
+.B health
+Call \fBGET /health\fR on the configured host/port.
+.TP
+.B bridge
+Call \fBGET /bridge\fR with one of the supported facade actions:
+\fIsources\fR, \fIsearch\fR, \fIentity\fR, or \fIsparql\fR.
+.TP
+.B test-case
+Create a self-contained test-case bundle containing:
+.IP \(bu 2
+a \fBREADME.txt\fR with the exact Singine call sequence
+.IP \(bu 2
+an \fBactivity.json\fR metadata file
+.IP \(bu 2
+the default snapshot output path to use
+.PP
+With \fB--run\fR, also execute the mock unittest case
+\fBpy.tests.test_server_surface_commands\fR from the Singine repo root.
+.SH DEFAULTS
+.TP
+.B bind host
+\fB0.0.0.0\fR on the JVM server side.
+.TP
+.B client host
+\fB127.0.0.1\fR for local CLI calls.
+.TP
+.B port
+\fB8080\fR.
+.TP
+.B environment types
+\fIlocal\fR, \fIedge\fR, \fIdocker\fR.
+.SH EXAMPLES
+.nf
+singine server inspect
+singine server inspect --environment-type edge --json
+singine server health --json
+singine server bridge --action sources --json
+singine server bridge --action sparql --query 'SELECT ?s ?p ?o WHERE { ?s ?p ?o } LIMIT 5' --json
+singine server test-case /tmp/singine-server-case
+singine server test-case /tmp/singine-server-case --run --json
+.fi
+.SH SIMPLE TEST CASE
+The shortest end-to-end Singine-driven surface check is:
+.nf
+singine server test-case /tmp/singine-server-case
+cat /tmp/singine-server-case/README.txt
+singine server inspect --json
+singine server health --json
+singine server bridge --action sources --json
+singine logseq inspect --json
+singine snapshot save --output /tmp/singine-server-case/snapshot.json --json
+python3 -m unittest py.tests.test_server_surface_commands -v
+.fi
+.SH SEE ALSO
+.BR singine (1),
+.BR singine-bridge (1),
+.BR singine-runtime (1),
+.BR singine-snapshot (1),
+.BR singine-logseq (1)
