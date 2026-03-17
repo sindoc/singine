@@ -1,0 +1,52 @@
+# .singine-dns — DNS configuration for the singine local network layer
+#
+# This file documents and configures DNS settings for singine.local.
+#
+# Source in shell (picks up environment variables):
+#   source ~/.singine-dns
+#
+# Manual /etc/hosts entry for production:
+#   sudo sh -c 'echo "127.0.0.1  singine.local  # singine local network" >> /etc/hosts'
+#
+# CentOS LTS (Rocky Linux 9):
+#   nmcli connection modify <conn> ipv4.dns "127.0.0.1" ipv4.dns-search "singine.local"
+#   Or use /etc/hosts directly (preferred for development).
+#
+# Docker (add to /etc/hosts inside the container):
+#   docker run --add-host=singine.local:127.0.0.1 ...
+#
+# ===========================================================================
+
+# ── Canonical singine.local → 127.0.0.1 mapping ───────────────────────────
+
+export SINGINE_LOCAL_HOST="singine.local"
+export SINGINE_LOCAL_IP="127.0.0.1"
+export SINGINE_LOCAL_PORT="2000"
+
+# /etc/hosts entry (for documentation and scripted installation)
+export SINGINE_HOSTS_ENTRY="127.0.0.1  singine.local  # singine local network (port 2000)"
+
+# ── Apply /etc/hosts entry (requires sudo) ─────────────────────────────────
+# Uncomment to apply automatically when this file is sourced with root privileges:
+# if [ "$(id -u)" = "0" ] && ! grep -q "$SINGINE_LOCAL_HOST" /etc/hosts 2>/dev/null; then
+#   echo "$SINGINE_HOSTS_ENTRY" >> /etc/hosts
+#   echo "[singine-dns] Added: $SINGINE_HOSTS_ENTRY"
+# fi
+
+# ── JVM DNS override ───────────────────────────────────────────────────────
+# For test environments: the JVM resolves singine.local via InetAddress.getByAddress()
+# (seeded by SingineLocalDns.register()), so no /etc/hosts change is needed for tests.
+# See: singine.local.SingineLocalDns
+
+# ── Docker DNS ─────────────────────────────────────────────────────────────
+# The CentOS LTS Dockerfile (docker/Dockerfile.centos) adds the hosts entry
+# at build time:
+#   RUN echo "127.0.0.1  singine.local" >> /etc/hosts
+
+# ── Additional search domains ──────────────────────────────────────────────
+# Uncomment if singine nodes form a multi-host network:
+# export SINGINE_DNS_SEARCH="singine.local"
+# export SINGINE_DNS_SERVERS="127.0.0.1"
+
+# ── Diagnostics ────────────────────────────────────────────────────────────
+# echo "[singine-dns] ${SINGINE_LOCAL_IP}  ${SINGINE_LOCAL_HOST}:${SINGINE_LOCAL_PORT}"

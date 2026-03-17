@@ -35,10 +35,31 @@ See
 .B install
 Install the launcher and bundled manpages.
 .TP
+.B template
+Generate Singine-aware project templates for Maven and npm workflows.
+See
+.BR singine-template (1).
+.TP
 .B runtime
 Inspect runtime capabilities and execute wrapped commands.
 See
 .BR singine-runtime (1).
+.TP
+.B server
+Inspect or query the local Singine HTTP edge/server surface.
+See
+.BR singine-server (1).
+.TP
+.B logseq
+Inspect or query the Logseq HTTP API surface used by Singine, discover local
+Logseq graphs, and export them to Org mode and XML for Emacs-based processing.
+See
+.BR singine-logseq (1).
+.TP
+.B snapshot
+Save the full Singine runtime, server, git, docker, Java, taxonomy, and Logseq context to JSON.
+See
+.BR singine-snapshot (1).
 .TP
 .B auth
 Authentication bootstrap and TOTP login commands.
@@ -73,6 +94,11 @@ See
 .TP
 .B activity
 Inspect, instantiate, and evaluate activity taxonomy entries.
+.TP
+.B photo
+Apple Photos queries, review exports, and deterministic test cases.
+See
+.BR singine-photo (1).
 .TP
 .B singe
 Render governed identities from @mentions.
@@ -177,7 +203,11 @@ with one of these topics:
 .IR singine-xml ,
 .IR singine-man ,
 .IR singine-install ,
+.IR singine-template ,
 .IR singine-runtime ,
+.IR singine-server ,
+.IR singine-logseq ,
+.IR singine-snapshot ,
 .IR singine-auth ,
 .IR singine-idp ,
 .IR singine-decide ,
@@ -185,6 +215,7 @@ with one of these topics:
 .IR singine-policy ,
 .IR singine-ai ,
 .IR singine-activity ,
+.IR singine-photo ,
 .IR singine-singe ,
 .IR singine-find ,
 .IR singine-mv ,
@@ -206,9 +237,20 @@ singine ai session show SESSION-ID
 singine ai last session data --db /tmp/singine-ai.db
 singine jdbc-url --db /tmp/singine-ai.db
 
+# Create and run the deterministic photo review test case.
+singine photo test-case /tmp/singine-photo-case
+singine photo export-review /tmp/singine-photo-case/review-output \\
+  --library-root /tmp/singine-photo-case/fixture-library.photoslibrary \\
+  --db /tmp/singine-photo-case/fixture-library.photoslibrary/database/Photos.sqlite \\
+  --max-kb 500 --max-dim 2560 --json
+
 # Inspect centralised sources.
 singine bridge sources --db /tmp/singine-ai.db
 singine bridge search --db /tmp/singine-ai.db "claude"
+
+# Scaffold a Maven or npm project with Singine-friendly defaults.
+singine template create maven singine-spec-demo --dir ~/ws/git/local/singine-spec-demo
+singine template create npm silkpage-spec-ui --dir ~/ws/git/local/silkpage-spec-ui --scope sindoc
 
 # Evaluate a Claude request against the synced policy pack.
 singine policy ai evaluate \\
@@ -219,6 +261,25 @@ singine policy ai evaluate \\
   --execution-env local \\
   --operation read \\
   --path /Users/skh/ws/git/github/sindoc/singine/man/singine.1
+
+# Inspect the local edge/server surface and save a full context snapshot.
+singine server inspect --json
+singine server health --json
+singine server test-case /tmp/singine-server-case
+singine snapshot save --json
+
+# Query the Logseq API surface directly.
+singine logseq inspect --json
+singine logseq ping --token "$LOGSEQ_API_TOKEN" --json
+singine logseq graphs --json
+singine logseq export-org --graph kernel --output /tmp/kernel.org
+singine logseq export-xml \\
+  --graph kernel \\
+  --org-output /tmp/kernel.org \\
+  --xml-output /tmp/kernel.xml \\
+  --om-to-xml-repo /Users/skh/ws/git/codeberg/ndw/org-to-xml \\
+  --elisp-load-path /Users/skh/ws/git/github/ndwarshuis/org-ml \\
+  --json
 .fi
 .SH SEE ALSO
 .BR singine-ai (1),
@@ -231,6 +292,9 @@ singine policy ai evaluate \\
 .BR singine-man (1),
 .BR singine-install (1),
 .BR singine-runtime (1),
+.BR singine-server (1),
+.BR singine-logseq (1),
+.BR singine-snapshot (1),
 .BR singine-auth (1),
 .BR singine-idp (1),
 .BR singine-model (1),

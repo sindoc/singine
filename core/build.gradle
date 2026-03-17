@@ -1,0 +1,216 @@
+/*
+ * singine/core/build.gradle — Gradle build for the singine-core JVM layer.
+ *
+ * JVM selection:
+ *   Set $JAVA_HOME before invoking gradle.
+ *   Or configure a Java toolchain (see java.toolchain block below).
+ *
+ * cacerts:
+ *   gradle -Djavax.net.ssl.trustStore=/path/to/cacerts <task>
+ *   Or set $SINGINE_CACERTS in the environment.
+ *
+ * Key tasks:
+ *   gradle compileJava          compile Java sources
+ *   gradle testLocal            run singine.local integration tests (15 TCs)
+ *   gradle javadocXml           Norman Walsh XML Javadoc (all singine.* packages)
+ *   gradle javadoc              standard HTML Javadoc
+ *   gradle dockerCentosBuild    build CentOS LTS test Docker image
+ *   gradle dockerCentosTest     run tests inside CentOS LTS Docker
+ *   gradle antJavadocXml        delegate to ant javadoc-xml
+ */
+
+plugins {
+    id 'java'
+    id 'maven-publish'
+}
+
+group   = 'com.sindoc.singine'
+version = '0.2.0'
+
+// ── Java toolchain (uses $JAVA_HOME if set) ────────────────────────────────
+
+java {
+    // Uncomment to pin to a specific JDK version (requires toolchain support):
+    // toolchain { languageVersion = JavaLanguageVersion.of(21) }
+    sourceCompatibility = JavaVersion.VERSION_11
+    targetCompatibility = JavaVersion.VERSION_11
+}
+
+// Respect $JAVA_HOME for forked processes
+def javaHomeDir = System.env.JAVA_HOME ?: System.properties['java.home']
+def javaBin     = javaHomeDir ? "${javaHomeDir}/bin" : '/usr/bin'
+
+// ── Source sets ────────────────────────────────────────────────────────────
+
+sourceSets {
+    main {
+        java { srcDirs = ['java'] }
+        resources { srcDirs = ['resources'] }
+    }
+    test {
+        java { srcDirs = ['java'] }  // integration test is in main java/ tree
+    }
+}
+
+// Output directories aligned with Ant build
+buildDir = file('target/gradle')
+compileJava.destinationDirectory = file('classes')
+
+// ── Dependencies ───────────────────────────────────────────────────────────
+
+repositories {
+    mavenCentral()
+    mavenLocal()
+}
+
+dependencies {
+    implementation 'org.xerial:sqlite-jdbc:3.45.3.0'
+    implementation 'org.apache.commons:commons-lang3:3.14.0'
+    implementation 'commons-codec:commons-codec:1.17.0'
+
+    // Apache Camel 4.4 LTS — optional (not required for singine.local tests)
+    compileOnly 'org.apache.camel:camel-core:4.4.4'
+    compileOnly 'org.apache.camel:camel-jetty:4.4.4'
+
+    // Norman Walsh xmldoclet — for javadocXml task only
+    javadocClasspath 'com.saxonica:xmldoclet:0.17.0'
+}
+
+configurations {
+    xmldoclet
+}
+dependencies {
+    xmldoclet 'com.saxonica:xmldoclet:0.17.0'
+}
+
+// ── Compile ────────────────────────────────────────────────────────────────
+
+compileJava {
+    options.encoding = 'UTF-8'
+    options.fork     = true
+    if (javaBin) {
+        options.forkOptions.executable = "${javaBin}/javac"
+    }
+}
+
+// ── Tests ──────────────────────────────────────────────────────────────────
+
+test {
+    // Pass cacerts and singine.local settings to test JVM
+    def cacerts = System.env.SINGINE_CACERTS
+                ?: System.properties['javax.net.ssl.trustStore']
+                ?: "${javaHomeDir}/conf/security/cacerts"
+
+    systemProperty 'javax.net.ssl.trustStore', cacerts
+    systemProperty 'singine.local.host', 'singine.local'
+    systemProperty 'singine.local.port', '2000'
+
+    if (javaHomeDir) {
+        environment 'JAVA_HOME', javaHomeDir
+    }
+}
+
+// Integration test target — runs SingineLocalIntegrationTest.main()
+task testLocal(type: JavaExec, dependsOn: compileJava) {
+    group       = 'verification'
+    description = 'Run singine.local integration tests (15 TCs, no JUnit)'
+    classpath   = sourceSets.main.runtimeClasspath
+    mainClass   = 'singine.local.SingineLocalIntegrationTest'
+
+    def cacerts = System.env.SINGINE_CACERTS
+                ?: "${javaHomeDir}/conf/security/cacerts"
+    jvmArgs "-Djavax.net.ssl.trustStore=${cacerts}"
+
+    if (javaHomeDir) {
+        environment 'JAVA_HOME', javaHomeDir
+    }
+}
+
+// ── Javadoc ────────────────────────────────────────────────────────────────
+
+// Standard HTML Javadoc for all singine.* packages
+javadoc {
+    source           = sourceSets.main.java
+    destinationDir   = file('target/javadoc-html')
+    title            = 'Singine Core API'
+    options.encoding = 'UTF-8'
+
+    if (javaBin) {
+        executable = "${javaBin}/javadoc"
+    }
+    options.windowTitle = 'Singine Core — singine.local:2000 + Activity Model + Auth'
+    options.addStringOption('subpackages', 'singine')
+}
+
+// Norman Walsh xmldoclet — machine-readable XML Javadoc
+task javadocXml(type: Javadoc, dependsOn: compileJava) {
+    group       = 'documentation'
+    description = 'Generate XML Javadoc via Norman Walsh xmldoclet (com.saxonica:xmldoclet)'
+    source      = sourceSets.main.java
+    classpath   = sourceSets.main.compileClasspath + configurations.xmldoclet
+
+    destinationDir = file('target/javadoc-xml')
+
+    options.docletpath        = configurations.xmldoclet.files.toList()
+    options.doclet            = 'com.saxonica.xmldoclet.XmlDoclet'
+    options.addStringOption('subpackages', 'singine')
+
+    if (javaBin) {
+        executable = "${javaBin}/javadoc"
+    }
+
+    def cacerts = System.env.SINGINE_CACERTS
+                ?: "${javaHomeDir}/conf/security/cacerts"
+    options.addStringOption('J-Djavax.net.ssl.trustStore', cacerts)
+
+    doLast {
+        println "XML Javadoc complete → target/javadoc-xml/"
+        println "Primary output: target/javadoc-xml/javadoc.xml"
+    }
+}
+
+// Delegate to Ant javadoc-xml target (uses Ant's xmldoclet detection from ~/.m2)
+task antJavadocXml(type: Exec) {
+    group       = 'documentation'
+    description = 'Delegate XML Javadoc to Ant build.xml (uses ~/.m2 xmldoclet detection)'
+    commandLine 'ant', '-f', 'build.xml', 'javadoc-xml'
+    environment 'JAVA_HOME', javaHomeDir ?: ''
+}
+
+// ── Docker: CentOS LTS (Rocky Linux 9) ────────────────────────────────────
+
+def centosImage = project.findProperty('centos.image') ?: 'singine-centos-test:latest'
+
+task dockerCentosBuild(type: Exec) {
+    group       = 'docker'
+    description = 'Build CentOS LTS (Rocky Linux 9) test Docker image'
+    commandLine 'docker', 'build',
+        '-t', centosImage,
+        '-f', '../docker/Dockerfile.centos',
+        '..'
+}
+
+task dockerCentosTest(type: Exec, dependsOn: dockerCentosBuild) {
+    group       = 'docker'
+    description = 'Run singine.local integration tests inside CentOS LTS Docker'
+    commandLine 'docker', 'run', '--rm',
+        '--name', 'singine-test-centos',
+        '-e', "SINGINE_LOCAL_PORT=2000",
+        centosImage,
+        'ant', '-f', '/singine/core/build.xml', 'test-local'
+}
+
+// ── Publishing ─────────────────────────────────────────────────────────────
+
+publishing {
+    publications {
+        maven(MavenPublication) {
+            from components.java
+            pom {
+                name        = 'Singine Core'
+                description = 'JVM core: Activity model, auth, and singine.local:2000'
+                url         = 'https://github.com/sindoc/singine'
+            }
+        }
+    }
+}

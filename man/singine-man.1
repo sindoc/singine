@@ -42,11 +42,25 @@ Terminal context inspection and sourced environment.
 .B singine-runtime
 Runtime capability inspection and wrapped-command execution.
 .TP
+.B singine-server
+Local Singine HTTP server defaults, health checks, and bridge facade queries.
+.TP
+.B singine-logseq
+Logseq HTTP API defaults, token-aware ping, filesystem fallback notes, and
+Org/XML export through Emacs and \fBom-to-xml.el\fR.
+.TP
+.B singine-snapshot
+One-file Singine runtime/context snapshot with git, docker, Java, taxonomy, and Logseq metadata.
+.TP
 .B singine-model
 Singine model objects and bridge surfaces.
 .TP
 .B singine-activity
 Activity taxonomy: list, inspect, run, score. Covers DP(DP) meta-activities.
+.TP
+.B singine-photo
+Apple Photos review exports, deterministic test cases, and multi-runner test
+commands.
 .TP
 .B singine-jdbc-url
 Print the JDBC URL for a bridge database.
@@ -62,6 +76,9 @@ Identity provider operations.
 .TP
 .B singine-install
 Launcher and manpage installation.
+.TP
+.B singine-template
+Generate Singine-aware Maven and npm project templates.
 .TP
 .B singine-singe
 Governed identity rendering from @mentions.
@@ -99,15 +116,25 @@ singine man singine-decide
 # Runtime, context, and execution envelope.
 singine man singine-runtime
 singine man singine-context
+singine man singine-server
+singine man singine-logseq
+singine man singine-snapshot
+
+# Template generation for Maven and npm.
+singine man singine-template
 
 # Activity taxonomy and DP(DP).
 singine man singine-activity
+
+# Apple Photos review workflow and test-case commands.
+singine man singine-photo
 
 # Get the raw filesystem path to a manpage.
 singine man singine-auth --raw
 .fi
 .SH SEE ALSO
 .BR singine (1),
+.BR singine-photo (1),
 .BR singine-ai (1),
 .BR singine-bridge (1),
 .BR singine-policy (1)

@@ -43,6 +43,9 @@ understand what any `singine` invocation actually does.
 | `runtime inspect` | `cmd_runtime_inspect` | inline |
 | `runtime exec` | `cmd_runtime_exec` | inline — wraps a **singine** subcommand |
 | `runtime exec-external` | `cmd_runtime_exec_external` | inline — wraps **any binary** |
+| `server inspect / health / bridge` | `cmd_server_*` | `server_surface` |
+| `logseq inspect / ping` | `cmd_logseq_*` | `server_surface` |
+| `snapshot save` | `cmd_snapshot_save` | `server_surface` |
 | `auth totp init / uri / code / verify` | `cmd_auth_totp_*` | `auth_totp` |
 | `auth login` | `cmd_auth_login` | `auth_totp` → `idp` |
 | `idp *` | `build_idp_parser` | `idp` |
@@ -69,6 +72,27 @@ Both wrap a command in a JSON envelope containing `terminal_context`,
 `exec-external` is the sanctioned execution gate used by
 `SingineRuntimeGate.groovy` in the Collibra toolkit. The binary is resolved
 without shell interpolation so there is no command injection surface.
+
+### `server_surface.py` — local server, Logseq, and snapshot helpers
+
+This module is the lightweight architecture reporter and HTTP client for the
+new top-level commands:
+
+- `singine server inspect`
+- `singine server health`
+- `singine server bridge`
+- `singine logseq inspect`
+- `singine logseq ping`
+- `singine snapshot save`
+
+It centralizes:
+
+- local/edge/docker environment typing
+- default server host/port and route URLs
+- git awareness and docker awareness
+- Java activity interface and taxonomy references
+- migration paths for bridge DBs, XML matrix output, Javadoc XML, and spec output
+- snapshot persistence under `~/.singine/context/`
 
 ---
 
