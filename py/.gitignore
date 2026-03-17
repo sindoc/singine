@@ -1,0 +1,6 @@
+# Created by venv; see https://docs.python.org/3/library/venv.html
+*
+!tests/
+!tests/test_multilingual_emotion_bundle.py
+!tests/test_server_surface_commands.py
+!tests/test_domain_commands.py

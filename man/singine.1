@@ -82,6 +82,22 @@ Covers Claude, Codex, and OpenAI-API systems.
 See
 .BR singine-policy (1).
 .TP
+.B domain
+Domain layer \(em master data, event log, governed transactions, and reference
+data, all backed by a shared SQLite database.
+Types are aligned with the Singine metamodel and Collibra bridge asset families
+.RI ( BusinessTerm ,
+.IR BusinessCapability ,
+.IR BusinessProcess ,
+.IR DataCategory ,
+.IR scenario-codes ,
+.IR iata-codes ).
+Interoperable with the Humble IDP Java domain layer
+.RI ( idp.db
+package) on the same SQLite file.
+See
+.BR singine-domain (1).
+.TP
 .B ai
 Governed AI session recording, permission tracking, and session-data
 centralisation for Claude, Codex, and OpenAI.
@@ -214,6 +230,7 @@ with one of these topics:
 .IR singine-model ,
 .IR singine-policy ,
 .IR singine-ai ,
+.IR singine-domain ,
 .IR singine-activity ,
 .IR singine-photo ,
 .IR singine-singe ,
@@ -298,6 +315,7 @@ singine logseq export-xml \\
 .BR singine-auth (1),
 .BR singine-idp (1),
 .BR singine-model (1),
+.BR singine-domain (1),
 .BR singine-activity (1),
 .BR singine-singe (1),
 .BR singine-find (1),
