@@ -1,0 +1,419 @@
+.TH SINGINE\-JVM\-GRACE 1 "2026\-03\-16" "singine 0.2.0" "User Commands"
+.
+.SH NAME
+singine\-jvm\-grace \- register, locate, build, and publish the JVM Grace
+DocBook 5.2 site using the singine platform
+.
+.SH SYNOPSIS
+.B singine find filesAboutTopic
+.I jvm\-grace
+.RB [ \-\-root\-dir
+.IR DIR ]
+.RB [ \-\-json ]
+.PP
+.B singine decide
+.I jvm\-grace\-groovy\-demo
+.B \-\-decision
+.I approve
+.RB [ \-\-reason
+.IR TEXT ]
+.RB [ \-\-json ]
+.PP
+.B singine xml matrix
+.RB [ \-\-db
+.IR PATH ]
+.RB [ \-\-output\-dir
+.IR PATH ]
+.PP
+.B singine runtime exec\-external
+.B make
+.RB [ \-C
+.IR DIR ]
+.RI [ TARGET ]
+.PP
+.B singine runtime exec\-external
+.B make
+.B \-C
+.I ~/ws/git/local/arash/jvm\-grace\-site
+.I single
+.
+.SH DESCRIPTION
+.B singine\-jvm\-grace
+documents the full singine command workflow for the
+.B JVM Grace
+DocBook 5.2 website project.  The project lives at
+.IR ~/ws/git/local/arash/jvm\-grace\-site/ .
+.PP
+All
+.BR make (1)
+targets in that directory are the canonical way to run the Saxon-based
+XSLT transformation.
+.B singine
+commands wrap, locate, register, and inspect those operations within the
+governed platform context.
+.
+.SH WHERE TO RUN
+.PP
+The
+.BR make (1)
+commands must be run from inside the site directory or with the
+.B \-C
+flag pointing at it:
+.PP
+.RS 4
+.EX
+cd ~/ws/git/local/arash/jvm\-grace\-site
+make
+.EE
+.RE
+.PP
+or, from any working directory:
+.PP
+.RS 4
+.EX
+make \-C ~/ws/git/local/arash/jvm\-grace\-site
+.EE
+.RE
+.PP
+The
+.B singine runtime exec\-external
+wrapper runs any external binary inside a structured JSON envelope that
+captures context, output, and exit status \(em useful when you want the
+invocation recorded in the singine runtime layer:
+.PP
+.RS 4
+.EX
+singine runtime exec\-external make \-C \[ti]/ws/git/local/arash/jvm\-grace\-site
+.EE
+.RE
+.
+.SH COMMANDS
+.
+.SS 1. Locate the project
+Use
+.B singine find filesAboutTopic
+to verify the project is where you expect it before running any build.
+This replaces a bare
+.BR find (1)
+or
+.BR ls (1)
+call with a governed, JSON-capable discovery command.
+.TP
+.B singine find filesAboutTopic jvm\-grace \-\-root\-dir ~/ws/git/local/arash \-\-json
+Find all files and directories related to
+.I jvm\-grace
+under the arash workspace.  Returns a JSON envelope with
+.IR count ,
+.IR matches ,
+and the resolved
+.IR root_dir .
+.TP
+.B singine find filesAboutTopic jvm\-grace \-\-root\-dir ~/ws/git/local/arash \-\-type dir
+Restrict results to directories only \(em useful to confirm
+.I jvm\-grace\-site/
+exists before running make.
+.TP
+.B singine find filesAboutTopic silkpage \-\-root\-dir ~/ws/git \-\-type dir \-\-max\-depth 4
+Locate the SilkPage toolchain directory that contains the Saxon jars,
+DocBook XSL snapshot, and XML catalog used by the Makefile.
+.
+.SS 2. Register the work
+Use
+.B singine decide
+to attach a governance record to the conversation or document before
+or after building.  The server is reached at
+.I http://localhost:8080
+by default; when the server is offline the command exits non-zero and
+the record should be written locally (see
+.BR OFFLINE " below).
+.TP
+.B singine decide jvm\-grace\-groovy\-demo \-\-decision approve \-\-reason "JVM Grace DocBook site built with Saxon 6.5.3 open\-source"
+Register an approval decision for the
+.I jvm\-grace\-groovy\-demo
+asset.  The server returns a URN of the form:
+.PP
+.RS 8
+.EX
+urn:singine:decision:jvm\-grace\-groovy\-demo:<ISO\-timestamp>
+.EE
+.RE
+.TP
+.B singine decide jvm\-grace\-groovy\-demo \-\-decision approve \-\-json
+Same as above but emit the full decision envelope as JSON so it can
+be piped or stored:
+.PP
+.RS 8
+.EX
+singine decide jvm\-grace\-groovy\-demo \-\-decision approve \-\-json \[rs]
+  > ~/.singine/decisions/jvm\-grace\-groovy\-demo.json
+.EE
+.RE
+.
+.SS 3. Build the chunked site (default \(em Saxon 6.5.3 open-source)
+The default
+.B make
+target runs Saxon 6.5.3 (MPL 1.0) with the Apache XML Commons Resolver
+for catalog-backed DocBook XSL chunking.  Saxon 6.5.3 is the XSLT 1.0
+processor that DocBook XSL was written for and is the only open-source
+Saxon that supports the
+.I http://icl.com/saxon
+extension elements required for chunked output.
+.TP
+.B make \-C ~/ws/git/local/arash/jvm\-grace\-site
+Produce 26 chunked HTML files under
+.I html/
+using Saxon 6.5.3.
+.TP
+.B singine runtime exec\-external make \-C ~/ws/git/local/arash/jvm\-grace\-site
+Same build wrapped in a singine runtime envelope: terminal context,
+sourced environment, and the make output are captured together.
+.
+.SS 4. Build the single-page site (Saxon\-HE 9.2.0.2J open-source)
+.B make single
+uses Saxon\-HE 9.2.0.2J (MPL 2.0) for single-page output.  Saxon 9 HE
+cannot drive the DocBook XSL 1.x chunker (XTDE1480 \(em
+.I xsl:result\-document
+inside a temporary tree), so it is used only for the non-chunked target.
+.TP
+.B make \-C ~/ws/git/local/arash/jvm\-grace\-site single
+Produce
+.I html/jvm\-grace\-single.html
+using Saxon\-HE 9.2.0.2J.
+.TP
+.B singine runtime exec\-external make \-C ~/ws/git/local/arash/jvm\-grace\-site single
+Wrapped version.
+.
+.SS 5. Validate the source
+.TP
+.B make \-C ~/ws/git/local/arash/jvm\-grace\-site validate
+Run
+.BR xmllint (1)
+well-formedness check on
+.IR jvm\-grace.xml .
+Equivalent to:
+.PP
+.RS 8
+.EX
+xmllint \-\-noout ~/ws/git/local/arash/jvm\-grace\-site/jvm\-grace.xml
+.EE
+.RE
+.
+.SS 6. Generate XML artifacts via singine
+.B singine xml matrix
+generates
+.IR request.xml ,
+.IR response.xml ,
+and
+.I heatmap.xml
+from the local bridge database.  These artifacts are the singine-native
+complement to the DocBook XML document.
+.TP
+.B singine xml matrix \-\-db /tmp/sqlite.db \-\-output\-dir ~/ws/git/local/arash/jvm\-grace\-site/singine\-xml
+Generate singine XML artifacts into the site directory alongside the
+DocBook source.
+.TP
+.B singine runtime exec bridge sources \-\-db /tmp/sqlite.db
+Inspect the current bridge sources before generating XML, to confirm
+the bridge is populated.
+.
+.SS 7. Open the result
+.TP
+.B make \-C ~/ws/git/local/arash/jvm\-grace\-site open
+Open
+.I html/index.html
+in the system default browser.
+.TP
+.B singine find filesAboutTopic jvm\-grace \-\-root\-dir ~/ws/git/local/arash \-\-type file \-\-json
+List every generated file to confirm the build output is complete.
+.
+.SH OFFLINE OPERATION
+When the singine server
+.RI ( http://localhost:8080 )
+is not running,
+.B singine decide
+exits with an error.  Save the decision manually:
+.PP
+.RS 4
+.EX
+python3 \-c "
+import json, datetime, os
+ts = datetime.datetime.now(datetime.timezone.utc).strftime('%Y\-%m\-%dT%H:%M:%SZ')
+uid = 'jvm\-grace\-groovy\-demo'
+rec = {
+  'ok': True,
+  'urn': f'urn:singine:decision:{uid}:{ts}',
+  'id': uid, 'decision': 'approve',
+  'ts': ts, 'source': 'local\-fallback'
+}
+os.makedirs(os.path.expanduser('~/.singine/decisions'), exist_ok=True)
+open(os.path.expanduser(f'~/.singine/decisions/{uid}.json'), 'w').write(
+  json.dumps(rec, indent=2))
+print(rec['urn'])
+"
+.EE
+.RE
+.PP
+The record is then stored at
+.IR ~/.singine/decisions/jvm\-grace\-groovy\-demo.json .
+Re-run
+.B singine decide
+once the server is back to obtain a server-issued URN.
+.
+.SH ENVIRONMENT
+.TP
+.B SINGINE_SESSION_TOKEN
+If set, included in
+.B runtime exec\-external
+payloads for audit tracing.
+.TP
+.B SINGINE_CORTEX_DB
+Override the default bridge database path
+.RI ( /tmp/sqlite.db ).
+.
+.SH FILES
+.TP
+.I ~/ws/git/local/arash/jvm\-grace\-site/
+Project root.  Run all
+.BR make (1)
+targets from here (or use
+.BR \-C ).
+.TP
+.I ~/ws/git/local/arash/jvm\-grace\-site/Makefile
+Defines the
+.BR transform ,
+.BR single ,
+.BR validate ,
+.BR clean ,
+and
+.B open
+targets.
+.TP
+.I ~/ws/git/local/arash/jvm\-grace\-site/jvm\-grace.xml
+DocBook 5.2 source document.
+.TP
+.I ~/ws/git/local/arash/jvm\-grace\-site/jvm\-grace\-custom.xsl
+SilkPage customization layer — imports DocBook XSL chunk.xsl via catalog.
+.TP
+.I ~/ws/git/local/arash/jvm\-grace\-site/html/
+Generated website (26 UTF-8 HTML files + CSS).
+.TP
+.I ~/ws/git/github/sindoc/silkpage/core/share/lib/java/saxon\-6_5_3.jar
+Saxon 6.5.3 open-source XSLT 1.0 processor (MPL 1.0).
+.TP
+.I ~/ws/git/github/sindoc/silkpage/core/share/lib/java/saxon9he.jar
+Saxon\-HE 9.2.0.2J open-source XSLT 2.0 processor (MPL 2.0).
+.TP
+.I ~/ws/git/github/sindoc/silkpage/core/share/lib/java/resolver\-1_0.jar
+Apache XML Commons Resolver \(em provides catalog-backed URI resolution
+for both Saxon processors.
+.TP
+.I ~/ws/git/github/sindoc/silkpage/core/cfg/catalog\-resolved.xml
+OASIS XML catalog that rewrites DocBook XSL public URIs to the local
+SilkPage toolchain paths.
+.TP
+.I ~/.singine/decisions/jvm\-grace\-groovy\-demo.json
+Local governance decision record (offline fallback).
+.
+.SH EXAMPLES
+.SS Full workflow from a clean state
+.PP
+.EX
+# 0. Confirm the project location
+singine find filesAboutTopic jvm\-grace \[rs]
+  \-\-root\-dir ~/ws/git/local/arash \-\-type dir
+
+# 1. Register the work (server must be running; see OFFLINE if not)
+singine decide jvm\-grace\-groovy\-demo \[rs]
+  \-\-decision approve \[rs]
+  \-\-reason "JVM Grace DocBook 5.2 site \(em Saxon 6.5.3 build" \[rs]
+  \-\-json > ~/.singine/decisions/jvm\-grace\-groovy\-demo.json
+
+# 2. Validate the DocBook source
+make \-C ~/ws/git/local/arash/jvm\-grace\-site validate
+
+# 3. Build chunked site (Saxon 6.5.3 \(em default, open\-source)
+make \-C ~/ws/git/local/arash/jvm\-grace\-site
+
+# 4. Build single\-page variant (Saxon\-HE 9 \(em open\-source)
+make \-C ~/ws/git/local/arash/jvm\-grace\-site single
+
+# 5. Open in browser
+make \-C ~/ws/git/local/arash/jvm\-grace\-site open
+
+# 6. Inspect output files via singine
+singine find filesAboutTopic jvm\-grace \[rs]
+  \-\-root\-dir ~/ws/git/local/arash \-\-json
+.EE
+.SS Wrapped in the singine runtime envelope
+.PP
+.EX
+singine runtime exec\-external \[rs]
+  make \-C ~/ws/git/local/arash/jvm\-grace\-site
+.EE
+.SS XML artifacts alongside the DocBook source
+.PP
+.EX
+singine bridge build \-\-db /tmp/sqlite.db
+singine bridge sources \-\-db /tmp/sqlite.db
+singine xml matrix \[rs]
+  \-\-db /tmp/sqlite.db \[rs]
+  \-\-output\-dir ~/ws/git/local/arash/jvm\-grace\-site/singine\-xml
+.EE
+.
+.SH SEE ALSO
+.BR singine (1),
+.BR singine\-find (1),
+.BR singine\-decide (1),
+.BR singine\-xml (1),
+.BR singine\-runtime (1),
+.BR singine\-install (1),
+.BR singine\-bridge (1),
+.BR make (1),
+.BR xmllint (1)
+.
+.SH SAXON EDITION NOTES
+.TP
+.B Saxon 6.5.3
+Open\-source, Mozilla Public Licence 1.0.  XSLT 1.0 processor.  Ships inside
+the SilkPage toolchain at
+.IR silkpage/core/share/lib/java/saxon\-6_5_3.jar .
+The DocBook XSL chunker detects it via
+.I element\-available('saxon:output')
+(namespace
+.IR http://icl.com/saxon )
+and uses it to write multiple output files.
+.TP
+.B Saxon\-HE 9.2.0.2J
+Open\-source, Mozilla Public Licence 2.0.  XSLT 2.0 / XPath 2.0 processor.
+Ships inside the SilkPage toolchain at
+.IR silkpage/core/share/lib/java/saxon9he.jar .
+Cannot drive the DocBook XSL 1.x chunker (XTDE1480 \(em
+.I xsl:result\-document
+is not permitted inside a temporary\-tree context).  Used only for
+the non\-chunked
+.B make single
+target.
+.
+.SH DOCBOOK TOOLCHAIN NOTES
+The XML catalog at
+.I silkpage/core/cfg/catalog\-resolved.xml
+rewrites two URI patterns:
+.TP
+.I http://docbook.sourceforge.net/release/xsl/current/
+Rewritten to the local DocBook XSL snapshot at
+.IR silkpage/tools/docbook\-xsl/ .
+.TP
+.I http://silkpage.markupware.com/release/core/current/src/xsl/
+Rewritten to the local SilkPage XSL directory at
+.IR silkpage/core/src/xsl/ .
+.PP
+Both Saxon processors load the catalog via the Apache XML Commons Resolver
+class
+.I org.apache.xml.resolver.tools.CatalogResolver
+configured with the system property
+.BR \-Dxml.catalog.files=<PATH> .
+.
+.SH AUTHOR
+skh <skh@sindoc.io>
+Human: skh
+singine 0.2.0                     2026-03-16              SINGINE-JVM-GRACE(1)

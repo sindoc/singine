@@ -1,0 +1,250 @@
+%% silkpage_coat_of_arms_04.tex — Lotus, Lambda, and Y
+%%
+%% Uses the provided lotus symbol as a heraldic charge.
+%% The Y combinator remains explicit.
+%% Lambda is treated as a generative stem that produces lotus charges.
+%% Boteh Jeghe replaces the prior x/y-style placeholder symbolism.
+%%
+%% compile: xelatex silkpage_coat_of_arms_04.tex
+
+\documentclass[border=24pt]{standalone}
+\usepackage{tikz}
+\usepackage{fontspec}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usetikzlibrary{calc}
+
+\newfontfamily\latinfont[
+  Path=/System/Library/Fonts/,
+  Ligatures=TeX, Kerning=On, Numbers=OldStyle
+]{SFNS.ttf}
+
+\definecolor{silkgreen}{HTML}{566E41}
+\definecolor{deepgreen}{HTML}{26630A}
+\definecolor{sage}{HTML}{DCE5D4}
+\definecolor{maroon}{HTML}{57160F}
+\definecolor{orange}{HTML}{E97E00}
+\definecolor{paper}{HTML}{FFFFFF}
+\definecolor{lightgray}{HTML}{DDDDDD}
+\definecolor{ink}{HTML}{333333}
+
+\pagecolor{paper}
+
+\newcommand{\lotusglyph}[3]{%
+  \node[inner sep=0pt] at (#1,#2) {\includegraphics[width=#3]{Lotus_10.svg.png}};
+}
+
+\newcommand{\boteh}[4]{%
+  \begin{scope}[shift={(#1,#2)}, scale=#3]
+    \path[fill=#4, draw=none]
+      (0,0)
+        .. controls (0.85,0.08) and (1.28,0.85) .. (1.2,1.82)
+        .. controls (1.08,3.18) and (0.38,4.36) .. (-0.26,5.06)
+        .. controls (-0.86,5.74) and (-1.42,5.68) .. (-1.76,5.1)
+        .. controls (-2.02,4.64) and (-1.94,4.1) .. (-1.56,3.74)
+        .. controls (-1.12,3.34) and (-0.68,3.3) .. (-0.12,3.66)
+        .. controls (0.12,2.86) and (0.12,2.06) .. (-0.04,1.18)
+        .. controls (-0.22,0.28) and (-0.54,-0.2) .. (-1.06,-0.86)
+        .. controls (-0.62,-0.34) and (-0.22,-0.02) .. (0,0)
+      -- cycle;
+    \path[fill=paper, draw=none, opacity=0.92]
+      (-0.18,0.48)
+        .. controls (0.4,0.9) and (0.62,1.62) .. (0.56,2.36)
+        .. controls (0.48,3.24) and (0.02,4.0) .. (-0.46,4.52)
+        .. controls (-0.78,4.86) and (-1.04,4.88) .. (-1.2,4.58)
+        .. controls (-1.34,4.3) and (-1.24,3.98) .. (-0.96,3.76)
+        .. controls (-0.68,3.54) and (-0.44,3.52) .. (-0.14,3.68)
+        .. controls (0.02,3.1) and (0.06,2.4) .. (-0.08,1.64)
+        .. controls (-0.16,1.2) and (-0.3,0.84) .. (-0.48,0.5)
+      -- cycle;
+  \end{scope}
+}
+
+\begin{document}
+\begin{tikzpicture}[x=1cm,y=1cm,line cap=round,line join=round]
+
+  %% title
+  \node[font=\latinfont\fontsize{38pt}{40pt}\selectfont, text=silkgreen] at (0,13.25) {SilkPage};
+  \node[font=\latinfont\fontsize{10pt}{12pt}\selectfont, text=ink] at (0,12.55)
+    {lotus, lambda, boteh, and recursive silk structure};
+
+  %% crest line with lotus charges
+  \draw[silkgreen, line width=0.95pt, samples=220, smooth, domain=-7.0:7.0]
+    plot(\x, {10.72 + 0.14*sin(56*\x)});
+  \draw[orange, line width=0.7pt, samples=220, smooth, domain=-7.0:7.0]
+    plot(\x, {10.52 + 0.12*sin(56*\x + 18)});
+  \foreach \x in {-5.8,-4.3,-2.9,-1.45,0,1.45,2.9,4.3,5.8} {
+    \fill[orange] (\x,{10.72 + 0.14*sin(56*\x)}) circle (0.045);
+  }
+
+  %% central lambda stem producing lotus
+  \draw[orange, line width=0.9pt] (0,11.98) -- (0,11.18);
+  \draw[silkgreen, line width=1.0pt] (0,11.18) -- (-0.36,10.66) -- (-0.08,10.66);
+  \draw[silkgreen, line width=1.0pt] (0,11.18) -- (0.36,10.66) -- (0.08,10.66);
+  \lotusglyph{0}{11.9}{0.62cm}
+
+  %% side standards using lotus instead of fleur-de-lis / monarchy charge
+  \draw[orange, line width=0.9pt] (-5.95,8.7) -- (-6.42,1.18);
+  \draw[orange, line width=0.9pt] (5.95,8.7) -- (6.42,1.18);
+  \fill[silkgreen] (-6.12,8.28) -- (-4.94,8.28) -- (-4.72,6.72) -- (-5.92,6.72) -- cycle;
+  \fill[maroon] (6.12,8.28) -- (4.94,8.28) -- (4.72,6.72) -- (5.92,6.72) -- cycle;
+  \draw[orange, line width=0.7pt] (-6.12,8.28) -- (-4.94,8.28) -- (-4.72,6.72) -- (-5.92,6.72) -- cycle;
+  \draw[orange, line width=0.7pt] (6.12,8.28) -- (4.94,8.28) -- (4.72,6.72) -- (5.92,6.72) -- cycle;
+  \lotusglyph{-5.42}{7.48}{0.56cm}
+  \lotusglyph{5.42}{7.48}{0.56cm}
+
+  %% textile-like outer vectors reused from royal inspiration
+  \draw[silkgreen, line width=1.05pt]
+    (-6.02,10.02) .. controls (-6.75,8.92) and (-6.82,7.46) .. (-6.3,6.12)
+                  .. controls (-5.92,5.08) and (-5.72,4.04) .. (-6.0,2.7)
+                  .. controls (-6.24,1.68) and (-6.12,0.78) .. (-5.56,-0.14);
+  \draw[silkgreen, line width=1.05pt]
+    (6.02,10.02) .. controls (6.75,8.92) and (6.82,7.46) .. (6.3,6.12)
+                 .. controls (5.92,5.08) and (5.72,4.04) .. (6.0,2.7)
+                 .. controls (6.24,1.68) and (6.12,0.78) .. (5.56,-0.14);
+  \draw[orange, line width=0.72pt, opacity=0.92]
+    (-5.64,9.18) .. controls (-6.08,8.22) and (-6.02,7.16) .. (-5.74,5.92)
+                 .. controls (-5.5,4.86) and (-5.42,3.78) .. (-5.62,2.26);
+  \draw[orange, line width=0.72pt, opacity=0.92]
+    (5.64,9.18) .. controls (6.08,8.22) and (6.02,7.16) .. (5.74,5.92)
+                .. controls (5.5,4.86) and (5.42,3.78) .. (5.62,2.26);
+
+  %% orbital dots and lotuses
+  \draw[orange!75!silkgreen, line width=0.8pt, opacity=0.68] (0,4.9) circle (3.48);
+  \foreach \a in {0,18,...,342} {
+    \fill[sage!75!silkgreen] (\a:3.48) circle (0.045);
+  }
+  \foreach \a in {90,210,330} {
+    \begin{scope}[shift={(\a:3.48)}]
+      \node[inner sep=0pt, opacity=0.95] {\includegraphics[width=0.42cm]{Lotus_10.svg.png}};
+    \end{scope}
+  }
+
+  %% main shield
+  \path[fill=paper, draw=silkgreen, line width=1.42pt]
+    (-4.18,7.44)
+      .. controls (-4.22,4.16) and (-3.72,1.72) ..
+    (-2.26,-0.56)
+      .. controls (-1.34,-1.76) and (-0.42,-2.66) ..
+    (0,-3.02)
+      .. controls (0.42,-2.66) and (1.34,-1.76) ..
+    (2.26,-0.56)
+      .. controls (3.72,1.72) and (4.22,4.16) ..
+    (4.18,7.44) -- cycle;
+
+  \begin{scope}
+  \clip
+    (-4.18,7.44)
+      .. controls (-4.22,4.16) and (-3.72,1.72) ..
+    (-2.26,-0.56)
+      .. controls (-1.34,-1.76) and (-0.42,-2.66) ..
+    (0,-3.02)
+      .. controls (0.42,-2.66) and (1.34,-1.76) ..
+    (2.26,-0.56)
+      .. controls (3.72,1.72) and (4.22,4.16) ..
+    (4.18,7.44) -- cycle;
+
+  \fill[sage!18] (-4.3,2.06) rectangle (0,7.56);
+  \fill[paper] (0,2.06) rectangle (4.3,7.56);
+  \fill[sage!35] (-4.3,-3.2) rectangle (0,2.06);
+  \fill[maroon!95] (0,-3.2) rectangle (4.3,2.06);
+
+  \draw[lightgray, line width=0.38pt, opacity=0.8] (-4.18,2.06) -- (4.18,2.06);
+  \draw[lightgray, line width=0.38pt, opacity=0.8] (0,7.44) -- (0,-3.02);
+
+  %% upper-left page and lambda birthing lotuses
+  \path[fill=paper, draw=silkgreen, line width=0.88pt]
+    (-3.32,6.28) -- (-1.12,6.28) -- (-0.54,5.7) -- (-0.54,3.1)
+    -- (-3.32,3.1) -- cycle;
+  \draw[silkgreen, line width=0.78pt] (-1.12,6.28) -- (-1.12,5.9)
+    .. controls (-1.12,5.5) and (-0.92,5.3) .. (-0.54,5.3);
+  \node[font=\latinfont\fontsize{22pt}{22pt}\selectfont, text=silkgreen] at (-2.1,4.74) {λ};
+  \draw[orange, line width=0.7pt]
+    (-2.1,4.25) -- (-2.62,3.78)
+    (-2.1,4.25) -- (-1.58,3.78);
+  \lotusglyph{-2.78}{3.64}{0.30cm}
+  \lotusglyph{-1.42}{3.64}{0.30cm}
+
+  %% upper-right boteh jeghe and lambda
+  \boteh{2.18}{3.56}{0.34}{orange}
+  \boteh{3.12}{4.1}{0.26}{maroon}
+  \node[font=\latinfont\fontsize{18pt}{18pt}\selectfont, text=silkgreen] at (1.34,4.88) {λ};
+  \draw[silkgreen, line width=0.8pt]
+    (1.04,4.08) -- (1.78,4.08)
+    (1.42,3.72) -- (1.42,4.44);
+
+  %% lower-left complex plane and spiral
+  \draw[silkgreen, line width=0.78pt] (-3.1,-1.6) -- (-0.82,-1.6);
+  \draw[silkgreen, line width=0.78pt] (-1.96,-2.56) -- (-1.96,1.04);
+  \node[font=\latinfont\fontsize{7pt}{8pt}\selectfont, text=ink, opacity=0.7] at (-0.98,-1.35) {Re};
+  \node[font=\latinfont\fontsize{7pt}{8pt}\selectfont, text=ink, opacity=0.7] at (-1.66,0.8) {Im};
+  \draw[orange, line width=0.95pt, samples=240, variable=\t, domain=0:560]
+    plot ({-1.96 + 0.085*exp(\t/255)*cos(\t)},
+          {-1.6 + 0.085*exp(\t/255)*sin(\t)});
+  \fill[maroon] (-1.96,-1.6) circle (0.05);
+
+  %% lower-right woven band and boteh
+  \draw[paper, line width=0.88pt, samples=140, smooth, domain=0.52:3.2]
+    plot(\x, {0.8 - 0.9*(\x-0.52)/(2.68) + 0.24*sin(170*\x)});
+  \draw[orange, line width=0.88pt, samples=140, smooth, domain=0.52:3.2]
+    plot(\x, {0.62 - 0.66*(\x-0.52)/(2.68) + 0.26*sin(170*\x + 120)});
+  \draw[sage, line width=0.88pt, samples=140, smooth, domain=0.52:3.2]
+    plot(\x, {0.42 - 0.82*(\x-0.52)/(2.68) + 0.22*sin(170*\x + 240)});
+  \boteh{2.65}{-0.18}{0.22}{sage}
+
+  %% central roundel with lotus and Y cartouche
+  \fill[paper] (0,2.0) circle (1.66);
+  \draw[silkgreen, line width=0.92pt] (0,2.0) circle (1.66);
+  \draw[orange, line width=0.7pt, opacity=0.84, dash pattern=on 2pt off 2pt] (0,2.0) circle (1.28);
+  \lotusglyph{0}{2.0}{0.82cm}
+
+  \path[fill=paper, draw=silkgreen, line width=0.7pt]
+    (-2.18,1.08) -- (2.18,1.08) -- (2.46,0.7) -- (2.18,0.32) -- (-2.18,0.32) -- (-2.46,0.7) -- cycle;
+  \node[font=\latinfont\fontsize{8.8pt}{9.8pt}\selectfont, text=deepgreen] at (0,0.69)
+    {Y = λf.(λx.f(xx))(λx.f(xx))};
+
+  \end{scope}
+
+  %% redraw shield
+  \path[fill=none, draw=silkgreen, line width=1.42pt]
+    (-4.18,7.44)
+      .. controls (-4.22,4.16) and (-3.72,1.72) ..
+    (-2.26,-0.56)
+      .. controls (-1.34,-1.76) and (-0.42,-2.66) ..
+    (0,-3.02)
+      .. controls (0.42,-2.66) and (1.34,-1.76) ..
+    (2.26,-0.56)
+      .. controls (3.72,1.72) and (4.22,4.16) ..
+    (4.18,7.44) -- cycle;
+
+  %% lower ceremonial border with textile wave
+  \draw[orange!70!silkgreen, line width=0.72pt, samples=150, smooth, domain=-4.6:-2.0]
+    plot(\x, {-4.1 + 0.10*sin(420*(\x+4.6)/2.6)});
+  \draw[orange!70!silkgreen, line width=0.72pt, samples=150, smooth, domain=2.0:4.6]
+    plot(\x, {-4.1 + 0.10*sin(420*(\x-2.0)/2.6)});
+  \foreach \t in {0,14,...,180} {
+    \pgfmathsetmacro{\rx}{3.2*cos(\t)}
+    \pgfmathsetmacro{\ry}{-3.92 + 0.42*sin(\t)}
+    \fill[orange!70!silkgreen] (\rx,\ry) circle (0.038);
+  }
+
+  %% motto
+  \path[fill=paper, draw=silkgreen, line width=0.82pt]
+    (-5.45,-4.8)
+      .. controls (-3.82,-5.14) and (-1.72,-5.24) ..
+    (0,-5.02)
+      .. controls (1.72,-5.24) and (3.82,-5.14) ..
+    (5.45,-4.8)
+      .. controls (3.92,-4.5) and (1.68,-4.42) ..
+    (0,-4.6)
+      .. controls (-1.68,-4.42) and (-3.92,-4.5) ..
+    (-5.45,-4.8) -- cycle;
+  \node[font=\latinfont\fontsize{11.2pt}{12.2pt}\selectfont, text=maroon] at (0,-4.74)
+    {Lotus \,•\, Recur \,•\, Weave \,•\, Return};
+  \node[font=\latinfont\fontsize{8pt}{9pt}\selectfont, text=silkgreen] at (0,-5.44)
+    {Y = λf.(λx.f(xx))(λx.f(xx))};
+  \node[font=\latinfont\fontsize{7.8pt}{9pt}\selectfont, text=ink, opacity=0.78] at (0,-6.0)
+    {lambda generating lotus under temporal recursion and silk structure};
+
+\end{tikzpicture}
+\end{document}

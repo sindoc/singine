@@ -1,0 +1,228 @@
+%% silkpage_coat_of_arms_03.tex — Recursive Mathematical Arms
+%%
+%% compile: xelatex silkpage_coat_of_arms_03.tex
+
+\documentclass[border=24pt]{standalone}
+\usepackage{tikz}
+\usepackage{fontspec}
+\usepackage{xcolor}
+\usetikzlibrary{calc}
+
+\newfontfamily\latinfont[
+  Path=/System/Library/Fonts/,
+  Ligatures=TeX, Kerning=On, Numbers=OldStyle
+]{SFNS.ttf}
+
+\definecolor{silkgreen}{HTML}{566E41}
+\definecolor{deepgreen}{HTML}{26630A}
+\definecolor{sage}{HTML}{DCE5D4}
+\definecolor{maroon}{HTML}{57160F}
+\definecolor{orange}{HTML}{E97E00}
+\definecolor{paper}{HTML}{FFFFFF}
+\definecolor{lightgray}{HTML}{DDDDDD}
+\definecolor{ink}{HTML}{333333}
+
+\pagecolor{paper}
+
+\newcommand{\silkbranch}[4]{%
+  \ifnum#4>0
+    \draw[#1, line width=#2] #3 -- ++(90:#2*16);
+    \begin{scope}[shift={#3}]
+      \path (90:#2*16) coordinate (tip);
+      \draw[#1, line width=#2] (0,0) -- (tip);
+      \silkbranch{#1}{#2*0.74}{($(tip)+(132:#2*8)$)}{\numexpr#4-1\relax}
+      \silkbranch{#1}{#2*0.74}{($(tip)+(48:#2*8)$)}{\numexpr#4-1\relax}
+    \end{scope}
+  \fi
+}
+
+\begin{document}
+\begin{tikzpicture}[x=1cm,y=1cm,line cap=round,line join=round]
+
+  %% title
+  \node[font=\latinfont\fontsize{38pt}{40pt}\selectfont, text=silkgreen] at (0,13.25) {SilkPage};
+  \node[font=\latinfont\fontsize{10pt}{12pt}\selectfont, text=ink] at (0,12.56)
+    {recursive markup, temporal algebra, and mathematically generated silk};
+
+  %% finial and wave canopy
+  \fill[silkgreen] (0,12.06) circle (0.11);
+  \draw[orange, line width=0.9pt] (0,11.82) -- (0,11.02);
+  \draw[silkgreen, line width=0.95pt, samples=220, smooth, domain=-7.1:7.1]
+    plot(\x, {10.72 + 0.16*sin(56*\x)});
+  \draw[orange, line width=0.72pt, samples=220, smooth, domain=-7.1:7.1]
+    plot(\x, {10.52 + 0.14*sin(56*\x + 18)});
+  \foreach \x in {-6.0,-4.8,-3.6,-2.4,-1.2,0,1.2,2.4,3.6,4.8,6.0} {
+    \fill[orange] (\x,{10.72 + 0.16*sin(56*\x)}) circle (0.05);
+  }
+
+  %% side standards
+  \draw[orange, line width=0.9pt] (-5.95,8.75) -- (-6.45,1.2);
+  \draw[orange, line width=0.9pt] (5.95,8.75) -- (6.45,1.2);
+  \fill[silkgreen] (-6.15,8.35) -- (-4.98,8.35) -- (-4.76,6.82) -- (-5.95,6.82) -- cycle;
+  \fill[maroon] (6.15,8.35) -- (4.98,8.35) -- (4.76,6.82) -- (5.95,6.82) -- cycle;
+  \draw[orange, line width=0.72pt] (-6.15,8.35) -- (-4.98,8.35) -- (-4.76,6.82) -- (-5.95,6.82) -- cycle;
+  \draw[orange, line width=0.72pt] (6.15,8.35) -- (4.98,8.35) -- (4.76,6.82) -- (5.95,6.82) -- cycle;
+  \node[font=\latinfont\fontsize{17pt}{18pt}\selectfont, text=paper] at (-5.45,7.53) {Y};
+  \node[font=\latinfont\fontsize{18pt}{18pt}\selectfont, text=paper] at (5.45,7.52) {λ};
+
+  %% recursive side ornament
+  \begin{scope}[shift={(-5.6,0.9)}]
+    \silkbranch{silkgreen}{0.09}{(0,0)}{4}
+  \end{scope}
+  \begin{scope}[shift={(5.6,0.9)}, xscale=-1]
+    \silkbranch{silkgreen}{0.09}{(0,0)}{4}
+  \end{scope}
+  \begin{scope}[shift={(-5.9,1.7)}]
+    \silkbranch{orange}{0.06}{(0,0)}{3}
+  \end{scope}
+  \begin{scope}[shift={(5.9,1.7)}, xscale=-1]
+    \silkbranch{orange}{0.06}{(0,0)}{3}
+  \end{scope}
+
+  %% central orbital frame
+  \draw[orange!75!silkgreen, line width=0.8pt, opacity=0.68] (0,4.88) circle (3.45);
+  \foreach \a in {0,15,...,345} {
+    \fill[sage!70!silkgreen] (\a:3.45) circle (0.045);
+  }
+
+  %% main shield
+  \path[fill=paper, draw=silkgreen, line width=1.42pt]
+    (-4.18,7.48)
+      .. controls (-4.22,4.18) and (-3.72,1.72) ..
+    (-2.26,-0.54)
+      .. controls (-1.34,-1.76) and (-0.42,-2.66) ..
+    (0,-3.02)
+      .. controls (0.42,-2.66) and (1.34,-1.76) ..
+    (2.26,-0.54)
+      .. controls (3.72,1.72) and (4.22,4.18) ..
+    (4.18,7.48) -- cycle;
+
+  \begin{scope}
+  \clip
+    (-4.18,7.48)
+      .. controls (-4.22,4.18) and (-3.72,1.72) ..
+    (-2.26,-0.54)
+      .. controls (-1.34,-1.76) and (-0.42,-2.66) ..
+    (0,-3.02)
+      .. controls (0.42,-2.66) and (1.34,-1.76) ..
+    (2.26,-0.54)
+      .. controls (3.72,1.72) and (4.22,4.18) ..
+    (4.18,7.48) -- cycle;
+
+  \fill[sage!18] (-4.3,2.08) rectangle (0,7.62);
+  \fill[paper] (0,2.08) rectangle (4.3,7.62);
+  \fill[sage!35] (-4.3,-3.2) rectangle (0,2.08);
+  \fill[maroon!95] (0,-3.2) rectangle (4.3,2.08);
+
+  \draw[lightgray, line width=0.38pt, opacity=0.8] (-4.18,2.08) -- (4.18,2.08);
+  \draw[lightgray, line width=0.38pt, opacity=0.8] (0,7.48) -- (0,-3.02);
+
+  %% upper-left: page with silk traces
+  \path[fill=paper, draw=silkgreen, line width=0.88pt]
+    (-3.34,6.34) -- (-1.14,6.34) -- (-0.54,5.72) -- (-0.54,3.12)
+    -- (-3.34,3.12) -- cycle;
+  \draw[silkgreen, line width=0.78pt] (-1.14,6.34) -- (-1.14,5.92)
+    .. controls (-1.14,5.5) and (-0.94,5.3) .. (-0.54,5.3);
+  \draw[orange, line width=0.6pt, samples=70, smooth, domain=-2.92:-1.0]
+    plot(\x, {5.04 + 0.18*sin(190*(\x+2.92)/1.92)});
+  \draw[maroon, line width=0.56pt, samples=70, smooth, domain=-2.92:-1.0]
+    plot(\x, {4.5 + 0.14*sin(190*(\x+2.92)/1.92 + 35)});
+  \draw[silkgreen, line width=0.56pt] (-2.96,3.94) -- (-1.22,3.94);
+
+  %% upper-right: derivation chamber
+  \draw[silkgreen, line width=0.95pt]
+    (0.95,5.86) -- (1.7,5.12) -- (0.95,4.4)
+    (2.06,4.4) -- (2.82,4.4);
+  \draw[lightgray, line width=0.38pt] (2.28,6.0) -- (3.22,4.86);
+  \draw[lightgray, line width=0.38pt] (2.1,4.9) -- (3.18,4.9);
+  \node[font=\latinfont\fontsize{15pt}{15pt}\selectfont, text=orange] at (2.82,5.83) {+};
+  \node[font=\latinfont\fontsize{15pt}{15pt}\selectfont, text=maroon] at (3.16,5.35) {×};
+  \node[font=\latinfont\fontsize{15pt}{15pt}\selectfont, text=silkgreen] at (2.48,3.76) {Y};
+
+  %% lower-left: explicit complex plane and spiral
+  \draw[silkgreen, line width=0.78pt] (-3.08,-1.6) -- (-0.82,-1.6);
+  \draw[silkgreen, line width=0.78pt] (-1.95,-2.58) -- (-1.95,1.08);
+  \node[font=\latinfont\fontsize{7pt}{8pt}\selectfont, text=ink, opacity=0.7] at (-0.98,-1.34) {Re};
+  \node[font=\latinfont\fontsize{7pt}{8pt}\selectfont, text=ink, opacity=0.7] at (-1.64,0.84) {Im};
+  \foreach \x in {-2.74,-2.36,-1.52,-1.14} {
+    \draw[lightgray, line width=0.32pt] (\x,-1.76) -- (\x,-1.44);
+  }
+  \foreach \y in {-2.16,-0.88,0.38} {
+    \draw[lightgray, line width=0.32pt] (-2.12,\y) -- (-1.82,\y);
+  }
+  \draw[orange, line width=0.95pt, samples=240, variable=\t, domain=0:560]
+    plot ({-1.95 + 0.085*exp(\t/255)*cos(\t)},
+          {-1.6 + 0.085*exp(\t/255)*sin(\t)});
+  \fill[maroon] (-1.95,-1.6) circle (0.05);
+
+  %% lower-right: recursive weave / time braid
+  \draw[paper, line width=0.88pt, samples=140, smooth, domain=0.52:3.24]
+    plot(\x, {0.84 - 0.92*(\x-0.52)/(2.72) + 0.26*sin(170*\x)});
+  \draw[orange, line width=0.88pt, samples=140, smooth, domain=0.52:3.24]
+    plot(\x, {0.64 - 0.65*(\x-0.52)/(2.72) + 0.28*sin(170*\x + 120)});
+  \draw[sage, line width=0.88pt, samples=140, smooth, domain=0.52:3.24]
+    plot(\x, {0.46 - 0.82*(\x-0.52)/(2.72) + 0.24*sin(170*\x + 240)});
+  \foreach \x/\y in {0.98/0.78,1.62/0.42,2.23/-0.24,2.8/-0.98} {
+    \fill[sage] (\x,\y) circle (0.11);
+  }
+
+  %% central cartouche and combinator eye
+  \fill[paper] (0,2.04) circle (1.66);
+  \draw[silkgreen, line width=0.92pt] (0,2.04) circle (1.66);
+  \draw[orange, line width=0.7pt, opacity=0.84, dash pattern=on 2pt off 2pt] (0,2.04) circle (1.28);
+  \draw[maroon, line width=0.82pt]
+    (-0.74,2.04) .. controls (-0.2,2.38) and (0.2,2.38) .. (0.74,2.04)
+    (-0.74,2.04) .. controls (-0.2,1.7) and (0.2,1.7) .. (0.74,2.04);
+  \draw[orange, line width=0.78pt] (-0.56,2.04) -- (0.56,2.04) (0,1.46) -- (0,2.62);
+  \fill[silkgreen] (0,2.04) circle (0.09);
+
+  \path[fill=paper, draw=silkgreen, line width=0.7pt]
+    (-2.12,1.12) -- (2.12,1.12) -- (2.4,0.74) -- (2.12,0.36) -- (-2.12,0.36) -- (-2.4,0.74) -- cycle;
+  \node[font=\latinfont\fontsize{8.6pt}{9.6pt}\selectfont, text=deepgreen] at (0,0.72)
+    {Y = λf.(λx.f(xx))(λx.f(xx))};
+
+  \end{scope}
+
+  %% redraw shield
+  \path[fill=none, draw=silkgreen, line width=1.42pt]
+    (-4.18,7.48)
+      .. controls (-4.22,4.18) and (-3.72,1.72) ..
+    (-2.26,-0.54)
+      .. controls (-1.34,-1.76) and (-0.42,-2.66) ..
+    (0,-3.02)
+      .. controls (0.42,-2.66) and (1.34,-1.76) ..
+    (2.26,-0.54)
+      .. controls (3.72,1.72) and (4.22,4.18) ..
+    (4.18,7.48) -- cycle;
+
+  %% generated lower border points
+  \foreach \t in {0,12,...,180} {
+    \pgfmathsetmacro{\rx}{3.25*cos(\t)}
+    \pgfmathsetmacro{\ry}{-3.95 + 0.45*sin(\t)}
+    \fill[orange!70!silkgreen] (\rx,\ry) circle (0.04);
+  }
+  \draw[orange!70!silkgreen, line width=0.72pt, samples=150, smooth, domain=-4.6:-2.1]
+    plot(\x, {-4.12 + 0.10*sin(420*(\x+4.6)/2.5)});
+  \draw[orange!70!silkgreen, line width=0.72pt, samples=150, smooth, domain=2.1:4.6]
+    plot(\x, {-4.12 + 0.10*sin(420*(\x-2.1)/2.5)});
+
+  %% motto
+  \path[fill=paper, draw=silkgreen, line width=0.82pt]
+    (-5.45,-4.82)
+      .. controls (-3.8,-5.18) and (-1.72,-5.28) ..
+    (0,-5.05)
+      .. controls (1.72,-5.28) and (3.8,-5.18) ..
+    (5.45,-4.82)
+      .. controls (3.9,-4.54) and (1.68,-4.44) ..
+    (0,-4.62)
+      .. controls (-1.68,-4.44) and (-3.9,-4.54) ..
+    (-5.45,-4.82) -- cycle;
+  \node[font=\latinfont\fontsize{11.2pt}{12.2pt}\selectfont, text=maroon] at (0,-4.76)
+    {Recur \,•\, Weave \,•\, Spiral \,•\, Return};
+  \node[font=\latinfont\fontsize{8pt}{9pt}\selectfont, text=silkgreen] at (0,-5.48)
+    {Y = λf.(λx.f(xx))(λx.f(xx))};
+  \node[font=\latinfont\fontsize{7.8pt}{9pt}\selectfont, text=ink, opacity=0.78] at (0,-6.04)
+    {temporal recursion, page structure, and mathematically generated silk};
+
+\end{tikzpicture}
+\end{document}

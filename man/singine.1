@@ -1,0 +1,306 @@
+.TH SINGINE 1 "2026-03-16" "singine 0.2.0" "User Commands"
+.SH NAME
+singine \- top-level command index for the Singine platform
+.SH SYNOPSIS
+.B singine
+[\fICOMMAND\fR] [\fIOPTIONS\fR]
+.SH DESCRIPTION
+.B singine
+is the top-level entry point for the Singine platform. This page is an index of
+top-level commands only. Each command has its own dedicated manpage for details,
+subcommands, options, and examples.
+.SH COMMANDS
+.TP
+.B context
+Inspect terminal context and sourced environment.
+.TP
+.B bridge
+SQLite and JDBC bridge operations.
+Merges local Singine, AI session, Silkpage, and Collibra data into a single
+queryable store.
+See
+.BR singine-bridge (1).
+.TP
+.B jdbc-url
+Print the JDBC URL for the bridge database.
+.TP
+.B xml
+Generate XML request, response, and heatmap artifacts.
+.TP
+.B man
+Open a Singine manpage by topic.
+See
+.BR singine-man (1).
+.TP
+.B install
+Install the launcher and bundled manpages.
+.TP
+.B template
+Generate Singine-aware project templates for Maven and npm workflows.
+See
+.BR singine-template (1).
+.TP
+.B runtime
+Inspect runtime capabilities and execute wrapped commands.
+See
+.BR singine-runtime (1).
+.TP
+.B server
+Inspect or query the local Singine HTTP edge/server surface.
+See
+.BR singine-server (1).
+.TP
+.B logseq
+Inspect or query the Logseq HTTP API surface used by Singine, discover local
+Logseq graphs, and export them to Org mode and XML for Emacs-based processing.
+See
+.BR singine-logseq (1).
+.TP
+.B snapshot
+Save the full Singine runtime, server, git, docker, Java, taxonomy, and Logseq context to JSON.
+See
+.BR singine-snapshot (1).
+.TP
+.B auth
+Authentication bootstrap and TOTP login commands.
+.TP
+.B idp
+Identity provider operations.
+.TP
+.B decide
+Send a governance decision request.
+Falls back to a local JSON record when the Singine server is not running.
+See
+.BR singine-decide (1).
+.TP
+.B model
+Inspect Singine model objects and bridge surfaces.
+.TP
+.B policy
+Manage governed policy packs and policy-backed execution workflows.
+Covers Claude, Codex, and OpenAI-API systems.
+See
+.BR singine-policy (1).
+.TP
+.B ai
+Governed AI session recording, permission tracking, and session-data
+centralisation for Claude, Codex, and OpenAI.
+Every conversation is stored as a named session with a manifest, ordered
+interactions, and mandates granted during the session.
+Sessions can be listed, inspected, and synced into a local SQLite
+bridge for JDBC and downstream Singine access.
+See
+.BR singine-ai (1).
+.TP
+.B activity
+Inspect, instantiate, and evaluate activity taxonomy entries.
+.TP
+.B photo
+Apple Photos queries, review exports, and deterministic test cases.
+See
+.BR singine-photo (1).
+.TP
+.B singe
+Render governed identities from @mentions.
+.TP
+.B find
+Find filesystem paths related to a topic via the
+.I filesAboutTopic
+activity.
+.TP
+.B mv
+Move filesystem paths from stdin into a destination directory via the
+.I fileListTo
+activity.
+.TP
+.B transfer
+File transfer and queue/stack helpers.
+.TP
+.B smtp
+SMTP test and send helpers.
+.SH AI CONVERSATION DATA
+Singine records every AI conversation — regardless of provider — as a governed
+session. The following command sequence covers the full journey from listing
+sessions to centralising the data behind each conversation.
+.SS 1. Start a governed provider session
+.nf
+singine ai claude --model claude-sonnet-4-6
+singine ai codex --model gpt-5-codex
+singine ai openai --model gpt-4o
+.fi
+.PP
+Each session records a session id, provider, model, timestamps, a session URN,
+a provider object reference for later API mapping, ordered interactions, and
+mandates granted during the session.
+.SS 2. List all recorded sessions
+.nf
+singine ai session list
+.fi
+.PP
+Shows all recorded runtime sessions under
+.IR ~/.singine/ai/sessions/ .
+.SS 3. Inspect one session
+.nf
+singine ai session show SESSION-ID
+.fi
+.PP
+Prints the full session bundle:
+.IP \(bu 2
+manifest
+.IP \(bu 2
+interactions
+.IP \(bu 2
+mandates
+.SS 4. Check provider configuration
+.nf
+singine ai status
+singine ai status --json
+.fi
+.PP
+Reports configured AI providers.
+.SS 5. Centralise sessions into SQLite
+.nf
+# Sync the most recent session into a named bridge database
+singine ai last session data --db /tmp/singine-ai.db
+
+# Or open an interactive session that auto-syncs on close
+singine ai claude --model claude-sonnet-4-6 --db /tmp/singine-ai.db
+.fi
+.SS 6. Query centralised data via the bridge
+.nf
+singine bridge sources --db /tmp/singine-ai.db
+singine bridge search --db /tmp/singine-ai.db "SESSION-TOPIC"
+singine jdbc-url --db /tmp/singine-ai.db
+.fi
+.SS 7. Review governance decisions for a session
+.nf
+singine policy ai report --ai-system claude
+singine policy ai report --ai-system codex
+.fi
+.SH POLICY SYNC
+Singine's AI policy workflow is available through the top-level
+.B singine policy ai
+command family.
+The canonical flow is:
+.IP "1."
+sync a canonical policy pack from LDAP or LDIF sources into a dedicated policy
+repository with
+.BR "singine policy ai sync" ;
+.IP "2."
+evaluate Claude or OpenAI/Codex requests against that synced pack with
+.BR "singine policy ai evaluate" ;
+.IP "3."
+persist approvals for governed Collibra paths, repos, or lambda names when a
+change is sanctioned with
+.BR "singine policy ai approve" .
+.SH TOPIC PAGES
+Use
+.B singine man
+with one of these topics:
+.IR singine-context ,
+.IR singine-bridge ,
+.IR singine-jdbc-url ,
+.IR singine-xml ,
+.IR singine-man ,
+.IR singine-install ,
+.IR singine-template ,
+.IR singine-runtime ,
+.IR singine-server ,
+.IR singine-logseq ,
+.IR singine-snapshot ,
+.IR singine-auth ,
+.IR singine-idp ,
+.IR singine-decide ,
+.IR singine-model ,
+.IR singine-policy ,
+.IR singine-ai ,
+.IR singine-activity ,
+.IR singine-photo ,
+.IR singine-singe ,
+.IR singine-find ,
+.IR singine-mv ,
+.IR singine-transfer ,
+or
+.IR singine-smtp .
+.SH EXAMPLES
+.nf
+# Quick-start: start a governed Claude conversation.
+singine ai claude --model claude-sonnet-4-6
+
+# See all recorded AI sessions.
+singine ai session list
+
+# Inspect one recorded conversation.
+singine ai session show SESSION-ID
+
+# Centralise the latest session into a bridge database.
+singine ai last session data --db /tmp/singine-ai.db
+singine jdbc-url --db /tmp/singine-ai.db
+
+# Create and run the deterministic photo review test case.
+singine photo test-case /tmp/singine-photo-case
+singine photo export-review /tmp/singine-photo-case/review-output \\
+  --library-root /tmp/singine-photo-case/fixture-library.photoslibrary \\
+  --db /tmp/singine-photo-case/fixture-library.photoslibrary/database/Photos.sqlite \\
+  --max-kb 500 --max-dim 2560 --json
+
+# Inspect centralised sources.
+singine bridge sources --db /tmp/singine-ai.db
+singine bridge search --db /tmp/singine-ai.db "claude"
+
+# Scaffold a Maven or npm project with Singine-friendly defaults.
+singine template create maven singine-spec-demo --dir ~/ws/git/local/singine-spec-demo
+singine template create npm silkpage-spec-ui --dir ~/ws/git/local/silkpage-spec-ui --scope sindoc
+
+# Evaluate a Claude request against the synced policy pack.
+singine policy ai evaluate \\
+  --policy-repo /Users/skh/ws/git/github/sindoc/singine-policy \\
+  --ai-system claude \\
+  --environment dev \\
+  --network-mode offline \\
+  --execution-env local \\
+  --operation read \\
+  --path /Users/skh/ws/git/github/sindoc/singine/man/singine.1
+
+# Inspect the local edge/server surface and save a full context snapshot.
+singine server inspect --json
+singine server health --json
+singine server test-case /tmp/singine-server-case
+singine snapshot save --json
+
+# Query the Logseq API surface directly.
+singine logseq inspect --json
+singine logseq ping --token "$LOGSEQ_API_TOKEN" --json
+singine logseq graphs --json
+singine logseq export-org --graph kernel --output /tmp/kernel.org
+singine logseq export-xml \\
+  --graph kernel \\
+  --org-output /tmp/kernel.org \\
+  --xml-output /tmp/kernel.xml \\
+  --om-to-xml-repo /Users/skh/ws/git/codeberg/ndw/org-to-xml \\
+  --elisp-load-path /Users/skh/ws/git/github/ndwarshuis/org-ml \\
+  --json
+.fi
+.SH SEE ALSO
+.BR singine-ai (1),
+.BR singine-bridge (1),
+.BR singine-policy (1),
+.BR singine-decide (1),
+.BR singine-context (1),
+.BR singine-jdbc-url (1),
+.BR singine-xml (1),
+.BR singine-man (1),
+.BR singine-install (1),
+.BR singine-runtime (1),
+.BR singine-server (1),
+.BR singine-logseq (1),
+.BR singine-snapshot (1),
+.BR singine-auth (1),
+.BR singine-idp (1),
+.BR singine-model (1),
+.BR singine-activity (1),
+.BR singine-singe (1),
+.BR singine-find (1),
+.BR singine-mv (1),
+.BR singine-transfer (1),
+.BR singine-smtp (1)

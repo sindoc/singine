@@ -1,0 +1,28 @@
+.TH SINGINE-SMTP 1 "2026-03-13" "singine 0.2.0" "User Commands"
+.SH NAME
+singine-smtp \- test SMTP connectivity and send mail
+.SH SYNOPSIS
+.B singine smtp
+\fISUBCOMMAND\fR [\fIOPTIONS\fR]
+.SH DESCRIPTION
+The
+.B smtp
+command tests SMTP connectivity or sends a test message using explicit CLI
+flags, environment variables, or IdP-derived configuration.
+.SH SUBCOMMANDS
+.TP
+.B test
+Connect, issue EHLO, negotiate TLS when available, and optionally authenticate.
+.TP
+.B send
+Send a test message, defaulting to self when sender information is available.
+.SH CONFIGURATION
+Resolution order is: CLI flags, environment variables, IdP properties, then
+1Password references when configured.
+.SH EXAMPLES
+.nf
+singine smtp test --host smtp.example.org --port 587 --user you@example.org
+singine smtp send --to you@example.org --subject "singine test" --body "hello"
+.fi
+.SH SEE ALSO
+.BR singine (1)

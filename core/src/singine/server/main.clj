@@ -7,6 +7,7 @@
 
    Routes exposed:
      GET /health       — ping (always available)
+     GET /bridge       — SQLite bridge (sources/search/entity/sparql)
      GET /messages     — mail search/list
      GET /cap          — machine capability profile
      GET /loc/:iata    — resolve IATA → URN + timezone
@@ -88,6 +89,7 @@
     (println)
     (println "  Routes:")
     (println (str "    GET  http://0.0.0.0:" port "/health"))
+    (println (str "    GET  http://0.0.0.0:" port "/bridge?action=sources"))
     (println (str "    GET  http://0.0.0.0:" port "/cap"))
     (println (str "    GET  http://0.0.0.0:" port "/messages?search=<term>"))
     (println (str "    GET  http://0.0.0.0:" port "/loc/<iata>"))

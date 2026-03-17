@@ -1,0 +1,111 @@
+# docker/Dockerfile.centos — CentOS LTS test image for singine
+#
+# Base: Rocky Linux 9 (binary-compatible RHEL 9 clone; CentOS LTS replacement).
+# Installs: OpenJDK 21, Ant, Maven, Gradle, Python 3, SQLite, DNS tools.
+#
+# Build:
+#   docker build -t singine-centos-test:latest -f docker/Dockerfile.centos .
+#
+# Run integration tests (singine.local port 2000):
+#   docker run --rm singine-centos-test:latest ant -f /singine/core/build.xml test-local
+#
+# Run xmldoclet (Norman Walsh):
+#   docker run --rm singine-centos-test:latest ant -f /singine/core/build.xml javadoc-xml
+#
+# Run Maven xmldoclet profile:
+#   docker run --rm singine-centos-test:latest mvn -f /singine/core/pom.xml verify -P xmldoclet
+#
+# Run Gradle:
+#   docker run --rm singine-centos-test:latest gradle -p /singine/core javadocXml
+#
+# Environment variables:
+#   JAVA_HOME         — set to /usr/lib/jvm/java-21-openjdk inside container
+#   SINGINE_CACERTS   — /etc/pki/ca-trust/extracted/java/cacerts (Rocky 9 default)
+#   SINGINE_LOCAL_PORT — 2000 (canonical singine local-network port)
+#
+# DNS:
+#   singine.local → 127.0.0.1 added to /etc/hosts at build time.
+#   Docker --add-host also works: --add-host=singine.local:127.0.0.1
+
+FROM rockylinux:9
+
+LABEL maintainer="sina.khakbaz.com"
+LABEL description="singine CentOS LTS (Rocky Linux 9) build and test environment"
+LABEL singine.version="0.2.0"
+LABEL singine.local.port="2000"
+
+# ── System packages ────────────────────────────────────────────────────────
+
+RUN dnf update -y --quiet && \
+    dnf install -y --quiet \
+        java-21-openjdk-devel \
+        ant \
+        maven \
+        python3 \
+        python3-pip \
+        sqlite \
+        sqlite-devel \
+        bind-utils \
+        hostname \
+        curl \
+        wget \
+        git \
+        unzip \
+        which \
+        findutils \
+        procps-ng \
+    && dnf clean all
+
+# ── Gradle (not in default Rocky repos) ───────────────────────────────────
+
+ARG GRADLE_VERSION=8.7
+RUN wget -q "https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip" \
+        -O /tmp/gradle.zip && \
+    unzip -q /tmp/gradle.zip -d /opt && \
+    ln -s "/opt/gradle-${GRADLE_VERSION}/bin/gradle" /usr/local/bin/gradle && \
+    rm /tmp/gradle.zip
+
+# ── JVM environment ────────────────────────────────────────────────────────
+
+ENV JAVA_HOME=/usr/lib/jvm/java-21-openjdk
+ENV PATH="${JAVA_HOME}/bin:/usr/local/bin:${PATH}"
+
+# CentOS / Rocky Linux 9 system cacerts (managed by update-ca-trust)
+ENV SINGINE_CACERTS=/etc/pki/ca-trust/extracted/java/cacerts
+ENV JAVA_TOOL_OPTIONS="-Djavax.net.ssl.trustStore=${SINGINE_CACERTS} -Dfile.encoding=UTF-8"
+
+# singine.local network defaults
+ENV SINGINE_LOCAL_HOST=singine.local
+ENV SINGINE_LOCAL_PORT=2000
+ENV SINGINE_CORTEX_DB=/tmp/sqlite.db
+
+# ── DNS: singine.local → 127.0.0.1 ───────────────────────────────────────
+
+RUN echo "127.0.0.1  singine.local  # singine local network (port 2000)" >> /etc/hosts
+
+# ── Maven settings (cache ~/.m2 in a volume for speed) ────────────────────
+
+RUN mkdir -p /root/.m2/repository
+VOLUME ["/root/.m2/repository"]
+
+# ── Copy singine source ────────────────────────────────────────────────────
+
+WORKDIR /singine
+COPY . .
+
+# ── Pre-fetch Maven dependencies (bake into image layer) ──────────────────
+
+RUN cd /singine/core && \
+    mvn -f pom.xml dependency:resolve --quiet 2>/dev/null || true && \
+    # Fetch xmldoclet for ant javadoc-xml
+    mvn -f pom.xml dependency:get \
+        -Dartifact=com.saxonica:xmldoclet:0.17.0 --quiet 2>/dev/null || true
+
+# ── Compile Java sources ───────────────────────────────────────────────────
+
+RUN cd /singine/core && ant -f build.xml compile
+
+# ── Default command ────────────────────────────────────────────────────────
+# Override with: docker run --rm singine-centos-test:latest ant test-local
+
+CMD ["ant", "-f", "/singine/core/build.xml", "test-local"]

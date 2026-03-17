@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1200" viewBox="0 0 1200 1200" role="img" aria-labelledby="title desc">
+  <title id="title">Silkpage symbol concept two</title>
+  <desc id="desc">A compact Silkpage mark that combines a folded page, woven threads, and markup chevrons.</desc>
+
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f7faf4"/>
+      <stop offset="100%" stop-color="#dce5d4"/>
+    </linearGradient>
+    <linearGradient id="shield" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#566e41"/>
+      <stop offset="100%" stop-color="#26630A"/>
+    </linearGradient>
+    <linearGradient id="silk" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#eef4e9"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#c63a22"/>
+      <stop offset="100%" stop-color="#E97E00"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="24" stdDeviation="28" flood-color="#566e41" flood-opacity="0.18"/>
+    </filter>
+  </defs>
+
+  <rect width="1200" height="1200" fill="url(#bg)"/>
+
+  <g opacity="0.16" stroke="#857968" stroke-width="2" fill="none">
+    <path d="M 160 220 H 1040"/>
+    <path d="M 160 600 H 1040"/>
+    <path d="M 160 980 H 1040"/>
+    <path d="M 220 160 V 1040"/>
+    <path d="M 600 160 V 1040"/>
+    <path d="M 980 160 V 1040"/>
+  </g>
+
+  <g filter="url(#shadow)">
+    <path d="M 600 145 L 900 300 L 900 730 L 600 1045 L 300 730 L 300 300 Z" fill="url(#shield)"/>
+    <path d="M 600 210 L 830 330 L 830 700 L 600 940 L 370 700 L 370 330 Z" fill="none" stroke="#dce5d4" stroke-width="8" opacity="0.85"/>
+  </g>
+
+  <g>
+    <path d="M 470 300 H 690 L 760 370 V 770 C 760 815 724 852 678 852 H 470 C 425 852 388 815 388 770 V 382 C 388 336 425 300 470 300 Z" fill="url(#silk)"/>
+    <path d="M 690 300 V 355 C 690 385 715 410 745 410 H 760" fill="none" stroke="#566e41" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M 470 300 H 690 L 760 370 V 770 C 760 815 724 852 678 852 H 470 C 425 852 388 815 388 770 V 382 C 388 336 425 300 470 300 Z" fill="none" stroke="#566e41" stroke-width="14" stroke-linejoin="round"/>
+  </g>
+
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M 446 456 C 492 418 528 406 574 406 C 624 406 662 424 704 456" stroke="url(#accent)" stroke-width="22"/>
+    <path d="M 446 532 C 492 570 528 582 574 582 C 624 582 662 564 704 532" stroke="#dce5d4" stroke-width="22"/>
+    <path d="M 446 608 C 492 570 528 558 574 558 C 624 558 662 576 704 608" stroke="url(#accent)" stroke-width="22"/>
+    <path d="M 446 684 C 492 722 528 734 574 734 C 624 734 662 716 704 684" stroke="#dce5d4" stroke-width="22"/>
+  </g>
+
+  <g fill="none" stroke="#566e41" stroke-width="20" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M 482 486 L 418 558 L 482 630"/>
+    <path d="M 666 486 L 730 558 L 666 630"/>
+  </g>
+
+  <g>
+    <path d="M 318 874 C 438 790 506 764 600 764 C 694 764 762 790 882 874" fill="none" stroke="#c63a22" stroke-width="10" stroke-linecap="round"/>
+    <path d="M 352 914 C 458 844 515 822 600 822 C 685 822 742 844 848 914" fill="none" stroke="#E97E00" stroke-width="8" stroke-linecap="round"/>
+    <circle cx="600" cy="764" r="18" fill="#ffffff" stroke="#566e41" stroke-width="10"/>
+  </g>
+
+  <text x="600" y="1000" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="38" font-weight="700" fill="#57160F">Silkpage</text>
+</svg>

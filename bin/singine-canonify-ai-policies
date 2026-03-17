@@ -1,0 +1,908 @@
+#!/usr/bin/env python3
+"""
+Canonify AI-system permissions from LDAP groups into a Collibra-shaped policy pack.
+
+The script uses Singine's sanctioned runtime execution gate to call external
+LDAP tooling when requested:
+
+    python3 -m singine.command runtime exec-external ldapsearch ...
+
+It then emits a portable policy pack that can be loaded into SQLite, Logseq,
+Org-mode, or later published through Silkpage and other Singine surfaces.
+
+Outputs:
+- policy-pack.json
+- policy-pack.edn
+- policy-pack.sql
+- logseq-policy-pack.md
+- policy-pack.org
+- communities.csv
+- domains.csv
+- assets.csv
+- relations.csv
+- grants.csv
+
+The source LDAP grants remain visible in the pack so canonification does not
+erase the upstream group semantics.
+"""
+
+from __future__ import annotations
+
+import argparse
+import csv
+import json
+import os
+import re
+import subprocess
+import sys
+import tempfile
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+try:
+    from singine.model_catalog import (  # type: ignore
+        COLLIBRA_ASSET_TYPES,
+        COLLIBRA_DOMAIN_TYPES,
+        COLLIBRA_RELATION_TYPES,
+    )
+except Exception:
+    COLLIBRA_ASSET_TYPES = ["Business Term", "Data Category", "Policy", "Technology Asset"]
+    COLLIBRA_DOMAIN_TYPES = ["Glossary", "Hierarchies", "Policies", "Reference Data"]
+    COLLIBRA_RELATION_TYPES = ["groups", "related to", "governs", "governed by"]
+
+
+DEFAULT_SYSTEMS = ["claude", "codex", "chatgpt", "openai-api"]
+DEFAULT_GROUP_FILTER = "(|(objectClass=groupOfNames)(objectClass=groupOfUniqueNames)(objectClass=group))"
+
+DEFAULT_RULES = [
+    {
+        "match": r"claude|anthropic",
+        "systems": ["claude"],
+        "community": "Anthropic AI",
+    },
+    {
+        "match": r"chatgpt|openai|gpt",
+        "systems": ["chatgpt", "openai-api"],
+        "community": "OpenAI",
+    },
+    {
+        "match": r"admin|owner",
+        "role": "AI Platform Owner",
+        "responsibilities": ["policy-administration", "runtime-governance"],
+        "privileges": ["policy.manage", "runtime.exec_external", "idp.manage"],
+        "permissions": ["approve", "manage", "write", "read", "execute"],
+    },
+    {
+        "match": r"steward|governance|review",
+        "role": "AI Governance Steward",
+        "responsibilities": ["grant-review", "policy-curation", "compliance-tracking"],
+        "privileges": ["policy.review", "policy.propagate", "metadata.curate"],
+        "permissions": ["approve", "review", "read", "write"],
+    },
+    {
+        "match": r"developer|engineer|builder",
+        "role": "AI Builder",
+        "responsibilities": ["prompt-engineering", "workflow-implementation"],
+        "privileges": ["runtime.exec", "bridge.query", "artifact.generate"],
+        "permissions": ["read", "write", "execute"],
+    },
+    {
+        "match": r"read|viewer|consumer|user",
+        "role": "AI Consumer",
+        "responsibilities": ["knowledge-consumption"],
+        "privileges": ["bridge.query", "artifact.read"],
+        "permissions": ["read"],
+    },
+]
+
+
+@dataclass
+class GroupGrant:
+    cn: str
+    dn: str
+    description: str
+    members: List[str]
+    object_classes: List[str]
+    ou: str
+
+
+def slugify(value: str) -> str:
+    lowered = value.strip().lower()
+    slug = re.sub(r"[^a-z0-9]+", "-", lowered).strip("-")
+    return slug or "item"
+
+
+def stable_id(prefix: str, value: str) -> str:
+    return f"{prefix}:{slugify(value)}"
+
+
+def json_dump(path: Path, payload: Any) -> None:
+    path.write_text(json.dumps(payload, indent=2, ensure_ascii=True) + "\n")
+
+
+def csv_dump(path: Path, rows: List[Dict[str, Any]], fieldnames: Sequence[str]) -> None:
+    with path.open("w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({name: row.get(name, "") for name in fieldnames})
+
+
+def sql_quote(value: Any) -> str:
+    if value is None:
+        return "NULL"
+    if isinstance(value, bool):
+        return "1" if value else "0"
+    if isinstance(value, (int, float)):
+        return str(value)
+    return "'" + str(value).replace("'", "''") + "'"
+
+
+def edn_quote(value: str) -> str:
+    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def to_edn(value: Any) -> str:
+    if value is None:
+        return "nil"
+    if value is True:
+        return "true"
+    if value is False:
+        return "false"
+    if isinstance(value, (int, float)):
+        return str(value)
+    if isinstance(value, str):
+        return edn_quote(value)
+    if isinstance(value, list):
+        return "[" + " ".join(to_edn(item) for item in value) + "]"
+    if isinstance(value, dict):
+        parts = []
+        for key, item in value.items():
+            key_text = str(key)
+            if re.fullmatch(r"[A-Za-z0-9_.:/-]+", key_text):
+                parts.append(f":{key_text} {to_edn(item)}")
+            else:
+                parts.append(f"{edn_quote(key_text)} {to_edn(item)}")
+        return "{" + " ".join(parts) + "}"
+    return edn_quote(str(value))
+
+
+def write_sql_pack(path: Path, tables: Dict[str, List[Dict[str, Any]]]) -> None:
+    lines = [
+        "-- Canonical AI policy pack for SQLite",
+        "BEGIN TRANSACTION;",
+        "CREATE TABLE IF NOT EXISTS communities (id TEXT PRIMARY KEY, name TEXT, parent_id TEXT, community_type TEXT, description TEXT);",
+        "CREATE TABLE IF NOT EXISTS domains (id TEXT PRIMARY KEY, community_id TEXT, name TEXT, domain_type TEXT, description TEXT);",
+        "CREATE TABLE IF NOT EXISTS assets (id TEXT PRIMARY KEY, domain_id TEXT, asset_type TEXT, name TEXT, external_ref TEXT, status TEXT, definition TEXT);",
+        "CREATE TABLE IF NOT EXISTS relations (id TEXT PRIMARY KEY, relation_type TEXT, source_id TEXT, target_id TEXT, description TEXT);",
+        "CREATE TABLE IF NOT EXISTS grants (id TEXT PRIMARY KEY, ldap_group_dn TEXT, system_id TEXT, role_id TEXT, responsibility_id TEXT, privilege_id TEXT, permission_id TEXT, policy_id TEXT);",
+    ]
+    for table_name, rows in tables.items():
+        if not rows:
+            continue
+        columns = list(rows[0].keys())
+        for row in rows:
+            values = ", ".join(sql_quote(row.get(column)) for column in columns)
+            lines.append(
+                f"INSERT INTO {table_name} ({', '.join(columns)}) VALUES ({values});"
+            )
+    lines.append("COMMIT;")
+    path.write_text("\n".join(lines) + "\n")
+
+
+def write_logseq_markdown(path: Path, pack: Dict[str, Any]) -> None:
+    lines = [
+        "- canonical-ai-policy-pack",
+        f"  - pack-id:: {pack['metadata']['pack_id']}",
+        f"  - generated-at:: {pack['metadata']['generated_at']}",
+        "  - source:: ldap-groups",
+        "  - communities",
+    ]
+    for community in pack["communities"]:
+        lines.append(f"    - {community['name']}")
+        lines.append(f"      - community-id:: {community['id']}")
+        lines.append(f"      - type:: {community['community_type']}")
+    lines.append("  - policies")
+    for policy in pack["policy_assets"]:
+        lines.append(f"    - {policy['name']}")
+        lines.append(f"      - policy-id:: {policy['id']}")
+        lines.append(f"      - governed-system:: {policy['external_ref']}")
+        lines.append(f"      - status:: {policy['status']}")
+    lines.append("  - grants")
+    for grant in pack["grants"]:
+        lines.append(f"    - {grant['id']}")
+        lines.append(f"      - ldap-group-dn:: {grant['ldap_group_dn']}")
+        lines.append(f"      - system-id:: {grant['system_id']}")
+        lines.append(f"      - policy-id:: {grant['policy_id']}")
+    path.write_text("\n".join(lines) + "\n")
+
+
+def write_org(path: Path, pack: Dict[str, Any]) -> None:
+    lines = [
+        f"* Canonical AI Policy Pack: {pack['metadata']['pack_id']}",
+        f":PROPERTIES:",
+        f":GENERATED_AT: {pack['metadata']['generated_at']}",
+        f":END:",
+        "",
+        "* Communities",
+    ]
+    for community in pack["communities"]:
+        lines.append(f"** {community['name']}")
+        lines.append(f":PROPERTIES:")
+        lines.append(f":ID: {community['id']}")
+        lines.append(f":TYPE: {community['community_type']}")
+        lines.append(f":END:")
+        lines.append("")
+    lines.append("* Policies")
+    for policy in pack["policy_assets"]:
+        lines.append(f"** {policy['name']}")
+        lines.append(f":PROPERTIES:")
+        lines.append(f":ID: {policy['id']}")
+        lines.append(f":SYSTEM: {policy['external_ref']}")
+        lines.append(f":STATUS: {policy['status']}")
+        lines.append(f":END:")
+        lines.append("")
+    path.write_text("\n".join(lines) + "\n")
+
+
+def load_json(path: Optional[str]) -> Dict[str, Any]:
+    if not path:
+        return {}
+    return json.loads(Path(path).read_text())
+
+
+def repo_python_command() -> List[str]:
+    env_python = os.environ.get("PYTHON", "")
+    if env_python:
+        return [env_python]
+    return [sys.executable]
+
+
+def run_singine_command(args: List[str]) -> Dict[str, Any]:
+    env = os.environ.copy()
+    env["PYTHONPATH"] = (
+        str(REPO_ROOT)
+        if not env.get("PYTHONPATH")
+        else str(REPO_ROOT) + os.pathsep + env["PYTHONPATH"]
+    )
+    cmd = repo_python_command() + ["-m", "singine.command"] + args
+    proc = subprocess.run(cmd, capture_output=True, text=True, env=env, check=False)
+    if proc.returncode not in (0, 1, 2, 127):
+        raise RuntimeError(proc.stderr.strip() or proc.stdout.strip() or "singine command failed")
+    try:
+        return json.loads(proc.stdout)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"Failed to decode singine output as JSON: {exc}") from exc
+
+
+def runtime_inspect() -> Dict[str, Any]:
+    return run_singine_command(["runtime", "inspect"])
+
+
+def fetch_ldap_ldif(args: argparse.Namespace) -> str:
+    ldap_cmd = [
+        "ldapsearch",
+        "-LLL",
+        "-x",
+        "-H",
+        args.ldap_uri,
+        "-b",
+        args.base_dn,
+    ]
+    temp_password_file: Optional[str] = None
+    if args.bind_dn:
+        ldap_cmd.extend(["-D", args.bind_dn])
+    if args.bind_password_env:
+        password = os.environ.get(args.bind_password_env)
+        if not password:
+            raise RuntimeError(f"Environment variable {args.bind_password_env} is not set")
+        handle = tempfile.NamedTemporaryFile("w", delete=False)
+        handle.write(password)
+        handle.flush()
+        handle.close()
+        temp_password_file = handle.name
+        ldap_cmd.extend(["-y", temp_password_file])
+    ldap_cmd.extend(
+        [
+            args.group_filter,
+            "dn",
+            "cn",
+            "displayName",
+            "description",
+            "member",
+            "uniqueMember",
+            "memberUid",
+            "ou",
+            "objectClass",
+        ]
+    )
+    try:
+        payload = run_singine_command(["runtime", "exec-external"] + ldap_cmd)
+    finally:
+        if temp_password_file:
+            Path(temp_password_file).unlink(missing_ok=True)
+    if not payload.get("ok"):
+        raise RuntimeError(payload.get("stderr") or payload.get("exception", {}).get("message", "ldapsearch failed"))
+    return payload.get("stdout", "")
+
+
+def normalize_ldif_lines(text: str) -> List[str]:
+    result: List[str] = []
+    for raw_line in text.splitlines():
+        if raw_line.startswith(" "):
+            if result:
+                result[-1] += raw_line[1:]
+            continue
+        result.append(raw_line.rstrip("\n"))
+    return result
+
+
+def parse_ldif(text: str) -> List[GroupGrant]:
+    entries: List[GroupGrant] = []
+    current: Dict[str, List[str]] = {}
+    for line in normalize_ldif_lines(text):
+        if not line.strip():
+            if current:
+                group = ldif_entry_to_group(current)
+                if group:
+                    entries.append(group)
+                current = {}
+            continue
+        if line.startswith("#") or ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        current.setdefault(key.strip(), []).append(value.strip())
+    if current:
+        group = ldif_entry_to_group(current)
+        if group:
+            entries.append(group)
+    return entries
+
+
+def ldif_entry_to_group(entry: Dict[str, List[str]]) -> Optional[GroupGrant]:
+    object_classes = [value.lower() for value in entry.get("objectClass", [])]
+    has_group_shape = any(cls in {"group", "groupofnames", "groupofuniquenames"} for cls in object_classes)
+    has_members = bool(entry.get("member") or entry.get("uniqueMember") or entry.get("memberUid"))
+    if not has_group_shape and not has_members:
+        return None
+    members = entry.get("member", []) + entry.get("uniqueMember", []) + entry.get("memberUid", [])
+    return GroupGrant(
+        cn=(entry.get("cn") or entry.get("displayName") or ["unnamed-group"])[0],
+        dn=(entry.get("dn") or [""])[0],
+        description=(entry.get("description") or [""])[0],
+        members=members,
+        object_classes=object_classes,
+        ou=(entry.get("ou") or [""])[0],
+    )
+
+
+def infer_systems(name: str, description: str, configured_systems: Sequence[str]) -> List[str]:
+    text = f"{name} {description}".lower()
+    matched = []
+    if "claude" in text or "anthropic" in text:
+        matched.append("claude")
+    if "chatgpt" in text or re.search(r"\bgpt\b", text):
+        matched.append("chatgpt")
+    if "openai" in text or "api" in text or "codex" in text:
+        matched.append("openai-api")
+        matched.append("codex")
+    if "openai" in text:
+        matched.append("chatgpt")
+    if not matched:
+        matched.extend(configured_systems)
+    return sorted(set(matched))
+
+
+def infer_role(name: str, description: str) -> str:
+    text = f"{name} {description}".lower()
+    if any(token in text for token in ["admin", "owner"]):
+        return "AI Platform Owner"
+    if any(token in text for token in ["steward", "governance", "review"]):
+        return "AI Governance Steward"
+    if any(token in text for token in ["developer", "engineer", "builder"]):
+        return "AI Builder"
+    return "AI Consumer"
+
+
+def infer_permissions(name: str, description: str) -> List[str]:
+    text = f"{name} {description}".lower()
+    permissions = set()
+    keyword_map = {
+        "read": ["read", "view", "viewer", "query", "inspect"],
+        "write": ["write", "edit", "update", "author"],
+        "execute": ["execute", "run", "invoke", "exec"],
+        "approve": ["approve", "review", "governance", "steward"],
+        "manage": ["manage", "admin", "owner"],
+        "network": ["network", "internet", "http", "web"],
+        "filesystem": ["file", "filesystem", "workspace", "disk"],
+        "git": ["git", "repo", "repository"],
+        "identity": ["idp", "saml", "oauth", "oidc", "ldap"],
+    }
+    for permission, keywords in keyword_map.items():
+        if any(keyword in text for keyword in keywords):
+            permissions.add(permission)
+    if not permissions:
+        permissions.add("read")
+    return sorted(permissions)
+
+
+def infer_responsibilities(role: str) -> List[str]:
+    defaults = {
+        "AI Platform Owner": ["policy-administration", "runtime-governance"],
+        "AI Governance Steward": ["grant-review", "compliance-tracking"],
+        "AI Builder": ["workflow-implementation", "prompt-engineering"],
+        "AI Consumer": ["knowledge-consumption"],
+    }
+    return defaults.get(role, ["knowledge-consumption"])
+
+
+def infer_privileges(role: str, permissions: Sequence[str]) -> List[str]:
+    privilege_map = {
+        "AI Platform Owner": ["policy.manage", "runtime.exec_external", "idp.manage"],
+        "AI Governance Steward": ["policy.review", "policy.propagate", "metadata.curate"],
+        "AI Builder": ["runtime.exec", "bridge.query", "artifact.generate"],
+        "AI Consumer": ["artifact.read", "bridge.query"],
+    }
+    privileges = set(privilege_map.get(role, []))
+    if "identity" in permissions:
+        privileges.add("idp.access")
+    if "git" in permissions:
+        privileges.add("repository.access")
+    if "filesystem" in permissions:
+        privileges.add("workspace.access")
+    return sorted(privileges)
+
+
+def provider_for_system(system: str) -> str:
+    if system == "claude":
+        return "Anthropic AI"
+    if system in {"chatgpt", "openai-api", "codex"}:
+        return "OpenAI"
+    return "Shared AI Systems"
+
+
+def apply_rules(group: GroupGrant, mapping: Dict[str, Any], configured_systems: Sequence[str]) -> Dict[str, Any]:
+    text = f"{group.cn} {group.description}".lower()
+    resolved = {
+        "systems": infer_systems(group.cn, group.description, configured_systems),
+        "community": None,
+        "role": infer_role(group.cn, group.description),
+        "responsibilities": [],
+        "privileges": [],
+        "permissions": infer_permissions(group.cn, group.description),
+    }
+    rules = mapping.get("group_rules", [])
+    for rule in rules:
+        pattern = rule.get("match")
+        if pattern and not re.search(pattern, text, flags=re.IGNORECASE):
+            continue
+        if rule.get("systems"):
+            resolved["systems"] = list(rule["systems"])
+        if rule.get("community"):
+            resolved["community"] = rule["community"]
+        if rule.get("role"):
+            resolved["role"] = rule["role"]
+        for key in ["responsibilities", "privileges", "permissions"]:
+            if rule.get(key):
+                resolved[key] = sorted(set(resolved[key]) | set(rule[key]))
+    if not resolved["responsibilities"]:
+        resolved["responsibilities"] = infer_responsibilities(resolved["role"])
+    if not resolved["privileges"]:
+        resolved["privileges"] = infer_privileges(resolved["role"], resolved["permissions"])
+    return resolved
+
+
+def ensure_community(communities: Dict[str, Dict[str, Any]], name: str, parent_id: Optional[str], community_type: str, description: str) -> Dict[str, Any]:
+    identifier = stable_id("community", name)
+    if identifier not in communities:
+        communities[identifier] = {
+            "id": identifier,
+            "name": name,
+            "parent_id": parent_id or "",
+            "community_type": community_type,
+            "description": description,
+        }
+    return communities[identifier]
+
+
+def ensure_domain(domains: Dict[str, Dict[str, Any]], community_id: str, name: str, domain_type: str, description: str) -> Dict[str, Any]:
+    identifier = stable_id("domain", f"{community_id}-{name}")
+    if identifier not in domains:
+        domains[identifier] = {
+            "id": identifier,
+            "community_id": community_id,
+            "name": name,
+            "domain_type": domain_type,
+            "description": description,
+        }
+    return domains[identifier]
+
+
+def ensure_asset(assets: Dict[str, Dict[str, Any]], domain_id: str, asset_type: str, name: str, external_ref: str, status: str, definition: str) -> Dict[str, Any]:
+    identifier = stable_id("asset", f"{domain_id}-{asset_type}-{name}")
+    if identifier not in assets:
+        assets[identifier] = {
+            "id": identifier,
+            "domain_id": domain_id,
+            "asset_type": asset_type,
+            "name": name,
+            "external_ref": external_ref,
+            "status": status,
+            "definition": definition,
+        }
+    return assets[identifier]
+
+
+def ensure_relation(relations: Dict[str, Dict[str, Any]], relation_type: str, source_id: str, target_id: str, description: str) -> None:
+    identifier = stable_id("rel", f"{relation_type}-{source_id}-{target_id}")
+    if identifier not in relations:
+        relations[identifier] = {
+            "id": identifier,
+            "relation_type": relation_type,
+            "source_id": source_id,
+            "target_id": target_id,
+            "description": description,
+        }
+
+
+def build_pack(groups: List[GroupGrant], mapping: Dict[str, Any], configured_systems: Sequence[str], runtime_payload: Dict[str, Any], pack_id: str) -> Dict[str, Any]:
+    communities: Dict[str, Dict[str, Any]] = {}
+    domains: Dict[str, Dict[str, Any]] = {}
+    assets: Dict[str, Dict[str, Any]] = {}
+    relations: Dict[str, Dict[str, Any]] = {}
+    grants: List[Dict[str, Any]] = []
+
+    root = ensure_community(
+        communities,
+        "AI Governance",
+        None,
+        "Community",
+        "Root governance community for AI systems and canonified grants.",
+    )
+    glossary = ensure_domain(domains, root["id"], "AI Glossary", "Glossary", "Canonical roles, responsibilities, privileges, and permissions.")
+    hierarchy = ensure_domain(domains, root["id"], "AI Hierarchies", "Hierarchies", "LDAP groups and community hierarchy.")
+    reference = ensure_domain(domains, root["id"], "AI Reference Data", "Reference Data", "Agent and provider reference data.")
+
+    system_assets: Dict[str, Dict[str, Any]] = {}
+    role_assets: Dict[str, Dict[str, Any]] = {}
+    responsibility_assets: Dict[str, Dict[str, Any]] = {}
+    privilege_assets: Dict[str, Dict[str, Any]] = {}
+    permission_assets: Dict[str, Dict[str, Any]] = {}
+    group_assets: Dict[str, Dict[str, Any]] = {}
+    policy_assets: Dict[str, Dict[str, Any]] = {}
+
+    for system in configured_systems:
+        provider_name = provider_for_system(system)
+        provider = ensure_community(
+            communities,
+            provider_name,
+            root["id"],
+            "Community",
+            f"Provider community for {provider_name}.",
+        )
+        provider_policy_domain = ensure_domain(
+            domains,
+            provider["id"],
+            f"{provider_name} Policies",
+            "Policies",
+            f"Canonified policy assets for {provider_name}.",
+        )
+        system_assets[system] = ensure_asset(
+            assets,
+            reference["id"],
+            "Technology Asset",
+            system,
+            system,
+            "Approved",
+            f"AI system under governance: {system}.",
+        )
+        ensure_relation(
+            relations,
+            "groups",
+            provider["id"],
+            provider_policy_domain["id"],
+            "Community contains provider policy domain.",
+        )
+
+    for group in groups:
+        resolved = apply_rules(group, mapping, configured_systems)
+        group_assets[group.cn] = ensure_asset(
+            assets,
+            hierarchy["id"],
+            "Data Category",
+            group.cn,
+            group.dn,
+            "Approved",
+            group.description or f"LDAP group sourced from {group.dn}.",
+        )
+        role_asset = ensure_asset(
+            assets,
+            glossary["id"],
+            "Business Term",
+            resolved["role"],
+            resolved["role"],
+            "Approved",
+            f"Canonical role inferred from LDAP group {group.cn}.",
+        )
+        role_assets[resolved["role"]] = role_asset
+
+        for responsibility in resolved["responsibilities"]:
+            responsibility_assets[responsibility] = ensure_asset(
+                assets,
+                glossary["id"],
+                "Business Term",
+                responsibility,
+                responsibility,
+                "Approved",
+                f"Responsibility canonified from LDAP grants for group {group.cn}.",
+            )
+            ensure_relation(
+                relations,
+                "related to",
+                role_asset["id"],
+                responsibility_assets[responsibility]["id"],
+                "Role is associated with responsibility.",
+            )
+
+        for privilege in resolved["privileges"]:
+            privilege_assets[privilege] = ensure_asset(
+                assets,
+                glossary["id"],
+                "Business Term",
+                privilege,
+                privilege,
+                "Approved",
+                f"Privilege canonified from LDAP grants for group {group.cn}.",
+            )
+            ensure_relation(
+                relations,
+                "related to",
+                role_asset["id"],
+                privilege_assets[privilege]["id"],
+                "Role is associated with privilege.",
+            )
+
+        for permission in resolved["permissions"]:
+            permission_assets[permission] = ensure_asset(
+                assets,
+                glossary["id"],
+                "Business Term",
+                permission,
+                permission,
+                "Approved",
+                f"Permission canonified from LDAP grants for group {group.cn}.",
+            )
+
+        for system in resolved["systems"]:
+            provider_name = resolved["community"] or provider_for_system(system)
+            provider = ensure_community(
+                communities,
+                provider_name,
+                root["id"],
+                "Community",
+                f"Provider community for {provider_name}.",
+            )
+            provider_policy_domain = ensure_domain(
+                domains,
+                provider["id"],
+                f"{provider_name} Policies",
+                "Policies",
+                f"Canonified policy assets for {provider_name}.",
+            )
+            policy_name = f"{group.cn} -> {system}"
+            policy_asset = ensure_asset(
+                assets,
+                provider_policy_domain["id"],
+                "Policy",
+                policy_name,
+                system,
+                "Approved",
+                f"Canonical policy derived from LDAP group {group.cn} for system {system}.",
+            )
+            policy_assets[policy_name] = policy_asset
+            ensure_relation(
+                relations,
+                "governs",
+                policy_asset["id"],
+                system_assets[system]["id"],
+                "Policy governs AI system access.",
+            )
+            ensure_relation(
+                relations,
+                "related to",
+                group_assets[group.cn]["id"],
+                policy_asset["id"],
+                "LDAP group is source for canonical policy.",
+            )
+            ensure_relation(
+                relations,
+                "related to",
+                policy_asset["id"],
+                role_asset["id"],
+                "Policy assigns canonical role.",
+            )
+            for responsibility in resolved["responsibilities"]:
+                ensure_relation(
+                    relations,
+                    "related to",
+                    policy_asset["id"],
+                    responsibility_assets[responsibility]["id"],
+                    "Policy implies responsibility.",
+                )
+            for privilege in resolved["privileges"]:
+                ensure_relation(
+                    relations,
+                    "related to",
+                    policy_asset["id"],
+                    privilege_assets[privilege]["id"],
+                    "Policy implies privilege.",
+                )
+            for permission in resolved["permissions"]:
+                ensure_relation(
+                    relations,
+                    "related to",
+                    policy_asset["id"],
+                    permission_assets[permission]["id"],
+                    "Policy implies permission.",
+                )
+            for responsibility in resolved["responsibilities"]:
+                for privilege in resolved["privileges"]:
+                    for permission in resolved["permissions"]:
+                        grants.append(
+                            {
+                                "id": stable_id(
+                                    "grant",
+                                    f"{group.dn}-{system}-{resolved['role']}-{responsibility}-{privilege}-{permission}",
+                                ),
+                                "ldap_group_dn": group.dn,
+                                "system_id": system_assets[system]["id"],
+                                "role_id": role_asset["id"],
+                                "responsibility_id": responsibility_assets[responsibility]["id"],
+                                "privilege_id": privilege_assets[privilege]["id"],
+                                "permission_id": permission_assets[permission]["id"],
+                                "policy_id": policy_asset["id"],
+                            }
+                        )
+
+    metadata = {
+        "pack_id": pack_id,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "source_kind": "ldap-groups",
+        "configured_systems": list(configured_systems),
+        "collibra_asset_types": [name for name in COLLIBRA_ASSET_TYPES if name in COLLIBRA_ASSET_TYPES],
+        "collibra_domain_types": [name for name in COLLIBRA_DOMAIN_TYPES if name in COLLIBRA_DOMAIN_TYPES],
+        "collibra_relation_types": [name for name in COLLIBRA_RELATION_TYPES if name in COLLIBRA_RELATION_TYPES],
+        "runtime": runtime_payload,
+        "group_count": len(groups),
+        "grant_count": len(grants),
+    }
+
+    return {
+        "metadata": metadata,
+        "communities": list(communities.values()),
+        "domains": list(domains.values()),
+        "assets": list(assets.values()),
+        "relations": list(relations.values()),
+        "grants": grants,
+        "policy_assets": list(policy_assets.values()),
+        "ldap_groups": [
+            {
+                "cn": group.cn,
+                "dn": group.dn,
+                "description": group.description,
+                "members": group.members,
+                "object_classes": group.object_classes,
+                "ou": group.ou,
+            }
+            for group in groups
+        ],
+    }
+
+
+def write_pack(output_dir: Path, pack: Dict[str, Any]) -> None:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    json_dump(output_dir / "policy-pack.json", pack)
+    (output_dir / "policy-pack.edn").write_text(to_edn(pack) + "\n")
+    write_logseq_markdown(output_dir / "logseq-policy-pack.md", pack)
+    write_org(output_dir / "policy-pack.org", pack)
+
+    tables = {
+        "communities": pack["communities"],
+        "domains": pack["domains"],
+        "assets": pack["assets"],
+        "relations": pack["relations"],
+        "grants": pack["grants"],
+    }
+    write_sql_pack(output_dir / "policy-pack.sql", tables)
+    csv_dump(
+        output_dir / "communities.csv",
+        pack["communities"],
+        ["id", "name", "parent_id", "community_type", "description"],
+    )
+    csv_dump(
+        output_dir / "domains.csv",
+        pack["domains"],
+        ["id", "community_id", "name", "domain_type", "description"],
+    )
+    csv_dump(
+        output_dir / "assets.csv",
+        pack["assets"],
+        ["id", "domain_id", "asset_type", "name", "external_ref", "status", "definition"],
+    )
+    csv_dump(
+        output_dir / "relations.csv",
+        pack["relations"],
+        ["id", "relation_type", "source_id", "target_id", "description"],
+    )
+    csv_dump(
+        output_dir / "grants.csv",
+        pack["grants"],
+        ["id", "ldap_group_dn", "system_id", "role_id", "responsibility_id", "privilege_id", "permission_id", "policy_id"],
+    )
+
+
+def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Canonify LDAP-backed AI permissions into a Singine/Collibra policy pack."
+    )
+    parser.add_argument("--output-dir", default=str(REPO_ROOT / "raw" / "ai-policy-pack"), help="Directory for generated files.")
+    parser.add_argument("--pack-id", default="ai-agent-permissions", help="Stable identifier for the emitted policy pack.")
+    parser.add_argument("--mapping-json", help="Optional JSON file with group_rules overrides.")
+    parser.add_argument("--systems", nargs="+", default=DEFAULT_SYSTEMS, help="AI systems covered by the policy hierarchy.")
+    parser.add_argument("--ldap-ldif", help="Read LDAP group export from an LDIF file.")
+    parser.add_argument("--ldap-uri", help="LDAP URI for secure runtime-backed ldapsearch, e.g. ldap://127.0.0.1:389.")
+    parser.add_argument("--base-dn", help="LDAP base DN for group discovery.")
+    parser.add_argument("--bind-dn", help="Optional bind DN for ldapsearch.")
+    parser.add_argument("--bind-password-env", help="Environment variable containing the bind password.")
+    parser.add_argument("--group-filter", default=DEFAULT_GROUP_FILTER, help="LDAP filter used when calling ldapsearch.")
+    return parser.parse_args(argv)
+
+
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    args = parse_args(argv)
+    mapping = {"group_rules": list(DEFAULT_RULES)}
+    mapping_override = load_json(args.mapping_json)
+    if mapping_override.get("group_rules"):
+        mapping["group_rules"].extend(mapping_override["group_rules"])
+
+    if args.ldap_ldif:
+        ldif_text = Path(args.ldap_ldif).read_text()
+    elif args.ldap_uri and args.base_dn:
+        ldif_text = fetch_ldap_ldif(args)
+    else:
+        raise SystemExit("Provide either --ldap-ldif or both --ldap-uri and --base-dn.")
+
+    groups = parse_ldif(ldif_text)
+    if not groups:
+        raise SystemExit("No LDAP groups were parsed from the supplied input.")
+
+    pack = build_pack(
+        groups=groups,
+        mapping=mapping,
+        configured_systems=args.systems,
+        runtime_payload=runtime_inspect(),
+        pack_id=args.pack_id,
+    )
+    write_pack(Path(args.output_dir), pack)
+
+    summary = {
+        "ok": True,
+        "output_dir": str(Path(args.output_dir).resolve()),
+        "group_count": pack["metadata"]["group_count"],
+        "grant_count": pack["metadata"]["grant_count"],
+        "systems": args.systems,
+        "files": sorted(path.name for path in Path(args.output_dir).iterdir()),
+    }
+    print(json.dumps(summary, indent=2))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

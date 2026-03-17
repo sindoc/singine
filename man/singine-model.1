@@ -1,0 +1,27 @@
+.TH SINGINE-MODEL 1 "2026-03-13" "singine 0.2.0" "User Commands"
+.SH NAME
+singine-model \- inspect Singine model objects and bridge surfaces
+.SH SYNOPSIS
+.B singine model
+\fISUBCOMMAND\fR [\fIOPTIONS\fR]
+.SH DESCRIPTION
+The
+.B model
+command exposes a lightweight catalog of named Singine objects, reference data,
+and Collibra bridge types for discovery and inspection.
+.SH SUBCOMMANDS
+.TP
+.B catalog
+List bootstrappers, auth operations, master data, reference data, and entity families.
+.TP
+.B inspect \fINAME\fR
+Show a detailed description of one named model object.
+.SH EXAMPLES
+.nf
+singine model catalog
+singine model catalog --json
+singine model inspect code-table
+singine model inspect "Business Term"
+.fi
+.SH SEE ALSO
+.BR singine (1)

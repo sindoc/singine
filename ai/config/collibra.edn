@@ -1,0 +1,60 @@
+;; singine/ai/config/collibra.edn
+;;
+;; Configuration for the Collibra Data Governance Center provider.
+;;
+;; Collibra has a dual role in singine:
+;;   1. Provider   — query the catalog, fetch asset metadata, resolve policies
+;;   2. Mandate grantor — issue AiMandate objects that extend singine's scope
+;;
+;; Mandate delegation workflow:
+;;   Collibra admin creates a Governance Policy asset in Collibra
+;;   → Exports it as a singine mandate via the REST API
+;;   → singine imports the mandate: singine ai mandate import --from collibra
+;;   → Mandate is stored in singine/ai/mandates/collibra-{date}.edn
+;;   → Git-committed for audit trail
+;; ------------------------------------------------------------------
+
+{:provider/id   "collibra"
+ :provider/type :COLLIBRA
+ :provider/name "Collibra Data Governance Center"
+
+ ;; ── Endpoint ──────────────────────────────────────────────────
+ ;; Replace with your Collibra instance URL
+ :endpoint/base    ""
+ :endpoint/rest    "/rest/2.0"
+ :endpoint/graphql "/graphql/knowledgeGraph/v1"
+
+ ;; ── Credential reference ──────────────────────────────────────
+ :credential/source "file:~/.singine/auth/collibra.json"
+
+ ;; ── Catalog mapping ───────────────────────────────────────────
+ ;; Asset type IDs from your Collibra instance.
+ ;; Fill in after connecting to your DGC.
+ :catalog/domain-type-id    ""
+ :catalog/dataset-type-id   ""
+ :catalog/metric-type-id    ""
+ :catalog/policy-type-id    ""
+ :catalog/api-type-id       ""
+
+ ;; ── Mandate config ────────────────────────────────────────────
+ :mandate/enabled           true
+ :mandate/import-dir        "singine/ai/mandates/"
+ :mandate/auto-commit       false
+ :mandate/collibra-policy-asset-type ""
+
+ ;; ── Governance defaults ───────────────────────────────────────
+ :default-permissions
+ [{:action "read"    :resource "collibra:catalog"  :decision "granted"
+   :rationale "Read-only catalog queries are pre-approved."}
+  {:action "write"   :resource "collibra:asset"    :decision "conditional"
+   :rationale "Writing to Collibra requires explicit approval."}]
+
+ ;; ── SBVR alignment ────────────────────────────────────────────
+ ;; SBVR Business Rules exported from Collibra are stored here:
+ :sbvr/rules-dir "singine/ai/config/sbvr/"
+
+ ;; ── Session recording ─────────────────────────────────────────
+ :session/record-commands    true
+ :session/record-permissions true
+ :session/flush-on-close     true
+ :session/dir                "singine/ai/sessions/"}

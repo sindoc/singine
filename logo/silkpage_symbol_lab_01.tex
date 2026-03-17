@@ -1,0 +1,204 @@
+%% silkpage_symbol_lab_01.tex — Lotus, Paisley, Lambda Study
+%%
+%% compile: xelatex silkpage_symbol_lab_01.tex
+
+\documentclass[border=18pt]{standalone}
+\usepackage{tikz}
+\usepackage{fontspec}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usetikzlibrary{calc}
+
+\newfontfamily\latinfont[
+  Path=/System/Library/Fonts/,
+  Ligatures=TeX, Kerning=On, Numbers=OldStyle
+]{SFNS.ttf}
+
+\definecolor{silkgreen}{HTML}{566E41}
+\definecolor{deepgreen}{HTML}{26630A}
+\definecolor{sage}{HTML}{DCE5D4}
+\definecolor{maroon}{HTML}{57160F}
+\definecolor{orange}{HTML}{E97E00}
+\definecolor{paper}{HTML}{FFFDF8}
+\definecolor{lightgray}{HTML}{DDDDDD}
+\definecolor{ink}{HTML}{333333}
+
+\pagecolor{paper}
+
+\newcommand{\lotusglyph}[3]{%
+  \node[inner sep=0pt] at (#1,#2) {\includegraphics[width=#3]{Lotus_10.svg.png}};
+}
+
+\newcommand{\paisleyoutline}[4]{%
+  \begin{scope}[shift={(#1,#2)}, scale=#3, rotate=#4]
+    \path[fill=none, draw=silkgreen, line width=1.15pt]
+      (0,0)
+        .. controls (0.95,0.06) and (1.46,0.92) .. (1.4,1.95)
+        .. controls (1.3,3.44) and (0.6,4.78) .. (-0.18,5.72)
+        .. controls (-0.92,6.56) and (-1.74,6.72) .. (-2.22,6.08)
+        .. controls (-2.58,5.56) and (-2.46,4.88) .. (-1.98,4.42)
+        .. controls (-1.44,3.92) and (-0.9,3.86) .. (-0.26,4.16)
+        .. controls (0.14,3.24) and (0.18,2.24) .. (-0.04,1.16)
+        .. controls (-0.24,0.28) and (-0.64,-0.28) .. (-1.18,-1.0)
+        .. controls (-0.66,-0.42) and (-0.22,-0.04) .. (0,0)
+      -- cycle;
+  \end{scope}
+}
+
+\newcommand{\paisleyband}[4]{%
+  \begin{scope}[shift={(#1,#2)}, scale=#3, rotate=#4]
+    \path[fill=none, draw=orange, line width=0.9pt]
+      (-0.34,0.62)
+        .. controls (0.26,1.02) and (0.56,1.84) .. (0.5,2.72)
+        .. controls (0.42,3.76) and (-0.02,4.66) .. (-0.58,5.28)
+        .. controls (-0.94,5.66) and (-1.3,5.74) .. (-1.52,5.38)
+        .. controls (-1.7,5.08) and (-1.58,4.72) .. (-1.24,4.46)
+        .. controls (-0.88,4.18) and (-0.54,4.18) .. (-0.16,4.34)
+        .. controls (0.02,3.66) and (0.06,2.82) .. (-0.12,1.92)
+        .. controls (-0.2,1.4) and (-0.38,0.98) .. (-0.66,0.56);
+  \end{scope}
+}
+
+\newcommand{\paisleyseed}[4]{%
+  \begin{scope}[shift={(#1,#2)}, scale=#3, rotate=#4]
+    \path[fill=maroon, draw=none]
+      (0.08,1.16)
+        .. controls (0.64,1.74) and (0.82,2.68) .. (0.58,3.56)
+        .. controls (0.34,4.52) and (-0.28,5.16) .. (-0.92,5.3)
+        .. controls (-1.3,5.4) and (-1.58,5.24) .. (-1.66,4.92)
+        .. controls (-1.76,4.52) and (-1.5,4.2) .. (-1.12,4.06)
+        .. controls (-0.82,3.94) and (-0.52,3.98) .. (-0.24,4.12)
+        .. controls (-0.02,3.52) and (0.1,2.9) .. (0.02,2.2)
+        .. controls (-0.02,1.76) and (-0.1,1.44) .. (-0.28,1.02)
+      -- cycle;
+  \end{scope}
+}
+
+\newcommand{\paisleydots}[4]{%
+  \begin{scope}[shift={(#1,#2)}, scale=#3, rotate=#4]
+    \foreach \i/\px/\py/\rr in {
+      1/-1.56/5.72/0.06,
+      2/-1.34/5.36/0.05,
+      3/-1.08/5.02/0.05,
+      4/-0.82/4.68/0.045,
+      5/-0.54/4.34/0.043,
+      6/-0.26/3.98/0.041,
+      7/-0.02/3.62/0.039,
+      8/0.18/3.22/0.038,
+      9/0.34/2.78/0.036,
+      10/0.44/2.28/0.034,
+      11/0.44/1.8/0.032,
+      12/0.34/1.34/0.03,
+      13/0.16/0.9/0.028
+    }{
+      \fill[sage!55!orange] (\px,\py) circle (\rr);
+    }
+  \end{scope}
+}
+
+\newcommand{\paisleyassembled}[4]{%
+  \paisleyoutline{#1}{#2}{#3}{#4}
+  \paisleyband{#1}{#2}{#3}{#4}
+  \paisleyseed{#1}{#2}{#3}{#4}
+  \paisleydots{#1}{#2}{#3}{#4}
+}
+
+\newcommand{\royaltextileframe}[1]{%
+  \begin{scope}[shift={(#1,0)}]
+    \draw[silkgreen, line width=1pt]
+      (-8.4,10.2) .. controls (-8.92,9.12) and (-8.98,7.64) .. (-8.44,6.14)
+      .. controls (-8.02,4.94) and (-7.82,3.76) .. (-8.1,2.3)
+      .. controls (-8.32,1.14) and (-8.26,0.16) .. (-7.72,-0.84);
+    \draw[silkgreen, line width=1pt]
+      (8.4,10.2) .. controls (8.92,9.12) and (8.98,7.64) .. (8.44,6.14)
+      .. controls (8.02,4.94) and (7.82,3.76) .. (8.1,2.3)
+      .. controls (8.32,1.14) and (8.26,0.16) .. (7.72,-0.84);
+    \draw[orange, line width=0.72pt]
+      (-7.96,9.32) .. controls (-8.32,8.28) and (-8.28,7.06) .. (-7.96,5.76)
+      .. controls (-7.72,4.68) and (-7.66,3.52) .. (-7.86,1.96);
+    \draw[orange, line width=0.72pt]
+      (7.96,9.32) .. controls (8.32,8.28) and (8.28,7.06) .. (7.96,5.76)
+      .. controls (7.72,4.68) and (7.66,3.52) .. (7.86,1.96);
+    \draw[silkgreen, line width=0.92pt, samples=220, smooth, domain=-8.4:8.4]
+      plot(\x, {10.88 + 0.12*sin(54*\x)});
+    \draw[orange, line width=0.68pt, samples=220, smooth, domain=-8.4:8.4]
+      plot(\x, {10.7 + 0.09*sin(54*\x + 24)});
+  \end{scope}
+}
+
+\begin{document}
+\begin{tikzpicture}[x=1cm,y=1cm,line cap=round,line join=round]
+
+  \royaltextileframe{0}
+
+  \node[font=\latinfont\fontsize{34pt}{36pt}\selectfont, text=silkgreen] at (0,12.24)
+    {SilkPage Symbol Lab};
+  \node[font=\latinfont\fontsize{10.5pt}{12pt}\selectfont, text=ink] at (0,11.52)
+    {lotus, paisley, lambda, and separable eastern recursive layers};
+
+  %% panel frames
+  \foreach \x/\title in {-6.2/Lotus,-0.2/Paisley Layers,5.8/Lambda Combinations} {
+    \path[fill=paper, draw=silkgreen!65, line width=0.88pt]
+      (\x-2.42,9.7) rectangle (\x+2.42,1.1);
+    \node[font=\latinfont\fontsize{12pt}{13pt}\selectfont, text=maroon] at (\x,9.2) {\title};
+  }
+
+  %% lotus panel
+  \lotusglyph{-6.2}{7.6}{1.55cm}
+  \draw[orange!80!silkgreen, line width=0.78pt] (-7.34,6.28) -- (-6.2,5.1) -- (-5.06,6.28);
+  \node[font=\latinfont\fontsize{9pt}{10pt}\selectfont, text=ink, align=center] at (-6.2,4.42)
+    {imported heraldic charge\\for growth, bloom, and return};
+  \lotusglyph{-7.08}{2.45}{0.54cm}
+  \lotusglyph{-6.2}{2.82}{0.54cm}
+  \lotusglyph{-5.32}{2.45}{0.54cm}
+  \draw[silkgreen, line width=0.7pt] (-7.08,2.18) -- (-6.2,1.72) -- (-5.32,2.18);
+  \node[font=\latinfont\fontsize{8pt}{9pt}\selectfont, text=silkgreen] at (-6.2,1.38)
+    {cluster / tessellation seed};
+
+  %% paisley layers panel
+  \paisleyoutline{-1.12}{6.42}{0.6}{0}
+  \node[font=\latinfont\fontsize{8pt}{9pt}\selectfont, text=silkgreen] at (1.1,7.78)
+    {layer 1: shell};
+  \paisleyband{-1.12}{4.72}{0.6}{0}
+  \node[font=\latinfont\fontsize{8pt}{9pt}\selectfont, text=orange!85!maroon] at (1.22,5.96)
+    {layer 2: sweep};
+  \paisleyseed{-1.12}{3.08}{0.6}{0}
+  \node[font=\latinfont\fontsize{8pt}{9pt}\selectfont, text=maroon] at (1.18,4.04)
+    {layer 3: heart};
+  \paisleydots{-1.12}{1.48}{0.6}{0}
+  \node[font=\latinfont\fontsize{8pt}{9pt}\selectfont, text=deepgreen] at (1.22,2.18)
+    {layer 4: recursive dots};
+  \node[font=\latinfont\fontsize{8.5pt}{9.5pt}\selectfont, text=ink, align=center] at (-0.2,1.42)
+    {These are separated from the outermost\\eastern shell so each can be rotated,\\mirrored, and recomposed independently.};
+
+  %% lambda combinations panel
+  \node[font=\latinfont\fontsize{32pt}{32pt}\selectfont, text=silkgreen] at (4.84,7.2) {λ};
+  \draw[orange, line width=0.82pt] (4.84,6.62) -- (4.08,5.82);
+  \draw[orange, line width=0.82pt] (4.84,6.62) -- (5.6,5.82);
+  \lotusglyph{4.02}{5.68}{0.48cm}
+  \lotusglyph{5.66}{5.68}{0.48cm}
+
+  \paisleyassembled{6.68}{4.66}{0.34}{14}
+  \paisleyassembled{7.32}{3.08}{0.24}{36}
+  \paisleyassembled{6.28}{2.16}{0.18}{64}
+  \node[font=\latinfont\fontsize{8.4pt}{9.2pt}\selectfont, text=ink, align=center] at (5.82,1.74)
+    {lambda emits lotus blooms\\and paisley layers become\\rotatable textile modules};
+
+  %% central recomposition strip
+  \path[fill=sage!25, draw=silkgreen!55, line width=0.8pt]
+    (-8.62,-0.28) rectangle (8.62,-2.72);
+  \node[font=\latinfont\fontsize{11pt}{12pt}\selectfont, text=maroon] at (0,-0.66)
+    {Recomposition Grammar};
+  \lotusglyph{-6.9}{-1.62}{0.6cm}
+  \paisleyassembled{-4.48}{-2.1}{0.14}{-18}
+  \node[font=\latinfont\fontsize{20pt}{20pt}\selectfont, text=silkgreen] at (-2.2,-1.56) {λ};
+  \draw[orange, line width=0.76pt] (-1.64,-1.56) -- (-0.7,-1.56);
+  \paisleyassembled{0.7}{-2.08}{0.14}{28}
+  \lotusglyph{2.52}{-1.62}{0.6cm}
+  \paisleyassembled{4.6}{-2.12}{0.14}{74}
+  \lotusglyph{6.76}{-1.62}{0.6cm}
+  \node[font=\latinfont\fontsize{8pt}{9pt}\selectfont, text=ink] at (0,-2.28)
+    {lotus + paisley(shell, sweep, heart, dots) + lambda + royal textile vectors};
+
+\end{tikzpicture}
+\end{document}

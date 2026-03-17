@@ -554,6 +554,64 @@ docker exec -it kafka kafka-topics --list --bootstrap-server localhost:9092
 
 ---
 
-**Last Updated**: 2026-02-07
+---
+
+## 15. Activity Taxonomy
+
+### Java Interface Package: `singine.activity`
+
+Located at `core/java/singine/activity/`.  Compiled automatically by
+`ant compile` (the compile target uses `find ... -name '*.java'`).
+
+| Class/Interface | Role |
+|-----------------|------|
+| `Activity` | Template interface: defines what is to be done |
+| `Policy` | Execution algorithm: governs how an action runs |
+| `Action` | Runtime instance: follows a Policy against an Activity |
+| `Outcome` | Measurement: usage value + business value − platform cost |
+| `Taxonomy` | Classification node: domain → category → subcategory |
+| `ActivityStatus` | Enum: PENDING, RUNNING, COMPLETED, FAILED, CANCELLED, DEFERRED |
+| `OutcomeType` | Enum: SUCCESS, FAILURE, PARTIAL, SKIPPED, DEFERRED |
+| `ActivityTemplate` | Abstract base: default XML/EDN serialisation |
+| `BaseAction` | Default Action with atomic status and policy application |
+| `BaseOutcome` | Immutable Outcome with ultimate-metric components |
+
+### Ultimate Metric
+
+```
+usage_cost_benefit_score = usage_value + business_value - platform_cost
+```
+
+### EDN Taxonomy (canonical source)
+
+`core/resources/singine/activity/taxonomy.edn`
+
+This file is the single source of truth for generating:
+XML, LaTeX, SVG, HTML (SilkPage), GraphQL, SPARQL, Logseq queries.
+
+```bash
+make activity-edn            # print the taxonomy
+singine activity list        # list all activities
+singine activity inspect ID  # inspect a single activity (--xml, --edn, --json)
+singine activity run ID      # run an activity and get an Outcome
+```
+
+### DP(DP) — Data Production Definition Protocol
+
+The `data-production` taxonomy domain documents the meta-concept:
+the activity taxonomy is itself a data product governed by an activity.
+Logo: `sina.khakbaz.com/img/dpdp-logo.svg`
+
+### Man Page
+
+`man singine-activity` — see `man/singine-activity.1`.
+
+### Published Docs
+
+`sina.khakbaz.com/docs/activity/` — SilkPage pages documenting the model.
+
+---
+
+**Last Updated**: 2026-03-15
 **Project Status**: Alpha (v0.2.0) -- Transitioning from Python to Clojure
 **Primary Developer**: skh

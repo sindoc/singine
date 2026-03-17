@@ -1,0 +1,243 @@
+;; singine/activity/taxonomy.edn
+;;
+;; Canonical activity taxonomy.
+;; This file is the single source of truth from which the following
+;; artefacts are generated:
+;;
+;;   XML   — domain model and API request/response schemas
+;;   LaTeX — technical documentation
+;;   SVG   — diagrams and the DP(DP) logo family
+;;   HTML  — SilkPage published pages (sina.khakbaz.com/docs/)
+;;   GraphQL query templates
+;;   SPARQL query templates (Apache Jena / Aristotle)
+;;   Logseq Clojure queries
+;;
+;; Generation is done via:
+;;   singine xml matrix --db /tmp/sqlite.db --output-dir /tmp/singine-xml-matrix
+;;
+;; Ultimate metric formula (applied per outcome):
+;;   usage_cost_benefit_score = usage_value + business_value - platform_cost
+;;
+;; Governance decisions are recorded via:
+;;   singine decide <activity-id> --decision approved --reason "..."
+;;
+;; ------------------------------------------------------------------
+
+{:taxonomy/id      "singine-activity-taxonomy"
+ :taxonomy/version "1.0.0"
+ :taxonomy/date    "2026-03-15"
+ :taxonomy/author  "sina.khakbaz.com"
+
+ ;; ── Categories ───────────────────────────────────────────────────
+
+ :taxonomy/categories
+
+ [;; ── emacs-orgmode-logseq ──────────────────────────────────────
+  {:category/id          "emacs-orgmode-logseq"
+   :category/domain      "web-publishing"
+   :category/name        "Emacs OrgMode Logseq Integration"
+   :category/labels      {:en "Emacs OrgMode Logseq Integration"
+                          :fr "Intégration Emacs OrgMode Logseq"
+                          :nl "Emacs OrgMode Logseq Integratie"}
+   :category/description "Activities for exposing Logseq data through Emacs,
+                          orgmode, and singine-compatible APIs."
+
+   :category/activities
+
+   [{:activity/id          "activity-emacs-logseq-01"
+     :activity/name        "Configure Emacs Client for Logseq API"
+     :activity/description "Set up emacsclient to expose Logseq graph data
+                            as files and OpenAPI-compatible HTTP endpoints."
+     :activity/subcategory "api-exposure"
+     :activity/policy
+     {:policy/id       "policy-emacs-logseq-01"
+      :policy/decision "approved"
+      :policy/rationale "Required for singine Semantic Model 1 alignment
+                         with usage and cost-benefit objective."}
+     :activity/shell-init ["~/.singine/activity.sh"
+                           "~/.singine/activity.bash"]
+     :activity/outputs     [:xml :openapi :logseq-query :sparql]
+     :activity/collibra
+     {:collibra/asset-type "Business Process"
+      :collibra/name       "Configure Emacs Client for Logseq API"
+      :collibra/id         ""}}
+
+    {:activity/id          "activity-emacs-logseq-02"
+     :activity/name        "Expose OrgMode Metadata via API"
+     :activity/description "Parse orgmode files and expose their metadata
+                            (properties, headings, tags) through a REST API
+                            with OpenAPI specification and Postman collection."
+     :activity/subcategory "api-exposure"
+     :activity/policy
+     {:policy/id       "policy-emacs-logseq-02"
+      :policy/decision "approved"
+      :policy/rationale "Enables downstream consumers to query orgmode data
+                         without Emacs dependency."}
+     :activity/shell-init  ["~/.singine/activity.sh"]
+     :activity/outputs     [:xml :openapi :html :graphql]
+     :activity/collibra
+     {:collibra/asset-type "Data Product"
+      :collibra/name       "OrgMode Metadata API"
+      :collibra/id         ""}}]}
+
+  ;; ── data-production ───────────────────────────────────────────
+  {:category/id          "data-production"
+   :category/domain      "singine-core"
+   :category/name        "Data Production Definition Protocol"
+   :category/labels      {:en "Data Production Definition Protocol (DP²)"
+                          :fr "Protocole de Définition de Production de Données"
+                          :nl "Data Productie Definitie Protocol"}
+   :category/description "DP(DP) — Data Production of Data Production.
+                          The meta-category for activities that produce data
+                          about the data production process itself.
+                          Logo: see img/dpdp-logo.svg"
+
+   :category/activities
+
+   [{:activity/id          "activity-dpdp-01"
+     :activity/name        "Define DP(DP) Activity Model"
+     :activity/description "Create the Java interface hierarchy for the
+                            singine activity taxonomy, publish as a
+                            SilkPage page on sina.khakbaz.com/docs/activity/"
+     :activity/subcategory "model-definition"
+     :activity/policy
+     {:policy/id       "policy-dpdp-01"
+      :policy/decision "approved"
+      :policy/rationale "Semantic Model 1 baseline approved.
+                         Aligned with usage and cost-benefit objective."}
+     :activity/shell-init  ["~/.singine/activity.sh"]
+     :activity/outputs     [:xml :svg :html :latex :sparql :graphql]
+     :activity/collibra
+     {:collibra/asset-type "Domain"
+      :collibra/name       "Data Production Definition Protocol"
+      :collibra/id         ""}}]}
+
+  ;; ── filesystem-operations ─────────────────────────────────────
+  {:category/id          "filesystem-operations"
+   :category/domain      "singine-core"
+   :category/name        "Filesystem Operations"
+   :category/labels      {:en "Filesystem Operations"
+                          :fr "Opérations sur le système de fichiers"
+                          :nl "Bestandssysteemoperaties"}
+   :category/description "Activities for secure local filesystem discovery
+                          and controlled file movement under Singine JVM
+                          policy control."
+
+   :category/activities
+
+   [{:activity/id          "activity-filesystem-find-01"
+     :activity/name        "Find Files About Topic"
+     :activity/description "Search local files and directories whose basename
+                            contains a requested topic fragment. Used by
+                            singine find filesAboutTopic."
+     :activity/subcategory "topic-discovery"
+     :activity/policy
+     {:policy/id       "policy-singine-filesystem-local-01"
+      :policy/decision "approved"
+      :policy/rationale "Approved for local filesystem search executed inside
+                         Singine's JVM control boundary."}
+     :activity/shell-init  ["~/.singine/activity.sh"]
+     :activity/outputs     [:json :xml :html]
+     :activity/collibra
+     {:collibra/asset-type "Business Process"
+      :collibra/name       "Find Files About Topic"
+      :collibra/id         ""}}
+
+    {:activity/id          "activity-filesystem-move-01"
+     :activity/name        "Move File List To Directory"
+     :activity/description "Move a stdin-provided list of files into a target
+                            directory. Used by singine mv fileListTo."
+     :activity/subcategory "controlled-move"
+     :activity/policy
+     {:policy/id       "policy-singine-filesystem-local-01"
+      :policy/decision "approved"
+      :policy/rationale "Approved for local filesystem moves executed inside
+                         Singine's JVM control boundary."}
+     :activity/shell-init  ["~/.singine/activity.sh"]
+     :activity/outputs     [:json :xml]
+     :activity/collibra
+     {:collibra/asset-type "Business Process"
+      :collibra/name       "Move File List To Directory"
+      :collibra/id         ""}}]}
+
+  ;; ── photo-review ──────────────────────────────────────────────
+  {:category/id          "photo-review"
+   :category/domain      "media-review"
+   :category/name        "Photo Review Exports"
+   :category/labels      {:en "Photo Review Exports"
+                          :fr "Exports de revue photo"
+                          :nl "Foto review-exports"}
+   :category/description "Activities for producing lightweight review JPEGs
+                          from Apple Photos moments and test-case fixtures
+                          aligned with Singine's local media governance flow."
+
+   :category/activities
+
+   [{:activity/id          "activity-photo-export-review-01"
+     :activity/name        "Export City Review JPEGs from Apple Photos"
+     :activity/description "Query Apple Photos by moment title/subtitle,
+                            export still images, and compress them into
+                            lightweight review JPEGs with manifest and path
+                            list artefacts for downstream Singine transfer."
+     :activity/subcategory "review-export"
+     :activity/policy
+     {:policy/id       "policy-singine-photo-local-review-01"
+      :policy/decision "approved"
+      :policy/rationale "Approved for local Apple Photos review export
+                         executed inside Singine's local workstation
+                         boundary with explicit output directories."}
+     :activity/shell-init  ["~/.singine/activity.sh"
+                            "~/.singine/activity.bash"]
+     :activity/outputs     [:jpeg :json :xml :tsv]
+     :activity/collibra
+     {:collibra/asset-type "Business Process"
+      :collibra/name       "Export City Review JPEGs from Apple Photos"
+      :collibra/id         ""}}
+
+    {:activity/id          "activity-photo-test-case-01"
+     :activity/name        "Generate Photo Review Export Test Case"
+     :activity/description "Create a self-contained Apple Photos fixture with
+                            taxonomy-linked activity metadata so the review
+                            export flow can be exercised with deterministic
+                            local commands and build runners."
+     :activity/subcategory "test-case-generation"
+     :activity/policy
+     {:policy/id       "policy-singine-photo-local-review-01"
+      :policy/decision "approved"
+      :policy/rationale "Approved for local deterministic fixture generation
+                         used to validate Singine photo workflows."}
+     :activity/shell-init  ["~/.singine/activity.sh"]
+     :activity/outputs     [:jpeg :json :tsv :html]
+     :activity/collibra
+     {:collibra/asset-type "Business Process"
+      :collibra/name       "Generate Photo Review Export Test Case"
+      :collibra/id         ""}}]}
+
+  ;; ── elia-electricity ──────────────────────────────────────────
+  {:category/id          "elia-electricity"
+   :category/domain      "elia-electricity"
+   :category/name        "Elia Electricity Domain"
+   :category/labels      {:en "Elia Electricity Domain Activities"
+                          :fr "Activités du Domaine Électricité Elia"}
+   :category/description "Activities for the Elia electricity data platform:
+                          balancing, settlement, grid operations."
+
+   :category/activities
+
+   [{:activity/id          "activity-elia-balancing-01"
+     :activity/name        "Electricity Balancing Model"
+     :activity/description "Define and govern the Electricity Balancing domain
+                            as XML, with Collibra catalog links, API exposure,
+                            and Databricks backend."
+     :activity/subcategory "domain-modelling"
+     :activity/policy
+     {:policy/id       "policy-elia-balancing-01"
+      :policy/decision "approved"
+      :policy/rationale "Semantic Model 1 aligned with usage and
+                         cost-benefit objective."}
+     :activity/shell-init  ["~/.singine/activity.sh"]
+     :activity/outputs     [:xml :openapi :sparql :graphql]
+     :activity/collibra
+     {:collibra/asset-type "Domain"
+      :collibra/name       "Electricity Balancing"
+      :collibra/id         ""}}]}]}

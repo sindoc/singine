@@ -1,0 +1,243 @@
+.TH SINGINE-AI 1 "2026-03-16" "singine 0.2.0" "User Commands"
+.SH NAME
+singine-ai \- governed AI session recording and conversation-data centralisation
+.SH SYNOPSIS
+.B singine ai claude
+[\fB--model\fR \fIMODEL\fR] [\fB--session\fR \fIID\fR] [\fB--mandate\fR \fIFILE\fR]
+[\fB--root-dir\fR \fIPATH\fR] [\fB--db\fR \fIPATH\fR]
+[\fB--resume\fR] [\fB--continue\fR]
+.PP
+.B singine ai codex
+[\fB--model\fR \fIMODEL\fR] [\fB--session\fR \fIID\fR] [\fB--mandate\fR \fIFILE\fR]
+[\fB--root-dir\fR \fIPATH\fR] [\fB--db\fR \fIPATH\fR]
+[\fB--resume\fR] [\fB--continue\fR]
+.PP
+.B singine ai openai
+[\fB--model\fR \fIMODEL\fR] [\fB--session\fR \fIID\fR] [\fB--mandate\fR \fIFILE\fR]
+[\fB--root-dir\fR \fIPATH\fR] [\fB--db\fR \fIPATH\fR]
+[\fB--resume\fR] [\fB--continue\fR]
+.PP
+.B singine ai session list
+[\fB--root-dir\fR \fIPATH\fR]
+.PP
+.B singine ai session overview
+[\fB--root-dir\fR \fIPATH\fR] [\fB--provider\fR \fIPROVIDER\fR]
+.PP
+.B singine ai session show
+\fIID\fR [\fB--root-dir\fR \fIPATH\fR]
+.PP
+.B singine ai status
+[\fB--json\fR]
+.PP
+.B singine ai last session data
+[\fB--root-dir\fR \fIPATH\fR] [\fB--db\fR \fIPATH\fR]
+.SH DESCRIPTION
+.B singine ai
+provides a governed session shell for Claude, Codex, and OpenAI.
+Each conversation is persisted as Singine data with:
+.IP \(bu 2
+session id
+.IP \(bu 2
+provider and model
+.IP \(bu 2
+session URN
+.IP \(bu 2
+provider object reference for later API mapping
+.IP \(bu 2
+ordered user and assistant interactions
+.IP \(bu 2
+mandates granted during the session
+.PP
+Provider API execution is not performed yet.
+The current implementation records the session shape so it can later be mapped
+to real provider-side session or response objects through Claude or OpenAI
+APIs.
+.PP
+The
+.B --resume
+and
+.B --continue
+flags mirror the equivalent flags in the
+.B claude
+CLI (Claude Code), applied to the Singine-governed session layer.
+.SH COMMANDS
+.TP
+.B claude | codex | openai
+Open an interactive governed session shell for the named provider.
+The shell records interactions to
+.IR interactions.json ,
+mandates to
+.IR mandates.json ,
+and session metadata to
+.IR manifest.json .
+If
+.B --db
+is provided, the session is synced into SQLite on close.
+.RS
+.TP
+.B --resume
+Show an interactive numbered picker of previously recorded sessions for this
+provider and reopen the selected one.
+Mirrors
+.B claude --resume
+in the Claude Code CLI.
+.TP
+.B --continue
+Reopen the most recently recorded session for this provider without prompting.
+Mirrors
+.B claude --continue
+in the Claude Code CLI.
+.RE
+.TP
+.B session list
+List recorded sessions under
+.IR ~/.singine/ai/sessions/
+or the overridden
+.BR --root-dir .
+Output is JSON.
+.TP
+.B session overview
+Print a human-readable table of all recorded sessions showing session id,
+provider, model, status, start time, interaction count, and mandate count.
+Use
+.B --provider
+to filter to a single provider.
+This is the overview equivalent of the
+.B claude --resume
+session picker.
+.TP
+.B session show \fIID\fR
+Show the full recorded session bundle: manifest, interactions, and mandates.
+.TP
+.B status
+Show configured AI provider registry information.
+.TP
+.B last session data
+Load the most recent recorded session, sync it into
+.I sqlite.db
+and print the full session bundle.
+.SH INTERACTIVE COMMANDS
+Inside a provider session:
+.TP
+.B /mandate \fIACTION RESOURCE [NOTE]\fR
+Record a granted mandate for the session.
+.TP
+.B /meta \fIKEY=VALUE\fR
+Attach metadata to the session manifest.
+.TP
+.B /exit
+Close the session and persist the end timestamp.
+.SH MAPPING TO CLAUDE CODE CLI
+.TS
+l l l.
+Claude Code	singine ai claude	Notes
+\fBclaude --resume\fR	\fBsingine ai claude --resume\fR	Interactive picker, filtered to claude sessions
+\fBclaude --continue\fR	\fBsingine ai claude --continue\fR	Reopens latest claude session
+\fBclaude --resume\fR (overview)	\fBsingine ai session overview --provider claude\fR	Human-readable table without entering a session
+\fBclaude --resume ID\fR	\fBsingine ai claude --session ID\fR	Reopen a specific session by id
+.TE
+.SH STORAGE MODEL
+Default root:
+.nf
+~/.singine/ai/
+.fi
+.PP
+Per-session layout:
+.nf
+~/.singine/ai/sessions/{session-id}/
+  manifest.json
+  interactions.json
+  mandates.json
+.fi
+.PP
+Default SQLite centralisation target:
+.nf
+~/.singine/ai/sqlite.db
+.fi
+.PP
+The SQLite file contains:
+.nf
+ai_sessions
+ai_interactions
+ai_mandates
+.fi
+.SH DATA FLOW
+.B Step 1 — Start a provider session
+.nf
+singine ai claude --model claude-sonnet-4-6
+singine ai codex --model gpt-5-codex
+singine ai openai --model gpt-4o
+.fi
+.PP
+.B Step 2 — Discover recorded sessions (overview)
+.nf
+singine ai session overview
+singine ai session overview --provider claude
+.fi
+.PP
+.B Step 3 — Resume or continue a session
+.nf
+singine ai claude --resume          # interactive picker
+singine ai claude --continue        # latest claude session
+.fi
+.PP
+.B Step 4 — Inspect one session in full
+.nf
+singine ai session show SESSION-ID
+.fi
+.PP
+.B Step 5 — Sync the latest session into SQLite
+.nf
+singine ai last session data --db /tmp/singine-ai.db
+.fi
+.PP
+.B Step 6 — Access the centralised data
+.nf
+singine jdbc-url --db /tmp/singine-ai.db
+singine bridge sources --db /tmp/singine-ai.db
+singine bridge search --db /tmp/singine-ai.db "claude"
+.fi
+.SH EXAMPLES
+.nf
+# Start a governed Claude conversation.
+singine ai claude --model claude-sonnet-4-6
+
+# Resume a previous Claude session interactively (like claude --resume).
+singine ai claude --resume
+
+# Continue the most recent Claude session (like claude --continue).
+singine ai claude --continue
+
+# Overview of all sessions across providers.
+singine ai session overview
+
+# Overview filtered to Claude sessions only.
+singine ai session overview --provider claude
+
+# Start a governed Codex conversation and sync it on close.
+singine ai codex \\
+  --model gpt-5-codex \\
+  --root-dir /tmp/singine-ai \\
+  --db /tmp/singine-ai/sqlite.db
+
+# List all recorded sessions (JSON).
+singine ai session list --root-dir /tmp/singine-ai
+
+# Show one session in full.
+singine ai session show 123e4567-e89b-12d3-a456-426614174000 \\
+  --root-dir /tmp/singine-ai
+
+# Centralise the latest session bundle.
+singine ai last session data \\
+  --root-dir /tmp/singine-ai \\
+  --db /tmp/singine-ai/sqlite.db
+
+# Access the centralised conversation data.
+singine bridge sources --db /tmp/singine-ai/sqlite.db
+singine jdbc-url --db /tmp/singine-ai/sqlite.db
+.fi
+.SH SEE ALSO
+.BR singine (1),
+.BR singine-bridge (1),
+.BR singine-jdbc-url (1),
+.BR singine-policy (1)

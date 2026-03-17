@@ -1,0 +1,166 @@
+.TH SINGINE-ACTIVITY 1 "2026-03-16" "singine 0.2.0" "User Commands"
+.SH NAME
+singine\-activity \- inspect, instantiate, and evaluate activity taxonomy entries
+.SH SYNOPSIS
+.B singine activity
+\fICOMMAND\fR [\fIOPTIONS\fR]
+.PP
+.B singine activity list
+[\fB--domain\fR \fIDOMAIN\fR] [\fB--json\fR|\fB--edn\fR|\fB--xml\fR]
+.PP
+.B singine activity inspect
+\fIACTIVITY_ID\fR [\fB--json\fR|\fB--edn\fR|\fB--xml\fR]
+.PP
+.B singine activity run
+\fIACTIVITY_ID\fR [\fB--input\fR \fIEDN_MAP\fR] [\fB--json\fR]
+.PP
+.B singine activity score
+\fIOUTCOME_ID\fR
+.SH DESCRIPTION
+The
+.B activity
+command works with the singine activity taxonomy: a strict classification
+of actions, policies, and outcomes centred on the ultimate metric.
+.PP
+Every activity in the taxonomy follows the three-part structure:
+.TP
+.B Activity
+Template that defines what is to be done and under which Policy.
+.TP
+.B Policy
+Execution algorithm: applies rules to a context map and governs the action.
+Governance decisions are recorded with
+.BR singine-decide (1).
+.TP
+.B Outcome
+Measured result carrying usage value, business value, and platform cost.
+The derived score is:
+.IP
+.nf
+usage_cost_benefit_score = usage_value + business_value \- platform_cost
+.fi
+.PP
+AI conversations governed by
+.BR singine-ai (1)
+are a first-class activity type in this taxonomy.
+Each conversation session maps to an Activity (the conversation topic), a
+Policy (the permission and mandate record), and an Outcome (the artefacts
+delivered and the session outcome score).
+Use
+.B "singine ai session show ID"
+to retrieve the full activity record for a conversation, and
+.B "singine ai session export ID"
+to export it in JSON or EDN form.
+.SH COMMANDS
+.TP
+.B list
+Print all activities in the taxonomy.
+Filter by domain with
+.BR --domain .
+.TP
+.B inspect
+Print the full definition of a single activity by ID.
+.TP
+.B run
+Instantiate and execute an activity.
+Accepts an EDN context map via
+.B --input
+to override defaults.
+.TP
+.B score
+Print the usage-cost-benefit score for a completed outcome.
+.SH OPTIONS
+.TP
+.B --domain \fIDOMAIN\fR
+Filter activities to a single domain (e.g.
+.IR emacs-orgmode-logseq ,
+.IR elia-electricity ,
+.IR data-production ,
+.IR ai-conversation ).
+.TP
+.B --json
+Emit raw JSON output.
+.TP
+.B --edn
+Emit Clojure EDN output (default for JVM consumers).
+.TP
+.B --xml
+Emit XML output compatible with the Elia electricity domain model.
+.TP
+.B --input \fIEDN_MAP\fR
+EDN context map overrides for the
+.B run
+command, e.g.
+.IR "{:env \"dev\"}" .
+.SH TAXONOMY FILE
+The canonical EDN taxonomy is at:
+.IP
+.I singine/core/resources/singine/activity/taxonomy.edn
+.PP
+It is aligned with the Java action/activity interfaces under:
+.IP
+.I singine/core/java/singine/activity/
+.PP
+and is the single source of truth from which XML, SPARQL, GraphQL,
+LaTeX, SVG, Logseq query artefacts, and SilkPage-facing publication inputs
+are generated via:
+.IP
+.nf
+singine xml matrix --db /tmp/sqlite.db --output-dir /tmp/singine-xml-matrix
+.fi
+.PP
+The same publication chain is typically completed with Ant Javadoc generation
+and the xmldoclet/SilkPage doc pipeline described in
+.BR singine-server (1)
+and the repo README files.
+.SH AI CONVERSATION ACTIVITIES
+AI conversations are recorded as activity instances.
+Each governed Claude Code session under
+.BR singine-ai (1)
+produces:
+.IP \(bu 2
+.B manifest.edn
+\(em the activity instance record (topic, artefacts, outcome type, outcome score)
+.IP \(bu 2
+.B permissions.edn
+\(em the policy record (every permission grant, denial, and conditional)
+.IP \(bu 2
+.B commands.edn
+\(em the ordered execution log (tool calls and their rationale)
+.PP
+These files live under:
+.nf
+singine/ai/sessions/{session-id}/
+.fi
+.PP
+To score a completed conversation activity:
+.nf
+# Retrieve the outcome from manifest.edn
+singine ai session show SESSION-ID --json | jq '.outcome'
+
+# Export and compute the score manually
+singine ai session export SESSION-ID | jq '.manifest.outcome'
+.fi
+.SH EXAMPLES
+.nf
+singine activity list
+singine activity list --domain ai-conversation --json
+singine activity list --domain emacs-orgmode-logseq --edn
+singine activity inspect activity-emacs-logseq-01 --xml
+singine activity run activity-dpdp-01 --input '{:env "dev"}'
+singine activity score <outcome-uuid>
+.fi
+.SH DP(DP) — DATA PRODUCTION OF DATA PRODUCTION
+The
+.I data-production
+domain contains the DP(DP) meta-activities: activities that govern the
+activity taxonomy itself.  The logo is published at
+.IR sina.khakbaz.com/img/dpdp-logo.svg .
+.SH SEE ALSO
+.BR singine (1),
+.BR singine-ai (1),
+.BR singine-decide (1),
+.BR singine-model (1),
+.BR singine-xml (1),
+.BR singine-bridge (1),
+.BR singine-server (1)

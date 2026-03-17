@@ -1,0 +1,3 @@
+SELECT ?s ?o
+WHERE { ?s skos:broader ?o . }
+LIMIT 20

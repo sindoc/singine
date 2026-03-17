@@ -1,0 +1,42 @@
+;; singine/ai/config/openai.edn
+;;
+;; Configuration for the OpenAI provider (GPT-4o / Codex passthrough).
+;;
+;; Codex mapping:
+;;   singine ai openai --model code-davinci-002   → legacy Codex
+;;   singine ai openai --model gpt-4o             → GPT-4o (recommended)
+;;   singine ai openai --model o3                 → reasoning model
+;; ------------------------------------------------------------------
+
+{:provider/id   "openai"
+ :provider/type :OPENAI
+ :provider/name "OpenAI (Codex / GPT-4o)"
+ :provider/note "Disabled by default; enable in providers.edn"
+
+ ;; ── Endpoint ──────────────────────────────────────────────────
+ :endpoint/base       "https://api.openai.com/v1"
+ :endpoint/chat       "/chat/completions"
+ :endpoint/embeddings "/embeddings"
+ :endpoint/models     "/models"
+
+ ;; ── Model defaults ────────────────────────────────────────────
+ :model/default    "gpt-4o"
+ :model/codex      "gpt-4o"
+ :model/available  ["gpt-4o" "o3" "o4-mini"]
+ :model/max-tokens 4096
+
+ ;; ── Credential reference ──────────────────────────────────────
+ :credential/source "env:OPENAI_API_KEY"
+
+ ;; ── Governance defaults ───────────────────────────────────────
+ :default-permissions
+ [{:action "read"    :resource "filesystem:cwd"   :decision "granted"
+   :rationale "Read access is standard."}
+  {:action "write"   :resource "filesystem:cwd"   :decision "conditional"
+   :rationale "Write requires explicit per-file approval."}]
+
+ ;; ── Session recording ─────────────────────────────────────────
+ :session/record-commands    true
+ :session/record-permissions true
+ :session/flush-on-close     true
+ :session/dir                "singine/ai/sessions/"}
