@@ -28,6 +28,7 @@ Current notable guide:
 - `idp-code-passthrough-architecture.md` for the recommended authorization-code passthrough architecture across Node, Singine core, and XML/SAML services
 - `ai-policy-canonify.md` for testing the LDAP-backed policy canonifier and understanding its current boundary
 - `ai-access-governance.md` for the governed access gate, persisted approvals, counters, and decision artefacts
+- `realm-ops.md` for Atom-backed realm audits, cron schedules, DNS/TLS checks, trust-store inventory, and vault inventory
 
 Reproducible development workflow:
 

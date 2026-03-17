@@ -7,7 +7,7 @@
 
    Routes exposed:
      GET /health       — ping (always available)
-     GET /bridge       — SQLite bridge (sources/search/entity/sparql)
+     GET /bridge       — SQLite bridge (sources/search/entity/sparql/graphql/latest-changes)
      GET /messages     — mail search/list
      GET /cap          — machine capability profile
      GET /loc/:iata    — resolve IATA → URN + timezone
