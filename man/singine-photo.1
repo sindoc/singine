@@ -1,0 +1,144 @@
+.TH SINGINE-PHOTO 1 "2026-03-17" "singine 0.2.0" "User Commands"
+.SH NAME
+singine-photo \- Apple Photos queries, review exports, and deterministic test cases
+.SH SYNOPSIS
+.B singine photo
+\fICOMMAND\fR [\fIOPTIONS\fR]
+.PP
+.B singine photo count-city
+[\fB--city\fR \fICITY\fR]...
+[\fB--db\fR \fIPATH\fR]
+[\fB--json\fR]
+.PP
+.B singine photo export-review
+[\fIOUT_ROOT\fR]
+[\fB--city\fR \fICITY\fR]...
+[\fB--library-root\fR \fIPATH\fR]
+[\fB--db\fR \fIPATH\fR]
+[\fB--max-kb\fR \fIN\fR]
+[\fB--max-dim\fR \fIN\fR]
+[\fB--limit\fR \fIN\fR]
+[\fB--json\fR]
+.PP
+.B singine photo test-case
+[\fICASE_ROOT\fR]
+[\fB--json\fR]
+.SH DESCRIPTION
+The
+.B photo
+command provides a local, command-driven workflow for Apple Photos review
+exports.
+It finds still images by city-labelled moments, emits lightweight JPEG review
+artefacts, and writes transfer-ready path lists for downstream
+.BR singine-mv (1)
+and
+.BR singine-transfer (1)
+operations.
+.PP
+The workflow is linked to the Singine activity taxonomy.
+The canonical activity ids are:
+.IP \(bu 2
+\fBactivity-photo-export-review-01\fR
+.IP \(bu 2
+\fBactivity-photo-test-case-01\fR
+.PP
+They are classified under:
+.IP
+\fBdomain\fR = \fImedia-review\fR,
+\fBcategory\fR = \fIphoto-review\fR,
+\fBsubcategory\fR = \fIreview-export\fR
+.PP
+The taxonomy source of truth is:
+.IP
+.I core/resources/singine/activity/taxonomy.edn
+.SH COMMANDS
+.TP
+.B count-city
+Count still photos whose Apple Photos moment title or subtitle matches one or
+more city fragments.
+.TP
+.B export-review
+Export review JPEGs into a destination tree.
+Outputs include:
+.IP \(bu 2
+city folders
+.IP \(bu 2
+\fBmanifest.tsv\fR
+.IP \(bu 2
+one \fB.paths\fR file per city for
+.BR singine-mv (1)
+.TP
+.B test-case
+Create a self-contained Apple Photos fixture under
+\fICASE_ROOT\fR
+with:
+.IP \(bu 2
+a minimal Photos SQLite database
+.IP \(bu 2
+fixture images
+.IP \(bu 2
+activity metadata linked to the taxonomy
+.IP \(bu 2
+a \fBREADME.txt\fR file containing the exact demo commands
+.SH SIMPLE TEST CASE
+The shortest repeatable demo is:
+.nf
+singine photo test-case /tmp/singine-photo-case
+singine photo export-review /tmp/singine-photo-case/review-output \\
+  --library-root /tmp/singine-photo-case/fixture-library.photoslibrary \\
+  --db /tmp/singine-photo-case/fixture-library.photoslibrary/database/Photos.sqlite \\
+  --max-kb 500 --max-dim 2560 --json
+column -t -s $'\\t' /tmp/singine-photo-case/review-output/manifest.tsv
+find /tmp/singine-photo-case/review-output -name '*.jpg' | sort
+cat /tmp/singine-photo-case/activity.json
+.fi
+.PP
+To move the generated review files with Singine:
+.nf
+cat /tmp/singine-photo-case/review-output/beirut.paths | \\
+  singine mv fileListTo /tmp/singine-photo-case/moved/beirut --mkdir
+cat /tmp/singine-photo-case/review-output/shiraz.paths | \\
+  singine mv fileListTo /tmp/singine-photo-case/moved/shiraz --mkdir
+.fi
+.SH BUILD RUNNERS
+The same Python test entrypoint is exposed through multiple runner surfaces.
+.PP
+\fBMake\fR:
+.nf
+make py-test-photo
+.fi
+.PP
+\fBAnt\fR:
+.nf
+ant photo-test
+.fi
+.PP
+\fBMaven\fR:
+.nf
+mvn test
+.fi
+.PP
+\fBGradle\fR:
+.nf
+gradle photoTest
+.fi
+.PP
+\fBAnsible\fR:
+.nf
+ansible-playbook -i localhost, -c local ansible/photo-test.yml
+.fi
+.SH EXAMPLES
+.nf
+singine photo count-city --json
+singine photo export-review ~/Pictures/review-exports/beirut-shiraz --max-kb 500
+singine photo export-review /tmp/review --city tehran --city tabriz --limit 20
+singine photo test-case /tmp/singine-photo-case
+cat /tmp/singine-photo-case/README.txt
+.fi
+.SH SEE ALSO
+.BR singine (1),
+.BR singine-man (1),
+.BR singine-activity (1),
+.BR singine-find (1),
+.BR singine-mv (1),
+.BR singine-transfer (1)

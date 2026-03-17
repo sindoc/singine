@@ -11,7 +11,8 @@
     Singine and SilkPage share a publication-oriented architecture grounded in XML,
     Java, HTTP, and standards-compliant metadata. This manifest drives generated
     reference material from JVM xmldoclet output, manual command specifications,
-    and curated architectural notes.
+    curated architectural notes, and reproducible command paths for template
+    generation, Logseq-to-Org/XML conversion, and server/snapshot inspection.
   </spec:abstract>
 
   <spec:project name="singine" homepage="https://singine.markupware.com/" kind="engine">
@@ -80,6 +81,26 @@
     <spec:page name="singine-install" section="1" purpose="Install launchers and toolchain dependencies">
       <spec:see-also>singine</spec:see-also>
       <spec:see-also>singine-man</spec:see-also>
+    </spec:page>
+    <spec:page name="singine-template" section="1" purpose="Generate Singine-aware Maven and npm project templates">
+      <spec:see-also>singine</spec:see-also>
+      <spec:see-also>singine-man</spec:see-also>
+      <spec:see-also>singine-logseq</spec:see-also>
+    </spec:page>
+    <spec:page name="singine-logseq" section="1" purpose="Discover Logseq graphs and export them to Org and XML">
+      <spec:see-also>singine</spec:see-also>
+      <spec:see-also>singine-server</spec:see-also>
+      <spec:see-also>singine-snapshot</spec:see-also>
+    </spec:page>
+    <spec:page name="singine-server" section="1" purpose="Inspect the local Singine HTTP surface and publication/runtime boundary">
+      <spec:see-also>singine</spec:see-also>
+      <spec:see-also>singine-snapshot</spec:see-also>
+      <spec:see-also>singine-logseq</spec:see-also>
+    </spec:page>
+    <spec:page name="singine-snapshot" section="1" purpose="Persist a runtime, server, git, docker, and Logseq snapshot">
+      <spec:see-also>singine</spec:see-also>
+      <spec:see-also>singine-server</spec:see-also>
+      <spec:see-also>singine-logseq</spec:see-also>
     </spec:page>
   </spec:manpages>
 </spec:publication>
