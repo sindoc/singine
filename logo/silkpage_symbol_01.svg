@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1200" viewBox="0 0 1200 1200" role="img" aria-labelledby="title desc">
+  <title id="title">Silkpage symbol concept one</title>
+  <desc id="desc">A page mark woven from markup brackets and thread geometry, designed for Silkpage.</desc>
+
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f7faf4"/>
+      <stop offset="100%" stop-color="#dce5d4"/>
+    </linearGradient>
+    <linearGradient id="pageFill" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#eef4e9"/>
+    </linearGradient>
+    <linearGradient id="thread" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#c63a22"/>
+      <stop offset="45%" stop-color="#E97E00"/>
+      <stop offset="100%" stop-color="#566e41"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="24" stdDeviation="30" flood-color="#566e41" flood-opacity="0.18"/>
+    </filter>
+  </defs>
+
+  <rect width="1200" height="1200" fill="url(#bg)"/>
+
+  <g opacity="0.35">
+    <circle cx="920" cy="240" r="200" fill="#ffffff"/>
+    <circle cx="250" cy="960" r="260" fill="#faf6ef"/>
+  </g>
+
+  <g opacity="0.14" stroke="#897d6d" stroke-width="2" fill="none">
+    <path d="M 130 230 H 1070"/>
+    <path d="M 130 600 H 1070"/>
+    <path d="M 130 970 H 1070"/>
+    <path d="M 230 130 V 1070"/>
+    <path d="M 600 130 V 1070"/>
+    <path d="M 970 130 V 1070"/>
+  </g>
+
+  <g filter="url(#shadow)">
+    <path d="M 350 150 H 740 L 855 265 V 920 C 855 980 806 1030 746 1030 H 350 C 290 1030 240 980 240 920 V 260 C 240 200 290 150 350 150 Z" fill="url(#pageFill)"/>
+    <path d="M 740 150 V 250 C 740 294 776 330 820 330 H 855" fill="none" stroke="#566e41" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M 350 150 H 740 L 855 265 V 920 C 855 980 806 1030 746 1030 H 350 C 290 1030 240 980 240 920 V 260 C 240 200 290 150 350 150 Z" fill="none" stroke="#566e41" stroke-width="18" stroke-linejoin="round"/>
+  </g>
+
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M 324 430 C 406 348 474 318 560 318 C 650 318 716 354 790 430" stroke="url(#thread)" stroke-width="36"/>
+    <path d="M 324 528 C 406 610 474 640 560 640 C 650 640 716 604 790 528" stroke="url(#thread)" stroke-width="36"/>
+    <path d="M 324 626 C 406 544 474 514 560 514 C 650 514 716 550 790 626" stroke="url(#thread)" stroke-width="36"/>
+    <path d="M 324 724 C 406 806 474 836 560 836 C 650 836 716 800 790 724" stroke="url(#thread)" stroke-width="36"/>
+  </g>
+
+  <g fill="none" stroke="#566e41" stroke-width="26" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M 355 476 L 265 576 L 355 676"/>
+    <path d="M 762 476 L 852 576 L 762 676"/>
+    <path d="M 492 430 L 628 722"/>
+  </g>
+
+  <g fill="#57160F">
+    <circle cx="492" cy="430" r="20"/>
+    <circle cx="628" cy="722" r="20"/>
+  </g>
+
+  <g opacity="0.95">
+    <rect x="360" y="878" width="376" height="72" rx="24" fill="#26630A"/>
+    <text x="548" y="924" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="34" font-weight="700" fill="#ffffff">woven markup</text>
+  </g>
+</svg>

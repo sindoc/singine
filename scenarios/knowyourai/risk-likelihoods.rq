@@ -1,0 +1,3 @@
+SELECT ?s ?o
+WHERE { ?s knowyourai:RiskProfile ?o . }
+LIMIT 20

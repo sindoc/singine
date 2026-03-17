@@ -1,0 +1,94 @@
+# .singine-jvm — JVM environment configuration for singine
+#
+# Source this file in your shell before building or running singine:
+#   source ~/.singine-jvm          (bash/zsh)
+#   . ~/.singine-jvm               (POSIX sh)
+#
+# Or copy to ~/.singine-jvm and add to ~/.bashrc / ~/.zshrc:
+#   [ -f ~/.singine-jvm ] && source ~/.singine-jvm
+#
+# The JVM selected here is used by:
+#   ant compile / ant test-local / ant javadoc-xml
+#   mvn verify -P xmldoclet
+#   gradle javadocXml / gradle testLocal
+#   lein javac / lein test-local
+#   docker run singine-centos-test ant test-local
+#   ansible-playbook ansible/singine-jvm.yml
+#
+# CentOS LTS (Rocky Linux 9) equivalent:
+#   /usr/lib/jvm/java-21-openjdk-amd64   (Debian/Ubuntu layout)
+#   /usr/lib/jvm/java-21                 (RHEL/Rocky layout)
+# ===========================================================================
+
+# ── JAVA_HOME ──────────────────────────────────────────────────────────────
+# Uncomment and set to the JDK you want singine to use.
+# Minimum required: JDK 11.  Recommended: JDK 21 LTS.
+
+# macOS (Homebrew):
+#   export JAVA_HOME="$(/usr/libexec/java_home -v 21)"
+
+# Linux (RHEL / Rocky / CentOS Stream):
+#   export JAVA_HOME=/usr/lib/jvm/java-21-openjdk
+
+# Linux (Debian / Ubuntu):
+#   export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
+
+# Linux (SDKMAN):
+#   export JAVA_HOME=$HOME/.sdkman/candidates/java/current
+
+# If JAVA_HOME is not set, fall back to the system default:
+if [ -z "$JAVA_HOME" ]; then
+  if command -v java >/dev/null 2>&1; then
+    _java_bin=$(command -v java)
+    _java_real=$(readlink -f "$_java_bin" 2>/dev/null || echo "$_java_bin")
+    export JAVA_HOME="${_java_real%/bin/java}"
+  fi
+fi
+
+# Add $JAVA_HOME/bin to PATH if not already present
+if [ -n "$JAVA_HOME" ] && [[ ":$PATH:" != *":$JAVA_HOME/bin:"* ]]; then
+  export PATH="$JAVA_HOME/bin:$PATH"
+fi
+
+# ── cacerts ────────────────────────────────────────────────────────────────
+# Custom truststore for singine JVM connections.
+# Overrides the JDK's bundled cacerts for all singine processes.
+#
+# Precedence:
+#   1. $SINGINE_CACERTS (set here or in CI)
+#   2. $JAVA_HOME/conf/security/cacerts       (Java 9+)
+#   3. $JAVA_HOME/lib/security/cacerts        (Java 8)
+#
+# Inject into JVM:
+#   -Djavax.net.ssl.trustStore=$SINGINE_CACERTS
+#
+# CentOS LTS:
+#   /etc/pki/ca-trust/extracted/java/cacerts  (update-ca-trust on Rocky 9)
+
+# export SINGINE_CACERTS=/etc/pki/ca-trust/extracted/java/cacerts
+
+if [ -z "$SINGINE_CACERTS" ] && [ -n "$JAVA_HOME" ]; then
+  if [ -f "$JAVA_HOME/conf/security/cacerts" ]; then
+    export SINGINE_CACERTS="$JAVA_HOME/conf/security/cacerts"
+  elif [ -f "$JAVA_HOME/lib/security/cacerts" ]; then
+    export SINGINE_CACERTS="$JAVA_HOME/lib/security/cacerts"
+  fi
+fi
+
+# Export to JVM system property for Maven, Gradle, Lein, Ant
+export JAVA_TOOL_OPTIONS="${JAVA_TOOL_OPTIONS} -Djavax.net.ssl.trustStore=${SINGINE_CACERTS}"
+
+# ── JVM options ────────────────────────────────────────────────────────────
+# Common options passed to the singine JVM.
+# MAVEN_OPTS, GRADLE_OPTS, LEIN_JVM_OPTS pick these up automatically.
+
+export SINGINE_JVM_OPTS="-Xms256m -Xmx1g -Dfile.encoding=UTF-8"
+export MAVEN_OPTS="${SINGINE_JVM_OPTS}"
+export GRADLE_OPTS="${SINGINE_JVM_OPTS}"
+export LEIN_JVM_OPTS="${SINGINE_JVM_OPTS}"
+
+# ── Diagnostics ────────────────────────────────────────────────────────────
+# Uncomment to print resolved JVM configuration on source:
+# echo "[singine-jvm] JAVA_HOME=${JAVA_HOME}"
+# echo "[singine-jvm] cacerts=${SINGINE_CACERTS}"
+# echo "[singine-jvm] PATH=${PATH}"

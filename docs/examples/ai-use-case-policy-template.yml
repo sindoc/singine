@@ -1,0 +1,63 @@
+# Collibra-shaped AI Use Case template for Singine policy inspection.
+template_name: "AI Use Case Policy Template"
+asset_type: "AI Use Case"
+collibra:
+  asset_type: "AI Use Case"
+  community: "AI Governance"
+  domain: "AI Use Cases"
+  relation_types:
+    - "governed by"
+    - "implemented by"
+    - "uses"
+
+ai_use_cases:
+  - id: "aiuc-claude-policy-review"
+    name: "Claude Policy Review Assistant"
+    ai_system: "claude"
+    ai_system_display_name: "Claude"
+    vendor: "Anthropic"
+    role_of_ai: "Assistant"
+    risk_profile: "medium"
+    lifecycle_status: "candidate"
+    owner: "AI Governance Office"
+    governed_policies:
+      - "AI Use Case Documentation Policy"
+      - "Prompt and Output Review Policy"
+      - "Human Oversight Policy"
+    datasets:
+      - "Policy Register"
+      - "Control Library"
+
+  - id: "aiuc-codex-kernel-sync"
+    name: "OpenAI Codex Kernel Policy Sync"
+    ai_system: "codex"
+    ai_system_display_name: "OpenAI Codex"
+    vendor: "OpenAI"
+    role_of_ai: "Tool"
+    risk_profile: "medium"
+    lifecycle_status: "active"
+    owner: "Platform Engineering"
+    governed_policies:
+      - "AI Use Case Documentation Policy"
+      - "Controlled Code Execution Policy"
+      - "Git-backed Policy Synchronization Policy"
+    datasets:
+      - "Singine Kernel Source"
+      - "Policy Repository"
+
+  - id: "aiuc-openai-api-use-case"
+    name: "OpenAI API Knowledge Enrichment"
+    ai_system: "openai-api"
+    ai_system_display_name: "OpenAI API"
+    vendor: "OpenAI"
+    role_of_ai: "Assistant"
+    risk_profile: "high"
+    lifecycle_status: "review"
+    owner: "Data Products Office"
+    governed_policies:
+      - "AI Use Case Documentation Policy"
+      - "External Model Access Policy"
+      - "Sensitive Data Handling Policy"
+    datasets:
+      - "Reference Data"
+      - "Business Glossary"

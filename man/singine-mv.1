@@ -1,0 +1,67 @@
+.TH SINGINE-MV 1 "2026-03-16" "singine 0.2.0" "User Commands"
+.SH NAME
+singine-mv \- move filesystem paths from stdin into a destination directory
+.SH SYNOPSIS
+.B singine mv
+.B fileListTo
+\fIDEST_DIR\fR
+[\fB-0\fR|\fB--null\fR]
+[\fB--mkdir\fR]
+[\fB--dry-run\fR]
+[\fB--json\fR]
+.SH DESCRIPTION
+The
+.B mv
+command is a first-class Singine activity entry point for filesystem moves.
+It reads source paths from standard input and applies the
+.B fileListTo
+activity to move each listed path into the destination directory.
+.PP
+This command is designed for shell pipelines. Use newline-delimited input for
+simple cases, or NUL-delimited input with
+.B --null
+for filenames containing spaces, tabs, or newlines.
+.PP
+When the Singine JVM filesystem activity classes are compiled under
+.I core/classes
+the CLI may route execution to the JVM-backed
+.B fileListTo
+activity implementation.
+.SH ACTIVITY
+.TP
+.B fileListTo
+Move each filesystem path received on stdin into the destination directory
+given as
+.IR DEST_DIR .
+.SH OPTIONS
+.TP
+.B -0 , --null
+Read NUL-delimited paths from stdin instead of newline-delimited paths.
+.TP
+.B --mkdir
+Create the destination directory if it does not already exist.
+.TP
+.B --dry-run
+Print the planned moves without modifying the filesystem.
+.TP
+.B --json
+Emit a JSON result with moved, skipped, and failed paths.
+.SH EXAMPLES
+.nf
+ls -a | grep -i collibra | singine mv fileListTo ~/ws/collibra/raw/
+find . -maxdepth 1 -iname '*collibra*' -print0 | singine mv fileListTo ~/ws/collibra/raw/ --null
+find . -maxdepth 1 -iname '*.dmg' -print0 | singine mv fileListTo ~/Downloads/Applications --null --mkdir
+find . -maxdepth 1 -iname '*.zip' -print0 | singine mv fileListTo ~/Downloads/Archives --null --dry-run
+singine find filesAboutTopic xflow --root-dir ~/Downloads --null | singine mv fileListTo ~/ws/xflow/ --null --mkdir
+printf '%s\n' ~/Downloads/report.pdf | java -cp ~/ws/git/github/sindoc/singine/core/classes singine.activity.fs.FilesystemActivityMain mv fileListTo ~/ws/archive --mkdir
+.fi
+.SH EXIT STATUS
+Returns 0 when all requested moves succeed or are planned via
+.BR --dry-run .
+Returns 1 when one or more move operations fail.
+.SH SEE ALSO
+.BR singine (1),
+.BR singine-transfer (1),
+.BR mv (1),
+.BR find (1),
+.BR xargs (1)

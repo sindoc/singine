@@ -1,0 +1,140 @@
+.TH SINGINE-MAN 1 "2026-03-16" "singine 0.2.0" "User Commands"
+.SH NAME
+singine-man \- open Singine manpages by topic
+.SH SYNOPSIS
+.B singine man
+[\fITOPIC\fR] [\fB--raw\fR]
+.SH DESCRIPTION
+Opens a manpage from Singine's bundled manual set. Without a topic, the main
+.BR singine (1)
+page is opened.
+.SH OPTIONS
+.TP
+.B --raw
+Print the filesystem path to the selected manpage instead of opening it with
+.BR man (1).
+.SH TOPICS
+.TP
+.B singine
+Top-level command index and AI conversation data quick-start.
+.TP
+.B singine-ai
+Governed AI session recording, permission tracking, and conversation-data
+centralisation for Claude, Codex, and OpenAI.
+Start here if you want to list, inspect, export, or centralise AI conversation
+data.
+.TP
+.B singine-bridge
+SQLite and JDBC bridge operations. Covers how to build the bridge, run SPARQL
+queries, and query AI session data once it has been synced.
+.TP
+.B singine-policy
+AI policy pack management: template, canonify, sync, evaluate, approve, report.
+Covers the relationship between policy records and session permission records.
+.TP
+.B singine-decide
+Governance decision requests. Covers online and offline (JSON fallback) modes.
+Use this to register a decision against a completed AI session.
+.TP
+.B singine-context
+Terminal context inspection and sourced environment.
+.TP
+.B singine-runtime
+Runtime capability inspection and wrapped-command execution.
+.TP
+.B singine-server
+Local Singine HTTP server defaults, health checks, and bridge facade queries.
+.TP
+.B singine-logseq
+Logseq HTTP API defaults, token-aware ping, filesystem fallback notes, and
+Org/XML export through Emacs and \fBom-to-xml.el\fR.
+.TP
+.B singine-snapshot
+One-file Singine runtime/context snapshot with git, docker, Java, taxonomy, and Logseq metadata.
+.TP
+.B singine-model
+Singine model objects and bridge surfaces.
+.TP
+.B singine-activity
+Activity taxonomy: list, inspect, run, score. Covers DP(DP) meta-activities.
+.TP
+.B singine-photo
+Apple Photos review exports, deterministic test cases, and multi-runner test
+commands.
+.TP
+.B singine-jdbc-url
+Print the JDBC URL for a bridge database.
+.TP
+.B singine-xml
+XML matrix and artefact generation.
+.TP
+.B singine-auth
+Authentication bootstrap and TOTP login.
+.TP
+.B singine-idp
+Identity provider operations.
+.TP
+.B singine-install
+Launcher and manpage installation.
+.TP
+.B singine-template
+Generate Singine-aware Maven and npm project templates.
+.TP
+.B singine-singe
+Governed identity rendering from @mentions.
+.TP
+.B singine-find
+Filesystem path discovery via the
+.I filesAboutTopic
+activity.
+.TP
+.B singine-mv
+Move filesystem paths from stdin into a destination directory.
+.TP
+.B singine-transfer
+File transfer and queue/stack helpers.
+.TP
+.B singine-smtp
+SMTP test and send helpers.
+.SH EXAMPLES
+.nf
+# Top-level index (start here).
+singine man
+
+# AI conversation data — listing, inspection, export, centralisation.
+singine man singine-ai
+
+# Semantic bridge and SPARQL queries over AI session data.
+singine man singine-bridge
+
+# Policy governance for Claude, Codex, and OpenAI.
+singine man singine-policy
+
+# Governance decision records (online and offline).
+singine man singine-decide
+
+# Runtime, context, and execution envelope.
+singine man singine-runtime
+singine man singine-context
+singine man singine-server
+singine man singine-logseq
+singine man singine-snapshot
+
+# Template generation for Maven and npm.
+singine man singine-template
+
+# Activity taxonomy and DP(DP).
+singine man singine-activity
+
+# Apple Photos review workflow and test-case commands.
+singine man singine-photo
+
+# Get the raw filesystem path to a manpage.
+singine man singine-auth --raw
+.fi
+.SH SEE ALSO
+.BR singine (1),
+.BR singine-photo (1),
+.BR singine-ai (1),
+.BR singine-bridge (1),
+.BR singine-policy (1)

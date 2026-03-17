@@ -1,0 +1,176 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">Singine technical symbol concept</title>
+  <desc id="desc">A technical diagrammatic symbol showing Singine as a bounded orchestration engine between local sources and execution and query surfaces.</desc>
+
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f4efe6"/>
+      <stop offset="55%" stop-color="#ece4d6"/>
+      <stop offset="100%" stop-color="#e2d7c5"/>
+    </linearGradient>
+
+    <linearGradient id="engineFill" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#171717"/>
+      <stop offset="100%" stop-color="#2e2a27"/>
+    </linearGradient>
+
+    <linearGradient id="fieldFill" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#efe8db" stop-opacity="0.25"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.05"/>
+    </linearGradient>
+
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="18" stdDeviation="24" flood-color="#47372a" flood-opacity="0.16"/>
+    </filter>
+
+    <marker id="flowArrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M 0 0 L 12 6 L 0 12 z" fill="#7f2f23"/>
+    </marker>
+
+    <marker id="signalArrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M 0 0 L 12 6 L 0 12 z" fill="#23201d"/>
+    </marker>
+
+    <style>
+      .headline { letter-spacing: 0.02em; fill: #171717; }
+      .subline { letter-spacing: 0.03em; fill: #5c5147; }
+      .section { letter-spacing: 0.16em; fill: #7f2f23; }
+      .label { letter-spacing: 0.02em; fill: #201d1a; }
+      .small { letter-spacing: 0.02em; fill: #5c5147; }
+      .tiny { letter-spacing: 0.04em; fill: #7a6f63; }
+    </style>
+  </defs>
+
+  <rect width="1600" height="900" fill="url(#bg)"/>
+
+  <g opacity="0.38">
+    <circle cx="1340" cy="160" r="220" fill="#ffffff"/>
+    <circle cx="260" cy="760" r="260" fill="#f7f2eb"/>
+  </g>
+
+  <g opacity="0.14" stroke="#8d7f73" stroke-width="1.5" fill="none">
+    <path d="M 120 230 H 1480"/>
+    <path d="M 120 450 H 1480"/>
+    <path d="M 120 670 H 1480"/>
+    <path d="M 290 120 V 820"/>
+    <path d="M 800 120 V 820"/>
+    <path d="M 1310 120 V 820"/>
+  </g>
+
+  <text x="120" y="104" class="headline" font-family="Helvetica, Arial, sans-serif" font-size="72" font-weight="700">Singine</text>
+  <text x="120" y="144" class="subline" font-family="Helvetica, Arial, sans-serif" font-size="24" font-weight="500">bounded orchestration for local knowledge, runtime control, and multi-query access</text>
+
+  <text x="120" y="212" class="section" font-family="Helvetica, Arial, sans-serif" font-size="18" font-weight="700">LOCAL INPUTS</text>
+  <text x="690" y="212" class="section" font-family="Helvetica, Arial, sans-serif" font-size="18" font-weight="700">ENGINE</text>
+  <text x="1180" y="212" class="section" font-family="Helvetica, Arial, sans-serif" font-size="18" font-weight="700">CONTROLLED OUTPUTS</text>
+
+  <g>
+    <rect x="108" y="248" width="418" height="452" rx="36" fill="url(#fieldFill)" stroke="#ccbba8" stroke-width="2"/>
+    <rect x="108" y="722" width="418" height="80" rx="24" fill="#f8f3ec" stroke="#ccbba8" stroke-width="2"/>
+    <text x="140" y="771" class="tiny" font-family="Courier, monospace" font-size="16" font-weight="500">filesystem  /  logseq  /  sqlite  /  rdf  /  auth-state  /  runtime</text>
+
+    <g transform="translate(142 282)">
+      <rect width="156" height="112" rx="24" fill="#f7f1e8" stroke="#c7b4a1" stroke-width="2"/>
+      <path d="M 30 38 H 126 M 30 58 H 126 M 30 78 H 98" stroke="#27221f" stroke-width="5" stroke-linecap="round"/>
+      <text x="22" y="138" class="label" font-family="Helvetica, Arial, sans-serif" font-size="24" font-weight="600">Documents</text>
+    </g>
+
+    <g transform="translate(334 282)">
+      <rect width="156" height="112" rx="24" fill="#f7f1e8" stroke="#c7b4a1" stroke-width="2"/>
+      <ellipse cx="78" cy="43" rx="42" ry="16" fill="none" stroke="#27221f" stroke-width="4"/>
+      <path d="M 36 43 V 74 C 36 83 55 90 78 90 C 101 90 120 83 120 74 V 43" fill="none" stroke="#27221f" stroke-width="4"/>
+      <path d="M 36 58 C 36 67 55 74 78 74 C 101 74 120 67 120 58" fill="none" stroke="#27221f" stroke-width="4"/>
+      <text x="26" y="138" class="label" font-family="Helvetica, Arial, sans-serif" font-size="24" font-weight="600">Structured Data</text>
+    </g>
+
+    <g transform="translate(142 432)">
+      <rect width="156" height="112" rx="24" fill="#f7f1e8" stroke="#c7b4a1" stroke-width="2"/>
+      <path d="M 32 82 L 52 40 L 80 64 L 104 28 L 124 82" fill="none" stroke="#27221f" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="52" cy="40" r="6" fill="#7f2f23"/>
+      <circle cx="80" cy="64" r="6" fill="#7f2f23"/>
+      <circle cx="104" cy="28" r="6" fill="#7f2f23"/>
+      <text x="27" y="138" class="label" font-family="Helvetica, Arial, sans-serif" font-size="24" font-weight="600">Observed State</text>
+    </g>
+
+    <g transform="translate(334 432)">
+      <rect width="156" height="112" rx="24" fill="#f7f1e8" stroke="#c7b4a1" stroke-width="2"/>
+      <path d="M 34 78 C 52 36 104 36 122 78" fill="none" stroke="#27221f" stroke-width="5"/>
+      <path d="M 44 78 C 58 52 98 52 112 78" fill="none" stroke="#7f2f23" stroke-width="5"/>
+      <circle cx="78" cy="30" r="10" fill="none" stroke="#27221f" stroke-width="4"/>
+      <text x="42" y="138" class="label" font-family="Helvetica, Arial, sans-serif" font-size="24" font-weight="600">Identity</text>
+    </g>
+
+    <g transform="translate(238 582)">
+      <rect width="156" height="84" rx="24" fill="#7f2f23"/>
+      <text x="28" y="52" class="label" font-family="Helvetica, Arial, sans-serif" font-size="24" font-weight="600" fill="#f7f1e8" style="fill:#f7f1e8">many inputs</text>
+    </g>
+  </g>
+
+  <g filter="url(#shadow)">
+    <path d="M 642 300 L 842 238 L 1042 300 L 1108 450 L 1042 600 L 842 662 L 642 600 L 576 450 Z" fill="url(#engineFill)"/>
+    <path d="M 690 333 L 842 286 L 994 333 L 1044 450 L 994 567 L 842 614 L 690 567 L 640 450 Z" fill="none" stroke="#ba9d7d" stroke-width="2" opacity="0.55"/>
+  </g>
+
+  <g>
+    <path d="M 842 326 L 925 450 L 842 574 L 759 450 Z" fill="none" stroke="#f5e9d7" stroke-width="14" stroke-linejoin="round"/>
+    <path d="M 802 450 H 882" stroke="#f5e9d7" stroke-width="14" stroke-linecap="round"/>
+    <path d="M 842 410 V 490" stroke="#7f2f23" stroke-width="10" stroke-linecap="round"/>
+    <circle cx="842" cy="450" r="122" fill="none" stroke="#7f2f23" stroke-width="2" opacity="0.45" stroke-dasharray="10 12"/>
+    <text x="759" y="716" class="label" font-family="Helvetica, Arial, sans-serif" font-size="24" font-weight="600">bounded core</text>
+    <text x="708" y="744" class="small" font-family="Helvetica, Arial, sans-serif" font-size="18" font-weight="500">inspect • route • constrain • execute</text>
+    <text x="723" y="772" class="tiny" font-family="Courier, monospace" font-size="16" font-weight="500">agent shell / service bridge / query layer</text>
+  </g>
+
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M 522 338 C 592 338 630 334 676 344" stroke="#7f2f23" stroke-width="8" marker-end="url(#flowArrow)"/>
+    <path d="M 522 488 C 592 488 628 494 674 480" stroke="#7f2f23" stroke-width="8" marker-end="url(#flowArrow)"/>
+    <path d="M 522 624 C 596 624 632 604 680 566" stroke="#7f2f23" stroke-width="8" marker-end="url(#flowArrow)"/>
+
+    <path d="M 1004 344 C 1060 336 1100 336 1170 338" stroke="#23201d" stroke-width="8" marker-end="url(#signalArrow)"/>
+    <path d="M 1010 480 C 1084 486 1110 490 1170 490" stroke="#23201d" stroke-width="8" marker-end="url(#signalArrow)"/>
+    <path d="M 1000 564 C 1060 594 1104 620 1170 624" stroke="#23201d" stroke-width="8" marker-end="url(#signalArrow)"/>
+  </g>
+
+  <g>
+    <rect x="1072" y="248" width="418" height="452" rx="36" fill="url(#fieldFill)" stroke="#ccbba8" stroke-width="2"/>
+
+    <g transform="translate(1106 282)">
+      <rect width="156" height="112" rx="24" fill="#f7f1e8" stroke="#c7b4a1" stroke-width="2"/>
+      <path d="M 40 74 H 116 M 58 50 L 40 74 L 58 98" fill="none" stroke="#27221f" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="38" y="138" class="label" font-family="Helvetica, Arial, sans-serif" font-size="24" font-weight="600">CLI Actions</text>
+    </g>
+
+    <g transform="translate(1298 282)">
+      <rect width="156" height="112" rx="24" fill="#f7f1e8" stroke="#c7b4a1" stroke-width="2"/>
+      <path d="M 34 78 H 122 M 54 54 V 102 M 82 42 V 102" stroke="#27221f" stroke-width="5" stroke-linecap="round"/>
+      <text x="36" y="138" class="label" font-family="Helvetica, Arial, sans-serif" font-size="24" font-weight="600">Runtime Control</text>
+    </g>
+
+    <g transform="translate(1106 432)">
+      <rect width="156" height="112" rx="24" fill="#f7f1e8" stroke="#c7b4a1" stroke-width="2"/>
+      <path d="M 34 84 H 122 M 34 56 H 122 M 34 28 H 122" stroke="#27221f" stroke-width="5" stroke-linecap="round"/>
+      <circle cx="48" cy="28" r="7" fill="#7f2f23"/>
+      <circle cx="86" cy="56" r="7" fill="#7f2f23"/>
+      <circle cx="108" cy="84" r="7" fill="#7f2f23"/>
+      <text x="21" y="138" class="label" font-family="Helvetica, Arial, sans-serif" font-size="24" font-weight="600">SQL / SPARQL / GraphQL</text>
+    </g>
+
+    <g transform="translate(1298 432)">
+      <rect width="156" height="112" rx="24" fill="#f7f1e8" stroke="#c7b4a1" stroke-width="2"/>
+      <path d="M 78 26 V 84 M 48 44 L 78 26 L 108 44 M 48 66 L 78 84 L 108 66" fill="none" stroke="#27221f" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="41" y="138" class="label" font-family="Helvetica, Arial, sans-serif" font-size="24" font-weight="600">Bridge APIs</text>
+    </g>
+
+    <g transform="translate(1202 582)">
+      <rect width="156" height="84" rx="24" fill="#171717"/>
+      <text x="19" y="52" class="label" font-family="Helvetica, Arial, sans-serif" font-size="24" font-weight="600" fill="#f7f1e8" style="fill:#f7f1e8">safe surfaces</text>
+    </g>
+  </g>
+
+  <g>
+    <path d="M 516 744 H 1084" stroke="#baa38a" stroke-width="2"/>
+    <text x="610" y="808" class="small" font-family="Helvetica, Arial, sans-serif" font-size="18" font-weight="500">The value is not just “AI output”. It is governed movement:</text>
+    <text x="530" y="842" class="tiny" font-family="Courier, monospace" font-size="16" font-weight="500">heterogeneous local sources  ->  inspectable orchestration core  ->  precise execution and query interfaces</text>
+  </g>
+</svg>

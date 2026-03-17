@@ -1,0 +1,162 @@
+.TH SINGINE-POLICY 1 "2026-03-16" "singine 0.2.0" "User Commands"
+.SH NAME
+singine-policy \- manage governed policy packs and policy-backed execution workflows
+.SH SYNOPSIS
+.B singine policy ai
+\fICOMMAND\fR [\fIOPTIONS\fR]
+.SH DESCRIPTION
+.B singine policy
+is the top-level policy management surface for Singine.
+The
+.B ai
+family governs request evaluation and approval for Claude, Codex, and OpenAI
+systems.
+.PP
+Policy and AI session permission data are complementary:
+.IP \(bu 2
+.B Policy
+records define what a given AI system is
+.I allowed
+to do in advance (synced from LDAP/LDIF or YAML templates into a policy
+repository).
+.IP \(bu 2
+.B Session permissions
+(see
+.BR singine-ai (1))
+record what was
+.I actually
+approved, denied, or conditionally granted during a specific conversation.
+.PP
+Use
+.B singine policy ai evaluate
+to check a pending request against the policy pack before running it.
+Use
+.B "singine ai session show ID --permissions"
+to review what was actually granted after the fact.
+.SH SUBCOMMANDS
+.TP
+.B template
+Read a YAML policy template shaped around Collibra
+.I AI Use Case
+assets and show per-system policy information.
+.TP
+.B canonify
+Generate canonical AI policy artefacts inside a policy repository.
+.TP
+.B sync
+Generate policy artefacts, write the kernel link file, and commit the results
+inside a dedicated git repository linked to the Singine kernel.
+.TP
+.B evaluate
+Evaluate a request against the canonical AI policy pack.
+Returns an allow/deny decision with the matched rule and rationale.
+.TP
+.B approve
+Persist an approval for a governed request and link it to the policy lineage.
+.TP
+.B report
+Show approvals, recent decisions, and invocation counters for an AI system.
+.SH SESSION PERMISSION LINEAGE
+For any conversation session, the full chain from policy pack to individual
+permission grants can be traced as follows:
+.PP
+.B 1. Check the governing policy pack
+.nf
+singine policy ai report --ai-system claude
+singine policy ai report --ai-system codex
+.fi
+.PP
+.B 2. Show what was actually granted in a session
+.nf
+singine ai session show SESSION-ID --permissions
+.fi
+.PP
+.B 3. Export the full permission record for audit
+.nf
+singine ai session export SESSION-ID --raw > SESSION-ID-audit.json
+.fi
+.PP
+.B 4. Record a post-hoc governance decision for a session
+.nf
+singine decide SESSION-ID --decision approve --reason "Audit review complete"
+.fi
+.SH REPOSITORY MODEL
+The
+.B sync
+workflow assumes a dedicated git repository for policy assets.
+Generated artefacts are written under
+.I policy/ai/current/
+by default, and a
+.I singine-kernel-link.json
+manifest is maintained under
+.I policy/ai/
+to tie the policy repository back to the Singine kernel repository where
+governed process execution and generated inputs and outputs integrate.
+.SH EXAMPLES
+.nf
+# Canonify AI policy files into a dedicated policy repository.
+singine policy ai canonify \\
+  --policy-repo /Users/skh/ws/git/github/sindoc/singine-policy \\
+  --ldap-ldif docs/examples/ldap-ai-groups.ldif \\
+  --systems claude codex openai-api chatgpt
+
+# List the AI systems described by a Collibra AI Use Case YAML template.
+singine policy ai template \\
+  --template-yaml docs/examples/ai-use-case-policy-template.yml
+
+# Show the governed policies and AI use cases for one system from the YAML template.
+singine policy ai template \\
+  --template-yaml docs/examples/ai-use-case-policy-template.yml \\
+  --ai-system codex
+
+# Emit the same template view as JSON for automation or downstream Collibra import prep.
+singine policy ai template \\
+  --template-yaml docs/examples/ai-use-case-policy-template.yml \\
+  --ai-system claude \\
+  --json
+
+# Sync the canonical policy pack into the policy repository and commit it.
+singine policy ai sync \\
+  --policy-repo /Users/skh/ws/git/github/sindoc/singine-policy \\
+  --ldap-ldif docs/examples/ldap-ai-groups.ldif \\
+  --systems claude codex openai-api chatgpt
+
+# Evaluate a Claude request using the synced policy pack.
+singine policy ai evaluate \\
+  --policy-repo /Users/skh/ws/git/github/sindoc/singine-policy \\
+  --ai-system claude \\
+  --environment dev \\
+  --network-mode offline \\
+  --execution-env local \\
+  --operation read \\
+  --command-text "rg --files /Users/skh/ws/git/github/sindoc/singine/man" \\
+  --path /Users/skh/ws/git/github/sindoc/singine/man/singine-policy.1
+
+# Approve a governed Collibra execution request.
+singine policy ai approve \\
+  --policy-repo /Users/skh/ws/git/github/sindoc/singine-policy \\
+  --ai-system codex \\
+  --environment dev \\
+  --network-mode lan \\
+  --execution-env docker \\
+  --operation execute \\
+  --command-text "docker compose -f docker/docker-compose.edge.yml up -d --build" \\
+  --repo-path /Users/skh/ws/collibra/edge \\
+  --resource-grant-kind repo \\
+  --granted-by singineer-dev \\
+  --reason "Approved Collibra Edge policy sync and validation run"
+
+# Show current governance state and invocation history for Claude and Codex.
+singine policy ai report --ai-system claude
+singine policy ai report --ai-system codex
+
+# Full permission audit for a specific conversation session.
+singine ai session show 2026-03-16-china-debt-timeline --permissions
+singine ai session export 2026-03-16-china-debt-timeline --raw
+.fi
+.SH SEE ALSO
+.BR singine (1),
+.BR singine-ai (1),
+.BR singine-decide (1),
+.BR singine-man (1),
+.BR singine-runtime (1)

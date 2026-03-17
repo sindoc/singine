@@ -1,0 +1,18 @@
+dn: cn=claude-admins,ou=Groups,dc=example,dc=org
+cn: claude-admins
+description: Claude administrators with workspace, idp, git, and policy management access
+objectClass: groupOfNames
+member: uid=alice,ou=People,dc=example,dc=org
+member: uid=bob,ou=People,dc=example,dc=org
+
+dn: cn=openai-governance-stewards,ou=Groups,dc=example,dc=org
+cn: openai-governance-stewards
+description: OpenAI governance stewards with review and approval access for policy propagation
+objectClass: groupOfNames
+member: uid=carol,ou=People,dc=example,dc=org
+
+dn: cn=chatgpt-builders,ou=Groups,dc=example,dc=org
+cn: chatgpt-builders
+description: ChatGPT builders with runtime exec, bridge query, filesystem, and markdown authoring access
+objectClass: groupOfNames
+member: uid=dave,ou=People,dc=example,dc=org

@@ -1,0 +1,278 @@
+---
+# ansible/singine-jvm.yml — Ansible playbook: JVM, cacerts, DNS, and singine dot files
+#
+# Provisions the singine build and runtime environment on:
+#   - macOS (local development)
+#   - Rocky Linux 9 / CentOS Stream 9 (CentOS LTS equivalent)
+#   - Debian / Ubuntu (CI/CD)
+#
+# Usage:
+#   ansible-playbook -i ansible/inventory/local ansible/singine-jvm.yml
+#   ansible-playbook -i ansible/inventory/local ansible/singine-jvm.yml --tags jvm
+#   ansible-playbook -i ansible/inventory/local ansible/singine-jvm.yml --tags dns
+#   ansible-playbook -i ansible/inventory/local ansible/singine-jvm.yml --tags dotfiles
+#   ansible-playbook -i ansible/inventory/local ansible/singine-jvm.yml --tags javadoc
+#
+# Also invokable via Ant:
+#   ant ansible-jvm
+#
+# Variables (override in inventory or -e):
+#   java_version       : 21 (default)
+#   singine_local_port : 2000 (canonical singine local-network port)
+#   singine_root       : ~/.singine
+#   singine_core_dir   : path to singine/core (autodetected)
+
+- name: Singine JVM, cacerts, DNS, and dot-file provisioning
+  hosts: all
+  become: "{{ ansible_become | default(false) }}"
+  gather_facts: true
+
+  vars:
+    java_version: 21
+    singine_local_host: singine.local
+    singine_local_port: 2000
+    singine_root: "{{ ansible_env.HOME }}/.singine"
+    singine_core_dir: "{{ playbook_dir | dirname }}"
+    singine_dotfiles_src: "{{ singine_core_dir }}"
+
+    # cacerts resolution by OS family
+    singine_cacerts_rhel: /etc/pki/ca-trust/extracted/java/cacerts
+    singine_cacerts_debian: /etc/ssl/certs/java/cacerts
+    singine_cacerts_macos: "{{ ansible_env.JAVA_HOME | default('/Library/Java/JavaVirtualMachines/temurin-21.jdk/Contents/Home') }}/conf/security/cacerts"
+
+  # ── Roles (inline tasks, no external roles required) ─────────────────────
+
+  pre_tasks:
+    - name: Detect OS family
+      ansible.builtin.set_fact:
+        is_rhel: "{{ ansible_os_family in ['RedHat', 'Rocky', 'AlmaLinux'] }}"
+        is_debian: "{{ ansible_os_family == 'Debian' }}"
+        is_macos: "{{ ansible_os_family == 'Darwin' }}"
+
+    - name: Resolve cacerts path
+      ansible.builtin.set_fact:
+        singine_cacerts: >-
+          {{
+            singine_cacerts_rhel   if is_rhel   else
+            singine_cacerts_debian if is_debian else
+            singine_cacerts_macos
+          }}
+
+  tasks:
+
+    # ── JVM: install OpenJDK ────────────────────────────────────────────────
+
+    - name: Install OpenJDK {{ java_version }} (RHEL/Rocky/CentOS)
+      ansible.builtin.dnf:
+        name: "java-{{ java_version }}-openjdk-devel"
+        state: present
+      when: is_rhel
+      become: true
+      tags: [jvm]
+
+    - name: Install OpenJDK {{ java_version }} (Debian/Ubuntu)
+      ansible.builtin.apt:
+        name: "openjdk-{{ java_version }}-jdk"
+        state: present
+        update_cache: true
+      when: is_debian
+      become: true
+      tags: [jvm]
+
+    - name: Install OpenJDK {{ java_version }} (macOS via Homebrew)
+      community.general.homebrew_cask:
+        name: "temurin@{{ java_version }}"
+        state: present
+      when: is_macos
+      tags: [jvm]
+
+    - name: Resolve JAVA_HOME (RHEL/Rocky)
+      ansible.builtin.shell: |
+        dirname "$(dirname "$(readlink -f "$(which javac)")")"
+      register: java_home_result
+      changed_when: false
+      when: is_rhel or is_debian
+      tags: [jvm]
+
+    - name: Set JAVA_HOME fact
+      ansible.builtin.set_fact:
+        java_home: "{{ java_home_result.stdout | trim if (is_rhel or is_debian) else '/Library/Java/JavaVirtualMachines/temurin-21.jdk/Contents/Home' }}"
+      tags: [jvm]
+
+    # ── Build tools: Ant, Maven, Gradle ───────────────────────────────────
+
+    - name: Install Ant (RHEL/Rocky)
+      ansible.builtin.dnf:
+        name: ant
+        state: present
+      when: is_rhel
+      become: true
+      tags: [jvm, build-tools]
+
+    - name: Install Maven (RHEL/Rocky)
+      ansible.builtin.dnf:
+        name: maven
+        state: present
+      when: is_rhel
+      become: true
+      tags: [jvm, build-tools]
+
+    - name: Install Ant + Maven (Debian/Ubuntu)
+      ansible.builtin.apt:
+        name: [ant, maven]
+        state: present
+      when: is_debian
+      become: true
+      tags: [jvm, build-tools]
+
+    # ── cacerts: update trust store ────────────────────────────────────────
+
+    - name: Update CA trust (RHEL/Rocky)
+      ansible.builtin.command: update-ca-trust
+      when: is_rhel
+      become: true
+      changed_when: false
+      tags: [cacerts]
+
+    - name: Update CA certificates (Debian/Ubuntu)
+      ansible.builtin.command: update-ca-certificates
+      when: is_debian
+      become: true
+      changed_when: false
+      tags: [cacerts]
+
+    - name: Verify cacerts file exists
+      ansible.builtin.stat:
+        path: "{{ singine_cacerts }}"
+      register: cacerts_stat
+      tags: [cacerts]
+
+    - name: Report cacerts path
+      ansible.builtin.debug:
+        msg: "singine_cacerts={{ singine_cacerts }} exists={{ cacerts_stat.stat.exists }}"
+      tags: [cacerts]
+
+    # ── DNS: singine.local → 127.0.0.1 ────────────────────────────────────
+
+    - name: Add singine.local to /etc/hosts
+      ansible.builtin.lineinfile:
+        path: /etc/hosts
+        line: "127.0.0.1  {{ singine_local_host }}  # singine local network (port {{ singine_local_port }})"
+        regexp: "{{ singine_local_host }}"
+        state: present
+      become: true
+      tags: [dns]
+
+    - name: Verify singine.local resolves
+      ansible.builtin.command: "getent hosts {{ singine_local_host }}"
+      register: dns_check
+      changed_when: false
+      failed_when: dns_check.rc != 0
+      tags: [dns]
+
+    # ── singine root directory ─────────────────────────────────────────────
+
+    - name: Create {{ singine_root }}
+      ansible.builtin.file:
+        path: "{{ singine_root }}"
+        state: directory
+        mode: "0700"
+      tags: [dotfiles]
+
+    # ── Dot files ──────────────────────────────────────────────────────────
+
+    - name: Deploy .singine-jvm
+      ansible.builtin.template:
+        src: "{{ singine_dotfiles_src }}/.singine-jvm"
+        dest: "{{ ansible_env.HOME }}/.singine-jvm"
+        mode: "0644"
+      vars:
+        # Inject resolved paths into the template
+        resolved_java_home: "{{ java_home | default('') }}"
+        resolved_cacerts: "{{ singine_cacerts }}"
+      tags: [dotfiles]
+
+    - name: Deploy .singinerc
+      ansible.builtin.copy:
+        src: "{{ singine_dotfiles_src }}/.singinerc"
+        dest: "{{ ansible_env.HOME }}/.singinerc"
+        mode: "0644"
+      tags: [dotfiles]
+
+    - name: Deploy .singine-dns
+      ansible.builtin.copy:
+        src: "{{ singine_dotfiles_src }}/.singine-dns"
+        dest: "{{ ansible_env.HOME }}/.singine-dns"
+        mode: "0644"
+      tags: [dotfiles]
+
+    - name: Source .singinerc in ~/.bashrc (idempotent)
+      ansible.builtin.lineinfile:
+        path: "{{ ansible_env.HOME }}/.bashrc"
+        line: "[ -f ~/.singinerc ] && source ~/.singinerc  # singine"
+        regexp: "singinerc"
+        state: present
+        create: true
+        mode: "0644"
+      tags: [dotfiles]
+
+    # ── xmldoclet: pre-fetch Norman Walsh jar ──────────────────────────────
+
+    - name: Fetch com.saxonica:xmldoclet:0.17.0 into local Maven cache
+      ansible.builtin.command: >
+        mvn dependency:get
+          -Dartifact=com.saxonica:xmldoclet:0.17.0
+          --quiet
+          -Dmdep.useBaseVersion=true
+      register: xmldoclet_fetch
+      changed_when: "'BUILD SUCCESS' in xmldoclet_fetch.stdout"
+      failed_when: false
+      environment:
+        JAVA_HOME: "{{ java_home | default('') }}"
+      tags: [xmldoclet, javadoc]
+
+    # ── Compile and test ───────────────────────────────────────────────────
+
+    - name: Compile singine-core Java sources
+      ansible.builtin.command: ant -f "{{ singine_core_dir }}/build.xml" compile
+      args:
+        chdir: "{{ singine_core_dir }}"
+      register: compile_result
+      changed_when: "'BUILD SUCCESSFUL' in compile_result.stdout"
+      environment:
+        JAVA_HOME: "{{ java_home | default('') }}"
+      tags: [compile]
+
+    - name: Run singine.local integration tests (15 TCs)
+      ansible.builtin.command: ant -f "{{ singine_core_dir }}/build.xml" test-local
+      args:
+        chdir: "{{ singine_core_dir }}"
+      register: test_result
+      changed_when: false
+      environment:
+        JAVA_HOME: "{{ java_home | default('') }}"
+        SINGINE_CACERTS: "{{ singine_cacerts }}"
+      tags: [test]
+
+    - name: Generate Norman Walsh XML Javadoc
+      ansible.builtin.command: ant -f "{{ singine_core_dir }}/build.xml" javadoc-xml
+      args:
+        chdir: "{{ singine_core_dir }}"
+      register: javadoc_result
+      changed_when: "'BUILD SUCCESSFUL' in javadoc_result.stdout"
+      failed_when: false
+      environment:
+        JAVA_HOME: "{{ java_home | default('') }}"
+      tags: [javadoc, xmldoclet]
+
+  # ── Summary ───────────────────────────────────────────────────────────────
+
+  post_tasks:
+    - name: Provisioning summary
+      ansible.builtin.debug:
+        msg:
+          - "JAVA_HOME  = {{ java_home | default('system default') }}"
+          - "cacerts    = {{ singine_cacerts }}"
+          - "DNS        = {{ singine_local_host }} → 127.0.0.1"
+          - "port       = {{ singine_local_port }}"
+          - "dot files  = ~/.singinerc, ~/.singine-jvm, ~/.singine-dns"

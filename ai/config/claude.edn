@@ -1,0 +1,52 @@
+;; singine/ai/config/claude.edn
+;;
+;; Configuration for the Anthropic Claude provider.
+;; Credentials are NOT stored here — see :credential/source.
+;; ------------------------------------------------------------------
+
+{:provider/id      "claude"
+ :provider/type    :CLAUDE
+ :provider/name    "Anthropic Claude"
+
+ ;; ── Endpoint ──────────────────────────────────────────────────
+ :endpoint/base    "https://api.anthropic.com/v1"
+ :endpoint/chat    "/messages"
+ :endpoint/models  "/models"
+
+ ;; ── Model defaults ────────────────────────────────────────────
+ :model/default    "claude-sonnet-4-6"
+ :model/available  ["claude-sonnet-4-6"
+                    "claude-opus-4-6"
+                    "claude-haiku-4-5-20251001"]
+ :model/max-tokens 8192
+
+ ;; ── Credential reference (not the credential itself) ──────────
+ :credential/source "env:ANTHROPIC_API_KEY"
+
+ ;; ── Governance defaults ───────────────────────────────────────
+ ;; Permissions automatically granted to every Claude session.
+ ;; These are conservative defaults; sessions may request more.
+ :default-permissions
+ [{:action "read"    :resource "filesystem:cwd"    :decision "granted"
+   :rationale "Read access to current working directory is standard."}
+  {:action "write"   :resource "filesystem:cwd"    :decision "conditional"
+   :rationale "Write requires explicit per-file approval."}
+  {:action "execute" :resource "shell:singine"      :decision "granted"
+   :rationale "singine CLI commands are pre-approved."}
+  {:action "commit"  :resource "git:*"              :decision "conditional"
+   :rationale "Git commits require user confirmation."}]
+
+ ;; ── Rate limits ───────────────────────────────────────────────
+ :rate/requests-per-minute 60
+ :rate/tokens-per-day      500000
+
+ ;; ── Session recording ─────────────────────────────────────────
+ :session/record-commands    true
+ :session/record-permissions true
+ :session/flush-on-close     true
+ :session/dir                "singine/ai/sessions/"
+
+ ;; ── TLS / trust ───────────────────────────────────────────────
+ :tls/verify          true
+ :tls/trust-store     "~/.singine/auth/trust.jks"
+ :tls/cacert-org-dns  true}

@@ -1,0 +1,30 @@
+.TH SINGINE-XML 1 "2026-03-13" "singine 0.2.0" "User Commands"
+.SH NAME
+singine-xml \- generate XML request, response, and heatmap artifacts
+.SH SYNOPSIS
+.B singine xml matrix
+[\fB--db\fR \fIPATH\fR] [\fB--output-dir\fR \fIPATH\fR]
+.SH DESCRIPTION
+Runs built-in and discovered scenarios across SQL, SPARQL, and GraphQL query
+dimensions and writes XML artifacts that summarize request inputs, response
+cells, and heatmap scoring.
+.SH OPTIONS
+.TP
+.B --db \fIPATH\fR
+SQLite bridge database to query. Default is
+.IR /tmp/sqlite.db .
+.TP
+.B --output-dir \fIPATH\fR
+Destination directory for
+.IR request.xml ,
+.IR response.xml ,
+and
+.IR heatmap.xml .
+.SH EXAMPLES
+.nf
+singine xml matrix
+singine xml matrix --db /tmp/sqlite.db --output-dir /tmp/singine-xml-matrix
+.fi
+.SH SEE ALSO
+.BR singine (1),
+.BR singine-bridge (1)
