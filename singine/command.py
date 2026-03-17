@@ -468,12 +468,13 @@ def cmd_template_create(args: argparse.Namespace) -> int:
     )
 
     name = args.name
+    target_dir_arg = Path(args.dir).expanduser() if args.dir else None
 
     if args.kind == "maven":
         defaults = default_maven_args(name)
         group_id = args.group_id or defaults["group_id"]
         artifact_id = args.artifact_id or defaults["artifact_id"]
-        target_dir = Path(args.dir).expanduser() if args.dir != "." else Path.cwd() / artifact_id
+        target_dir = target_dir_arg if target_dir_arg is not None else Path.cwd() / artifact_id
         try:
             result = create_maven_template(
                 name=name,
@@ -499,7 +500,7 @@ def cmd_template_create(args: argparse.Namespace) -> int:
         version = args.version if args.version != "0.1.0-SNAPSHOT" else "0.1.0"
         package_name = args.package_name or defaults["package_name"]
         target_leaf = package_name.split("/", 1)[-1] if package_name.startswith("@") else package_name
-        target_dir = Path(args.dir).expanduser() if args.dir != "." else Path.cwd() / target_leaf
+        target_dir = target_dir_arg if target_dir_arg is not None else Path.cwd() / target_leaf
         try:
             result = create_npm_template(
                 name=name,
@@ -1791,7 +1792,7 @@ def build_parser() -> argparse.ArgumentParser:
     template_create.add_argument("name", help="Project name")
     template_create.add_argument(
         "--dir",
-        default=".",
+        default=None,
         help="Target directory for the generated template. Defaults to a new project directory under the current directory.",
     )
     template_create.add_argument("--description", help="Project description")

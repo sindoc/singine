@@ -1,0 +1,102 @@
+.TH SINGINE-LOGSEQ 1 "2026-03-17" "singine 0.2.0" "User Commands"
+.SH NAME
+singine-logseq \- inspect Logseq graphs and export them to Org and XML
+.SH SYNOPSIS
+.B singine logseq inspect
+[\fB--base-url\fR \fIURL\fR] [\fB--json\fR]
+.PP
+.B singine logseq ping
+[\fB--base-url\fR \fIURL\fR] [\fB--token\fR \fITOKEN\fR] [\fB--timeout\fR \fISECONDS\fR] [\fB--json\fR]
+.PP
+.B singine logseq graphs
+[\fB--root\fR \fIDIR\fR] [\fB--json\fR]
+.PP
+.B singine logseq export-org
+\fB--graph\fR \fINAME-OR-PATH\fR
+[\fB--root\fR \fIDIR\fR] [\fB--output\fR \fIFILE\fR]
+[\fB--limit\fR \fIN\fR] [\fB--pages-only\fR | \fB--journals-only\fR] [\fB--json\fR]
+.PP
+.B singine logseq export-xml
+\fB--graph\fR \fINAME-OR-PATH\fR
+\fB--org-output\fR \fIORGFILE\fR
+\fB--xml-output\fR \fIXMLFILE\fR
+[\fB--root\fR \fIDIR\fR]
+[\fB--om-to-xml-repo\fR \fIDIR\fR]
+[\fB--elisp-load-path\fR \fIDIR\fR]
+[\fB--emacs-bin\fR \fIPROGRAM\fR]
+[\fB--limit\fR \fIN\fR] [\fB--pages-only\fR | \fB--journals-only\fR] [\fB--json\fR]
+.SH DESCRIPTION
+The
+.B logseq
+command family reports the Logseq HTTP API defaults that Singine uses when it
+prefers API ingestion over filesystem fallback, and it can also discover local
+Logseq graph roots and render their Markdown content into Org mode and XML.
+.PP
+Singine's current default is:
+.IP
+\fBhttp://127.0.0.1:12315/api\fR
+.PP
+with the bearer token sourced from
+.BR LOGSEQ_API_TOKEN .
+When the API is unavailable, Singine falls back to local graph directories
+under \fI~/ws/logseq\fR.
+.PP
+For the XML export path, Singine expects a local checkout of Norman Walsh's
+\fBorg-to-xml\fR project and Emacs-loadable dependencies such as
+\fBorg-ml\fR, \fBdash.el\fR, and \fBs.el\fR. The default workspace layout used
+by the command examples is:
+.IP \(bu 2
+\fI/Users/skh/ws/git/codeberg/ndw/org-to-xml\fR
+.IP \(bu 2
+\fI/Users/skh/ws/git/github/ndwarshuis/org-ml\fR
+.IP \(bu 2
+\fI/Users/skh/ws/git/github/magnars/dash.el\fR
+.IP \(bu 2
+\fI/Users/skh/ws/git/github/magnars/s.el\fR
+.SH COMMANDS
+.TP
+.B inspect
+Print the effective base URL, API endpoint, token presence flag, filesystem
+fallback hint, and publication alignment with the activity taxonomy and the
+SilkPage docs tree.
+.TP
+.B ping
+POST \fBlogseq.App.getCurrentGraph\fR to the configured Logseq API endpoint.
+.TP
+.B graphs
+Discover local Logseq graph base directories. Singine checks direct graph roots
+with \fIpages/\fR and \fIjournals/\fR, and versioned graphs under
+\fIversion-files/base\fR. Default search roots are \fI~/ws/logseq\fR and the
+versioned website graph under \fI~/ws/git/github/sindoc/website/logseq\fR.
+.TP
+.B export-org
+Resolve a graph by name or path and render it as a consolidated Org document.
+This is intended as the hand-off point to Emacs and Org mode tooling.
+.TP
+.B export-xml
+Generate an Org document and then invoke Emacs in batch mode to call Norman
+Walsh's \fBom-to-xml.el\fR from the \fBorg-to-xml\fR project. Singine also
+adds extra Emacs load paths for dependencies such as \fBorg-ml\fR.
+.SH EXAMPLES
+.nf
+singine logseq inspect
+singine logseq inspect --json
+singine logseq ping --token "$LOGSEQ_API_TOKEN" --json
+singine logseq graphs --json
+singine logseq export-org --graph kernel --output /tmp/kernel.org
+singine logseq export-org \\
+  --graph /Users/skh/ws/git/github/sindoc/website/logseq \\
+  --limit 5
+singine logseq export-xml \\
+  --graph kernel \\
+  --org-output /tmp/kernel.org \\
+  --xml-output /tmp/kernel.xml \\
+  --om-to-xml-repo /Users/skh/ws/git/codeberg/ndw/org-to-xml \\
+  --elisp-load-path /Users/skh/ws/git/github/ndwarshuis/org-ml \\
+  --json
+.fi
+.SH SEE ALSO
+.BR singine (1),
+.BR singine-server (1),
+.BR singine-snapshot (1),
+.BR singine-man (1)
