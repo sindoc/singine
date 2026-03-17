@@ -1,0 +1,15 @@
+# silkpage/.gitignore
+
+# macOS metadata
+.DS_Store
+**/.DS_Store
+
+# Editor temporaries
+*.xsl~
+*.xml~
+*~
+
+# Build output
+out/
+target/
+build/output/
