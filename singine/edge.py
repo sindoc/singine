@@ -324,6 +324,33 @@ def cmd_edge_deploy(args: argparse.Namespace) -> int:
 
 # ── Agent subcommands ─────────────────────────────────────────────────────────
 
+def cmd_edge_setup(args: argparse.Namespace) -> int:
+    """Run the full automated setup and launch the stack."""
+    edge = _edge_dir()
+    script = edge / "scripts" / "setup.sh"
+    if not script.exists():
+        msg = f"Setup script not found: {script}"
+        if args.json:
+            print(json.dumps(_envelope(False, "edge setup", error=msg)))
+        else:
+            print(f"[edge setup] ERROR: {msg}", file=sys.stderr)
+        return 1
+
+    cmd = ["bash", str(script)]
+    if args.dev:
+        cmd.append("--dev")
+    if args.no_start:
+        cmd.append("--no-start")
+    if args.tag:
+        cmd += ["--tag", args.tag]
+
+    result = subprocess.run(cmd, text=True)
+    ok = result.returncode == 0
+    if args.json:
+        print(json.dumps(_envelope(ok, "edge setup", dev=args.dev, exit_code=result.returncode)))
+    return result.returncode
+
+
 def cmd_edge_javadoc(args: argparse.Namespace) -> int:
     """Build Javadoc for the edge Java interface layer."""
     edge = _edge_dir()
@@ -461,6 +488,19 @@ def add_edge_parser(sub: argparse._SubParsersAction) -> None:
     p.add_argument("--tag", default="local", help="Image tag (default: local)")
     p.add_argument("--json", action="store_true")
     p.set_defaults(func=cmd_edge_install)
+
+    # ── setup ─────────────────────────────────────────────────────────────────
+    p = edge_sub.add_parser(
+        "setup",
+        help="Full automated setup: certs, .env, JAR, images, launch (runs scripts/setup.sh)",
+    )
+    p.add_argument("--dev", action="store_true",
+                   help="Use mock DGC edge (auto-enabled when collibra-edge.jar is absent)")
+    p.add_argument("--no-start", action="store_true", dest="no_start",
+                   help="Build and prepare but do not start the stack")
+    p.add_argument("--tag", default="local", help="Image tag (default: local)")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_edge_setup)
 
     # ── javadoc ───────────────────────────────────────────────────────────────
     p = edge_sub.add_parser(
