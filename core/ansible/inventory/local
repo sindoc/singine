@@ -1,0 +1,11 @@
+# ansible/inventory/local — Ansible inventory for localhost provisioning
+#
+# Usage:
+#   ansible-playbook -i ansible/inventory/local ansible/singine-jvm.yml
+#   ansible-playbook -i ansible/inventory/local ansible/singine-jvm.yml --tags jvm
+#
+# This inventory targets the local machine only (no SSH required).
+# ansible_connection=local bypasses SSH entirely.
+
+[local]
+localhost ansible_connection=local ansible_python_interpreter=auto_silent

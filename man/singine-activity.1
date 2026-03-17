@@ -97,12 +97,22 @@ The canonical EDN taxonomy is at:
 .IP
 .I singine/core/resources/singine/activity/taxonomy.edn
 .PP
-It is the single source of truth from which XML, SPARQL, GraphQL,
-LaTeX, SVG, and Logseq query artefacts are generated via:
+It is aligned with the Java action/activity interfaces under:
+.IP
+.I singine/core/java/singine/activity/
+.PP
+and is the single source of truth from which XML, SPARQL, GraphQL,
+LaTeX, SVG, Logseq query artefacts, and SilkPage-facing publication inputs
+are generated via:
 .IP
 .nf
 singine xml matrix --db /tmp/sqlite.db --output-dir /tmp/singine-xml-matrix
 .fi
+.PP
+The same publication chain is typically completed with Ant Javadoc generation
+and the xmldoclet/SilkPage doc pipeline described in
+.BR singine-server (1)
+and the repo README files.
 .SH AI CONVERSATION ACTIVITIES
 AI conversations are recorded as activity instances.
 Each governed Claude Code session under
@@ -152,4 +162,5 @@ activity taxonomy itself.  The logo is published at
 .BR singine-decide (1),
 .BR singine-model (1),
 .BR singine-xml (1),
-.BR singine-bridge (1)
+.BR singine-bridge (1),
+.BR singine-server (1)

@@ -160,6 +160,59 @@
       :collibra/name       "Move File List To Directory"
       :collibra/id         ""}}]}
 
+  ;; ── photo-review ──────────────────────────────────────────────
+  {:category/id          "photo-review"
+   :category/domain      "media-review"
+   :category/name        "Photo Review Exports"
+   :category/labels      {:en "Photo Review Exports"
+                          :fr "Exports de revue photo"
+                          :nl "Foto review-exports"}
+   :category/description "Activities for producing lightweight review JPEGs
+                          from Apple Photos moments and test-case fixtures
+                          aligned with Singine's local media governance flow."
+
+   :category/activities
+
+   [{:activity/id          "activity-photo-export-review-01"
+     :activity/name        "Export City Review JPEGs from Apple Photos"
+     :activity/description "Query Apple Photos by moment title/subtitle,
+                            export still images, and compress them into
+                            lightweight review JPEGs with manifest and path
+                            list artefacts for downstream Singine transfer."
+     :activity/subcategory "review-export"
+     :activity/policy
+     {:policy/id       "policy-singine-photo-local-review-01"
+      :policy/decision "approved"
+      :policy/rationale "Approved for local Apple Photos review export
+                         executed inside Singine's local workstation
+                         boundary with explicit output directories."}
+     :activity/shell-init  ["~/.singine/activity.sh"
+                            "~/.singine/activity.bash"]
+     :activity/outputs     [:jpeg :json :xml :tsv]
+     :activity/collibra
+     {:collibra/asset-type "Business Process"
+      :collibra/name       "Export City Review JPEGs from Apple Photos"
+      :collibra/id         ""}}
+
+    {:activity/id          "activity-photo-test-case-01"
+     :activity/name        "Generate Photo Review Export Test Case"
+     :activity/description "Create a self-contained Apple Photos fixture with
+                            taxonomy-linked activity metadata so the review
+                            export flow can be exercised with deterministic
+                            local commands and build runners."
+     :activity/subcategory "test-case-generation"
+     :activity/policy
+     {:policy/id       "policy-singine-photo-local-review-01"
+      :policy/decision "approved"
+      :policy/rationale "Approved for local deterministic fixture generation
+                         used to validate Singine photo workflows."}
+     :activity/shell-init  ["~/.singine/activity.sh"]
+     :activity/outputs     [:jpeg :json :tsv :html]
+     :activity/collibra
+     {:collibra/asset-type "Business Process"
+      :collibra/name       "Generate Photo Review Export Test Case"
+      :collibra/id         ""}}]}
+
   ;; ── elia-electricity ──────────────────────────────────────────
   {:category/id          "elia-electricity"
    :category/domain      "elia-electricity"

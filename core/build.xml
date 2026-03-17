@@ -55,6 +55,29 @@
   <property name="mail.folder"   value="INBOX"/>
   <property name="mail.search"   value="invoice"/>
 
+  <!--
+    JVM configuration via $JAVA_HOME.
+    Override with: ant -Djava.home.bin=$JAVA_HOME/bin <target>
+    Or export JAVA_HOME before invoking ant; the env.JAVA_HOME property is
+    set automatically when the variable is present in the shell environment.
+
+    cacerts: set via -Djavax.net.ssl.trustStore or $SINGINE_CACERTS.
+    Defaults to $JAVA_HOME/conf/security/cacerts (Java 9+) or
+    $JAVA_HOME/lib/security/cacerts (Java 8).
+
+    DNS: singine.local → 127.0.0.1 for test-local target.
+    For production: add "127.0.0.1  singine.local" to /etc/hosts.
+  -->
+  <property environment="env"/>
+  <!-- Prefer $JAVA_HOME/bin if set, fall back to /usr/bin -->
+  <condition property="java.home.bin" value="${env.JAVA_HOME}/bin" else="/usr/bin">
+    <isset property="env.JAVA_HOME"/>
+  </condition>
+  <!-- singine.local default port -->
+  <property name="singine.local.port" value="2000"/>
+  <!-- CentOS test image tag -->
+  <property name="centos.image" value="singine-centos-test:latest"/>
+
   <!-- ── Init: detect dependency jars from local Maven cache ─────────────── -->
 
   <target name="init" description="Detect dependency jars and xmldoclet from ~/.m2">
@@ -81,29 +104,56 @@
 
   <target name="compile" depends="init" description="javac all Java sources → classes/">
     <exec executable="bash" failonerror="true">
-      <env key="PATH" value="/usr/bin:/bin"/>
+      <env key="PATH" value="${java.home.bin}:/usr/bin:/bin"/>
       <arg value="-c"/>
-      <arg value="javac -d '${classes}' -cp '${classes}:${m2.classpath}' $(find '${src.java}' -name '*.java' | sort)"/>
+      <arg value="'${java.home.bin}/javac' -d '${classes}' -cp '${classes}:${m2.classpath}' $(find '${src.java}' -name '*.java' | sort)"/>
     </exec>
     <echo message="Java compilation complete → ${classes}"/>
+    <echo message="JDK: ${java.home.bin}"/>
   </target>
 
-  <target name="javadoc-html" depends="compile" description="Generate standard HTML Javadoc">
+  <!--
+    javadoc-html: standard HTML Javadoc for all singine.* packages.
+    Uses $JAVA_HOME/bin/javadoc when JAVA_HOME is set.
+    Covers: singine.activity, singine.auth, singine.local (+ all sub-packages).
+  -->
+  <target name="javadoc-html" depends="compile" description="Generate standard HTML Javadoc (all singine.* packages)">
     <exec executable="bash" failonerror="true">
+      <env key="PATH" value="${java.home.bin}:/usr/bin:/bin"/>
       <arg value="-c"/>
-      <arg value="javadoc -quiet -classpath '${classes}:${m2.classpath}' -d '${target}/javadoc-html' -sourcepath '${src.java}' -subpackages singine.activity"/>
+      <arg value="'${java.home.bin}/javadoc' -quiet -classpath '${classes}:${m2.classpath}' -d '${target}/javadoc-html' -sourcepath '${src.java}' -subpackages singine"/>
     </exec>
     <echo message="HTML Javadoc complete → ${target}/javadoc-html"/>
   </target>
 
-  <target name="javadoc-xml" depends="compile" description="Generate XML Javadoc via Saxonica xmldoclet">
+  <!--
+    javadoc-xml: Norman Walsh's xmldoclet (com.saxonica:xmldoclet).
+    Generates machine-readable XML Javadoc for all singine.* packages.
+
+    Invokable from:
+      ant javadoc-xml                   (Ant, uses $JAVA_HOME if set)
+      mvn verify -P xmldoclet           (Maven, see pom.xml)
+      gradle javadocXml                 (Gradle, see build.gradle)
+      lein javadoc-xml                  (Leiningen, see project.clj)
+      docker run -rm singine-centos-test ant javadoc-xml    (Docker)
+      ansible-playbook ansible/singine-jvm.yml -tags javadoc    (Ansible)
+
+    Output: target/javadoc-xml/
+    Key file: target/javadoc-xml/javadoc.xml (merged XML tree)
+
+    Custom cacerts: pass -Djavax.net.ssl.trustStore=/path/to/cacerts
+    Custom DNS:     singine.local resolved at HTTP layer (Host header).
+  -->
+  <target name="javadoc-xml" depends="compile" description="Generate XML Javadoc via Norman Walsh xmldoclet (all singine.* packages)">
     <fail unless="xmldoclet.jar"
-          message="xmldoclet jar not found in ~/.m2. Install com.saxonica:xmldoclet first, then rerun ant javadoc-xml."/>
+          message="xmldoclet jar not found in ~/.m2. Run: mvn dependency:get -Dartifact=com.saxonica:xmldoclet:0.17.0"/>
     <exec executable="bash" failonerror="true">
+      <env key="PATH" value="${java.home.bin}:/usr/bin:/bin"/>
       <arg value="-c"/>
-      <arg value="javadoc -quiet -classpath '${classes}:${m2.classpath}' -docletpath '${xmldoclet.jar}:${m2.classpath}' -doclet com.saxonica.xmldoclet.XmlDoclet -d '${target}/javadoc-xml' -sourcepath '${src.java}' -subpackages singine.activity"/>
+      <arg value="'${java.home.bin}/javadoc' -quiet -classpath '${classes}:${m2.classpath}' -docletpath '${xmldoclet.jar}:${m2.classpath}' -doclet com.saxonica.xmldoclet.XmlDoclet -d '${target}/javadoc-xml' -sourcepath '${src.java}' -subpackages singine"/>
     </exec>
     <echo message="XML Javadoc complete → ${target}/javadoc-xml"/>
+    <echo message="Primary output: ${target}/javadoc-xml/javadoc.xml"/>
   </target>
 
   <!-- ── Test: full Clojure test suite ────────────────────────────────────── -->
@@ -198,6 +248,112 @@
     <delete dir="${classes}" includeemptydirs="true"/>
     <delete dir="${target}"  includeemptydirs="true"/>
     <echo message="Clean complete."/>
+  </target>
+
+  <!-- ── test-centos: run tests inside CentOS LTS (Rocky Linux 9) Docker ───── -->
+
+  <!--
+    Builds the CentOS LTS test image and runs the full Java + Clojure test suite
+    inside it, using the JDK installed in the container (not $JAVA_HOME on the host).
+
+    The Dockerfile is at: docker/Dockerfile.centos
+    It installs: OpenJDK 21, Ant, Maven, Gradle, Python 3, SQLite, DNS tools.
+
+    Environment variables passed into the container:
+      SINGINE_CACERTS — path to custom cacerts inside the container
+      SINGINE_DNS     — singine.local DNS record (injected into /etc/hosts)
+
+    Invokable from:
+      ant test-centos
+      docker run -rm singine-centos-test ant test-local
+  -->
+  <target name="test-centos-build" description="Build CentOS LTS test Docker image">
+    <exec executable="docker" failonerror="true">
+      <arg value="build"/>
+      <arg value="-t"/>
+      <arg value="${centos.image}"/>
+      <arg value="-f"/>
+      <arg value="${docker.dir}/Dockerfile.centos"/>
+      <arg value="${basedir}/.."/>
+    </exec>
+    <echo message="CentOS test image built: ${centos.image}"/>
+  </target>
+
+  <target name="test-centos" depends="test-centos-build"
+          description="Run Java integration tests inside CentOS LTS Docker (Rocky Linux 9)">
+    <exec executable="docker" failonerror="true">
+      <arg value="run"/>
+      <arg value="--rm"/>
+      <arg value="--name"/>
+      <arg value="singine-test-centos"/>
+      <arg value="-e"/>
+      <arg value="SINGINE_LOCAL_PORT=${singine.local.port}"/>
+      <arg value="${centos.image}"/>
+      <arg value="ant"/>
+      <arg value="-f"/>
+      <arg value="/singine/core/build.xml"/>
+      <arg value="test-local"/>
+    </exec>
+    <echo message="CentOS integration tests complete."/>
+  </target>
+
+  <!-- ── ansible-jvm: provision JVM environment via Ansible ────────────────── -->
+
+  <!--
+    Runs the Ansible playbook that installs and configures:
+      - OpenJDK (version controlled by ansible/singine-jvm.yml)
+      - $JAVA_HOME and PATH in dot files
+      - Custom cacerts
+      - DNS: singine.local → 127.0.0.1
+
+    Targets: localhost by default (see ansible/inventory/local).
+    Override inventory: ant ansible-jvm -Dansible.inventory=my-inventory
+
+    Dot files deployed:
+      ~/.singine-jvm   — JVM environment variables (source in .bashrc / .zshrc)
+      ~/.singinerc     — singine main configuration
+      ~/.singine-dns   — DNS settings for singine.local
+
+    Requires: ansible-playbook on PATH.
+  -->
+  <property name="ansible.inventory" value="${basedir}/ansible/inventory/local"/>
+
+  <target name="ansible-jvm" description="Provision JVM, cacerts, DNS, and dot files via Ansible">
+    <exec executable="ansible-playbook" failonerror="true">
+      <arg value="-i"/>
+      <arg value="${ansible.inventory}"/>
+      <arg value="${basedir}/ansible/singine-jvm.yml"/>
+      <arg value="-v"/>
+    </exec>
+    <echo message="Ansible JVM provisioning complete."/>
+  </target>
+
+  <!-- ── test-local: singine.local integration test (Java, port 2000) ──────── -->
+
+  <!--
+    Runs SingineLocalIntegrationTest — a self-contained Java integration test
+    that verifies the full singine.local stack:
+
+      * SQLite master data (4 trusted individuals, access grants)
+      * Embedded HTTP server at port 2000 (singine.local canonical address)
+      * HTTP request/response for all roles (API_CONSUMER, SSH_OPERATOR,
+        CORTEX_BRIDGE_USER, ADMIN)
+      * singine.crypt: HS256 and RS256 JWS sign + verify (JwsToken, CertAuthority)
+      * singine.cortex: /bridge?action=sources stub response
+      * DNS management: singine.local → 127.0.0.1 registration
+      * XML catalog content: collibra-catalog URN assertions
+      * Response headers: X-Singine-Host, X-Singine-Port, X-Singine-Catalog
+
+    Covers 15 test cases (TC-01 … TC-15).
+    Exit code 1 if any TC fails; exit code 0 if all pass.
+  -->
+  <target name="test-local" depends="compile" description="Run singine.local Java integration tests (15 TCs)">
+    <exec executable="java" failonerror="true">
+      <arg value="-cp"/>
+      <arg value="${classes}:${m2.classpath}"/>
+      <arg value="singine.local.SingineLocalIntegrationTest"/>
+    </exec>
+    <echo message="singine.local integration tests complete."/>
   </target>
 
   <!-- ── All ──────────────────────────────────────────────────────────────── -->
