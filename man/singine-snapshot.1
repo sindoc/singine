@@ -1,0 +1,52 @@
+.TH SINGINE-SNAPSHOT 1 "2026-03-17" "singine 0.2.0" "User Commands"
+.SH NAME
+singine-snapshot \- persist a full Singine runtime, server, and Logseq context snapshot
+.SH SYNOPSIS
+.B singine snapshot save
+[\fB--output\fR \fIPATH\fR]
+[\fB--host\fR \fIHOST\fR]
+[\fB--port\fR \fIPORT\fR]
+[\fB--environment-type\fR \fIlocal|edge|docker\fR]
+[\fB--logseq-url\fR \fIURL\fR]
+[\fB--logseq-token\fR \fITOKEN\fR]
+[\fB--json\fR]
+.SH DESCRIPTION
+The
+.B snapshot
+command writes one JSON file that captures the current Singine operating
+context:
+.IP \(bu 2
+runtime shell and Python metadata
+.IP \(bu 2
+server defaults and route URLs
+.IP \(bu 2
+docker packaging files
+.IP \(bu 2
+git branch, HEAD, and working tree excerpt
+.IP \(bu 2
+Java activity interfaces and taxonomy path
+.IP \(bu 2
+publication and migration paths for Ant, xmldoclet, SilkPage, and generated spec output
+.IP \(bu 2
+Logseq API defaults and fallback path
+.PP
+This is the simplest way to save the entire context in Singine for later
+inspection, issue reports, or migration planning. The saved activity metadata
+includes recursively discovered JVM packages such as
+\fIsingine.activity.photo\fR, so publication and review workflows are preserved
+with the rest of the runtime state.
+.SH DEFAULT OUTPUT
+.IP
+\fI~/.singine/context/latest.json\fR
+.SH EXAMPLES
+.nf
+singine snapshot save
+singine snapshot save --json
+singine snapshot save --output /tmp/singine-context.json --environment-type docker --json
+.fi
+.SH SEE ALSO
+.BR singine (1),
+.BR singine-context (1),
+.BR singine-runtime (1),
+.BR singine-server (1),
+.BR singine-logseq (1)

@@ -15,6 +15,7 @@
  *   <li>{@link singine.activity.Action}    — runtime instance: follows a Policy against an Activity</li>
  *   <li>{@link singine.activity.Outcome}   — measurement: usage value + business value − platform cost</li>
  *   <li>{@link singine.activity.Taxonomy}  — classification node: domain → category → subcategory</li>
+ *   <li>{@link singine.activity.photo.PhotoReviewActivities} — nested photo-review activity bindings published via xmldoclet</li>
  * </ul>
  *
  * <h2>Lifecycle</h2>
@@ -71,6 +72,13 @@
  * Shell sourcing: each Action sources {@code ~/.singine/activity.sh} and
  * {@code ~/.singine/activity.bash} before executing, serializing its context
  * to {@code SINGINE_*} environment variables.</p>
+ *
+ * <h2>Inspection and Publication</h2>
+ * <p>The CLI command {@code singine server inspect --json} walks this package
+ * recursively so nested packages such as {@code singine.activity.photo} are
+ * visible in snapshots, man pages, and generated XML publication artifacts.
+ * The same package graph is published through xmldoclet and
+ * {@code docs/spec-publication.xml} for downstream SilkPage rendering.</p>
  *
  * @see singine.activity.Activity
  * @see singine.activity.Policy
