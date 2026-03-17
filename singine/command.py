@@ -1995,6 +1995,12 @@ def build_parser() -> argparse.ArgumentParser:
     from .policy import add_policy_parser
     add_policy_parser(sub)
 
+    from .domain import add_domain_parser
+    add_domain_parser(sub)
+
+    from .edge import add_edge_parser
+    add_edge_parser(sub)
+
     # ── singe — SINGE Is Not Generally Expansive (template + people) ────────
     singe_parser = sub.add_parser(
         "singe",

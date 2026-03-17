@@ -1,9 +1,11 @@
 SINGINE_CORTEX_DB      ?= /tmp/sqlite.db
+SINGINE_DOMAIN_DB      ?= /tmp/humble-idp.db
 SINGINE_KERNEL_GRAPH   ?= $(HOME)/ws/logseq/singine/sindoc/fa-KfK-HDYAT-KRNL-421b
 SINGINE_KERNEL_SEARCH  ?= singine
 SINGINE_REF            ?= C12
+HUMBLE_IDP_JAVA        ?= $(HOME)/ws/today/cleanUp/X0-DigitalIdentity/humble-idp/java
 
-.PHONY: help status test test-core serve-core repl-core javac-core python-smoke py-test-xml py-test-transfer-flow backlog-status install install-bash install-sh manpath bridge-build bridge-sources xml-matrix knowyourai-list knowyourai-query auth-demo auth-uri auth-code model-catalog brew-clojure transfer-queue-demo transfer-stack-demo logseq-kernel-build logseq-kernel-sources logseq-kernel-search logseq-kernel-commit logseq-kernel-sync
+.PHONY: help status test test-core serve-core repl-core javac-core python-smoke py-test-xml py-test-transfer-flow py-test-multilingual-emotion py-test-photo py-test-surface py-test-domain backlog-status install install-bash install-sh manpath bridge-build bridge-sources xml-matrix knowyourai-list knowyourai-query auth-demo auth-uri auth-code model-catalog brew-clojure transfer-queue-demo transfer-stack-demo logseq-kernel-build logseq-kernel-sources logseq-kernel-search logseq-kernel-commit logseq-kernel-sync domain-schema domain-seed domain-event-log domain-tx-list domain-refdata-list domain-docs docs
 
 help:
 	@printf "Singine commands:\n"
@@ -15,6 +17,9 @@ help:
 	@printf "  make javac-core    Compile Java helpers into core/classes/\n"
 	@printf "  make python-smoke  Compile the Python package to catch syntax errors\n"
 	@printf "  make py-test-xml   Run the XML matrix Python test\n"
+	@printf "  make py-test-multilingual-emotion  Run the multilingual emotion bundle test\n"
+	@printf "  make py-test-photo Run the singine photo workflow test suite\n"
+	@printf "  make py-test-surface Run the mock server/logseq surface integration test\n"
 	@printf "  make install       Install singine into ~/.local for sh\n"
 	@printf "  make install-bash  Install singine into ~/.local for bash\n"
 	@printf "  make install-sh    Install singine into ~/.local for sh\n"
@@ -38,11 +43,19 @@ help:
 	@printf "  make logseq-kernel-search  SINGINE_KERNEL_SEARCH=<term> Search kernel bridge\n"
 	@printf "  make logseq-kernel-commit  Git-commit new kernel journals (ref SINGINE_REF)\n"
 	@printf "  make logseq-kernel-sync    Rebuild bridge after Logseq Sync drop\n"
+	@printf "  make domain-schema         Init Humble IDP SQLite schema (SINGINE_DOMAIN_DB)\n"
+	@printf "  make domain-seed           Seed electricity balancing master data and ref data\n"
+	@printf "  make domain-event-log      Show recent domain events\n"
+	@printf "  make domain-tx-list        List governed transactions\n"
+	@printf "  make domain-refdata-list   List reference data code sets\n"
+	@printf "  make domain-docs           Build DocBook + Javadoc HTML for Humble IDP\n"
+	@printf "  make docs                  Build all Singine + Humble IDP documentation\n"
+	@printf "  make py-test-domain        Run domain command Python tests\n"
 
 status:
 	git status -sb
 
-test: test-core python-smoke py-test-transfer-flow
+test: test-core python-smoke py-test-transfer-flow py-test-multilingual-emotion py-test-photo py-test-surface py-test-domain
 
 test-core:
 	$(MAKE) -C core test
@@ -65,6 +78,18 @@ py-test-xml:
 
 py-test-transfer-flow:
 	python3 -m unittest py.tests.test_transfer_flow -v
+
+py-test-multilingual-emotion:
+	python3 -m unittest py.tests.test_multilingual_emotion_bundle -v
+
+py-test-photo:
+	python3 -m unittest py.tests.test_photo -v
+
+py-test-surface:
+	python3 -m unittest py.tests.test_server_surface_commands -v
+
+py-test-domain:
+	python3 -m unittest py.tests.test_domain_commands -v
 
 install:
 	python3 -m singine.command install --prefix "$$HOME/.local" --shell all
@@ -123,6 +148,42 @@ transfer-stack-demo:
 	python3 -m singine.command transfer stack push "item-b"
 	python3 -m singine.command transfer stack list
 	python3 -m singine.command transfer stack pop
+
+# ── Domain layer (Humble IDP SQLite) ─────────────────────────────────────────
+# Override: make domain-schema SINGINE_DOMAIN_DB=/path/to/db.sqlite
+
+domain-schema:
+	python3 -m singine.command domain schema init --db "$(SINGINE_DOMAIN_DB)"
+	python3 -m singine.command domain schema tables --db "$(SINGINE_DOMAIN_DB)"
+
+domain-seed: domain-schema
+	python3 -m singine.command domain master add --type BusinessTerm \
+	  --name "Electricity Balancing" --collibra-id "" --db "$(SINGINE_DOMAIN_DB)"
+	python3 -m singine.command domain master add --type BusinessCapability \
+	  --name "Grid Operations" --db "$(SINGINE_DOMAIN_DB)"
+	python3 -m singine.command domain master add --type BusinessProcess \
+	  --name "Electricity Balancing Process" --db "$(SINGINE_DOMAIN_DB)"
+	python3 -m singine.command domain master add --type DataCategory \
+	  --name "Energy Data" --db "$(SINGINE_DOMAIN_DB)"
+	python3 -m singine.command domain refdata add --code-set scenario-codes \
+	  --code ELBA --label "Electricity Balancing" --db "$(SINGINE_DOMAIN_DB)"
+	python3 -m singine.command domain refdata add --code-set iata-codes \
+	  --code BRU --label "Brussels Airport" --db "$(SINGINE_DOMAIN_DB)"
+
+domain-event-log:
+	python3 -m singine.command domain event log --limit 20 --db "$(SINGINE_DOMAIN_DB)"
+
+domain-tx-list:
+	python3 -m singine.command domain tx list --db "$(SINGINE_DOMAIN_DB)"
+
+domain-refdata-list:
+	python3 -m singine.command domain refdata list --db "$(SINGINE_DOMAIN_DB)"
+
+domain-docs:
+	$(MAKE) -C "$(HUMBLE_IDP_JAVA)" docs
+
+docs: domain-docs
+	@printf "All documentation built.\n"
 
 # ── Logseq kernel (fa-KfK-HDYAT-KRNL-421b) ──────────────────────────────────
 # Override: make logseq-kernel-search SINGINE_KERNEL_SEARCH="smtp"

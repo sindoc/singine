@@ -102,5 +102,28 @@
       <spec:see-also>singine-server</spec:see-also>
       <spec:see-also>singine-logseq</spec:see-also>
     </spec:page>
+    <spec:page name="singine-domain" section="1"
+               purpose="Domain layer — master data, events, transactions, and reference data over SQLite">
+      <spec:see-also>singine</spec:see-also>
+      <spec:see-also>singine-model</spec:see-also>
+      <spec:see-also>singine-policy</spec:see-also>
+      <spec:see-also>singine-decide</spec:see-also>
+      <spec:see-also>singine-bridge</spec:see-also>
+    </spec:page>
   </spec:manpages>
+
+  <spec:java-modules>
+    <spec:module name="humble-idp-java"
+                 root="humble-idp/java"
+                 doclet="humble-idp/java/target/javadoc-xml/javadoc.xml"
+                 docbook="humble-idp/java/docs/domain-book.xml"
+                 purpose="Java domain layer — master data, events, transactions, reference data">
+      <spec:package name="idp.domain"              purpose="Core Collibra-aligned value types and enumerations"/>
+      <spec:package name="idp.domain.masterdata"   purpose="Master data interfaces and records"/>
+      <spec:package name="idp.domain.events"       purpose="Append-only domain event log"/>
+      <spec:package name="idp.domain.transactions" purpose="Governed transaction lifecycle"/>
+      <spec:package name="idp.domain.refdata"      purpose="Reference data code sets"/>
+      <spec:package name="idp.db"                  purpose="SQLite persistence implementations"/>
+    </spec:module>
+  </spec:java-modules>
 </spec:publication>
