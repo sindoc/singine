@@ -3597,6 +3597,9 @@ def build_parser() -> argparse.ArgumentParser:
     from .domain import add_domain_parser
     add_domain_parser(sub)
 
+    from .pg import add_pg_parser
+    add_pg_parser(sub)
+
     from .edge import add_edge_parser
     add_edge_parser(sub)
 
