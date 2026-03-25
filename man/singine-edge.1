@@ -299,7 +299,7 @@ path, for example:
 .BR "python3 -m singine.command collibra edge files sync /tmp/my-dataset --dest /tmp/my-dataset" .
 .SS create
 .TP
-.B singine collibra edge create datasource connection [\fB--name\fR \fINAME\fR] [\fB--host\fR \fIHOST\fR] [\fB--port\fR \fIPORT\fR] [\fB--database\fR \fINAME\fR] [\fB--user\fR \fIUSER\fR] [\fB--password\fR \fIPASSWORD\fR] [\fB--json\fR]
+.B singine collibra edge create datasource connection [\fB--name\fR \fINAME\fR] [\fB--host\fR \fIHOST\fR] [\fB--port\fR \fIPORT\fR] [\fB--database\fR \fINAME\fR] [\fB--user\fR \fIUSER\fR] [\fB--password\fR \fIPASSWORD\fR] [\fB--driver-version\fR \fIVERSION|latest\fR] [\fB--download-driver\fR] [\fB--json\fR]
 Print the PostgreSQL datasource values to copy into the Collibra Edge
 connection screens.
 Default Edge-facing values are aligned with the Singine PostgreSQL import
@@ -318,6 +318,12 @@ Username:
 Password:
 .BR "singine"
 .RE
+With
+.B --download-driver
+the command resolves the driver version dynamically from Maven Central and
+downloads the jar into
+.IR ~/.m2/repository/
+only when it is not already cached locally.
 Use this after:
 .BR "python3 -m singine.command pg create database fromSQLite /tmp/singine/sqlite.db --db-name singine_bridge --replace" .
 .SS javadoc

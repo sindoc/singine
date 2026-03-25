@@ -50,6 +50,8 @@ import os
 import posixpath
 import subprocess
 import sys
+import urllib.request
+import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
@@ -688,8 +690,13 @@ _DEFAULT_PG_DATABASE = "singine_bridge"
 _DEFAULT_PG_USER = "singine"
 _DEFAULT_PG_PASSWORD = "singine"
 _DEFAULT_PG_DRIVER_CLASS = "org.postgresql.Driver"
-_DEFAULT_PG_DRIVER_COORD = "org.postgresql:postgresql:42.7.5"
-_DEFAULT_PG_DRIVER_JAR = "postgresql-42.7.5.jar"
+_DEFAULT_PG_DRIVER_GROUP = "org.postgresql"
+_DEFAULT_PG_DRIVER_ARTIFACT = "postgresql"
+_DEFAULT_PG_DRIVER_COORD = "org.postgresql:postgresql"
+_DEFAULT_PG_FALLBACK_VERSION = "42.7.10"
+_MAVEN_CENTRAL_METADATA_URL = (
+    "https://repo1.maven.org/maven2/org/postgresql/postgresql/maven-metadata.xml"
+)
 
 
 def _pod_phase(ns: str, label: str) -> str:
@@ -945,6 +952,62 @@ def cmd_edge_files_ls(args: argparse.Namespace) -> int:
     return result.returncode
 
 
+def _m2_repo() -> Path:
+    return Path.home() / ".m2" / "repository"
+
+
+def _pgjdbc_cached_versions() -> List[str]:
+    root = _m2_repo() / "org" / "postgresql" / "postgresql"
+    if not root.exists():
+        return []
+    versions = [path.name for path in root.iterdir() if path.is_dir()]
+    return sorted(versions)
+
+
+def _latest_pg_driver_version(timeout: int = 10) -> str:
+    req = urllib.request.Request(_MAVEN_CENTRAL_METADATA_URL, headers={"Accept": "application/xml"})
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        xml_bytes = resp.read()
+    root = ET.fromstring(xml_bytes)
+    release = root.findtext("./versioning/release")
+    latest = root.findtext("./versioning/latest")
+    return (release or latest or "").strip()
+
+
+def _resolve_pg_driver_version(requested: str) -> str:
+    if requested and requested != "latest":
+        return requested
+    try:
+        latest = _latest_pg_driver_version()
+        if latest:
+            return latest
+    except Exception:
+        pass
+    cached = _pgjdbc_cached_versions()
+    if cached:
+        return cached[-1]
+    return _DEFAULT_PG_FALLBACK_VERSION
+
+
+def _ensure_pg_driver(*, version: str, jar_name: str, timeout: int = 30) -> Tuple[bool, str]:
+    target = _m2_repo() / "org" / "postgresql" / "postgresql" / version / jar_name
+    if target.exists():
+        return True, "cached"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    url = (
+        "https://repo1.maven.org/maven2/org/postgresql/postgresql/"
+        f"{version}/{jar_name}"
+    )
+    req = urllib.request.Request(url, headers={"User-Agent": "singine-edge/1.0"})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            data = resp.read()
+        target.write_bytes(data)
+    except Exception as exc:
+        return False, f"unable to download {url}: {exc}"
+    return True, "downloaded"
+
+
 def cmd_edge_create_datasource_connection(args: argparse.Namespace) -> int:
     host = args.host
     local_host = args.local_host
@@ -954,9 +1017,21 @@ def cmd_edge_create_datasource_connection(args: argparse.Namespace) -> int:
     password = args.password
     name = args.name or database
     driver_class = args.driver_class
-    driver_coordinate = args.driver_coordinate
-    driver_jar = args.driver_jar
     use_json = args.json
+    version = _resolve_pg_driver_version(args.driver_version)
+    driver_coordinate = args.driver_coordinate or f"{_DEFAULT_PG_DRIVER_COORD}:{version}"
+    driver_jar = args.driver_jar or f"postgresql-{version}.jar"
+    driver_path = _m2_repo() / "org" / "postgresql" / "postgresql" / version / driver_jar
+    driver_status = "cached" if driver_path.exists() else "missing"
+    if args.download_driver:
+        ok, detail = _ensure_pg_driver(version=version, jar_name=driver_jar)
+        if not ok:
+            if use_json:
+                print(json.dumps(_envelope(False, "edge create datasource connection", error=detail)))
+            else:
+                print(f"[edge create datasource connection] ERROR: {detail}", file=sys.stderr)
+            return 1
+        driver_status = detail
 
     payload = {
         "ok": True,
@@ -975,6 +1050,9 @@ def cmd_edge_create_datasource_connection(args: argparse.Namespace) -> int:
             "driver_class": driver_class,
             "driver_coordinate": driver_coordinate,
             "driver_jar": driver_jar,
+            "driver_version": version,
+            "driver_path": str(driver_path),
+            "driver_status": driver_status,
         },
         "edge_screen_fields": [
             {"label": "Connection name", "value": name},
@@ -988,6 +1066,7 @@ def cmd_edge_create_datasource_connection(args: argparse.Namespace) -> int:
             {"label": "Password", "value": password},
             {"label": "Driver JAR", "value": driver_jar},
             {"label": "Driver Maven coordinate", "value": driver_coordinate},
+            {"label": "Driver local path", "value": str(driver_path)},
         ],
         "notes": [
             "Use the host.docker.internal JDBC URL from Collibra Edge or Kubernetes workloads.",
@@ -1005,6 +1084,9 @@ def cmd_edge_create_datasource_connection(args: argparse.Namespace) -> int:
     print(f"  Driver class:     {driver_class}")
     print(f"  Driver JAR:       {driver_jar}")
     print(f"  Driver Maven:     {driver_coordinate}")
+    print(f"  Driver version:   {version}")
+    print(f"  Driver path:      {driver_path}")
+    print(f"  Driver status:    {driver_status}")
     print(f"  Host:             {host}")
     print(f"  Port:             {port}")
     print(f"  Database:         {database}")
@@ -1747,10 +1829,14 @@ def add_edge_parser(sub: argparse._SubParsersAction, *, name: str = "edge", help
                    help=f"Database password (default: {_DEFAULT_PG_PASSWORD})")
     p.add_argument("--driver-class", default=_DEFAULT_PG_DRIVER_CLASS,
                    help=f"JDBC driver class (default: {_DEFAULT_PG_DRIVER_CLASS})")
-    p.add_argument("--driver-coordinate", default=_DEFAULT_PG_DRIVER_COORD,
-                   help=f"Suggested JDBC driver Maven coordinate (default: {_DEFAULT_PG_DRIVER_COORD})")
-    p.add_argument("--driver-jar", default=_DEFAULT_PG_DRIVER_JAR,
-                   help=f"Suggested JDBC driver jar filename (default: {_DEFAULT_PG_DRIVER_JAR})")
+    p.add_argument("--driver-version", default="latest",
+                   help="JDBC driver version or 'latest' (default: latest)")
+    p.add_argument("--driver-coordinate",
+                   help="Suggested JDBC driver Maven coordinate (default: resolved dynamically)")
+    p.add_argument("--driver-jar",
+                   help="Suggested JDBC driver jar filename (default: resolved dynamically)")
+    p.add_argument("--download-driver", action="store_true",
+                   help="Download the PostgreSQL JDBC jar into ~/.m2/repository if it is not already cached")
     p.add_argument("--json", action="store_true")
     p.set_defaults(func=cmd_edge_create_datasource_connection)
 

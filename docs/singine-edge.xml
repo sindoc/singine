@@ -74,6 +74,8 @@
       <arg><option>--database</option> <replaceable>NAME</replaceable></arg>
       <arg><option>--user</option> <replaceable>USER</replaceable></arg>
       <arg><option>--password</option> <replaceable>PASSWORD</replaceable></arg>
+      <arg><option>--driver-version</option> <replaceable>VERSION</replaceable></arg>
+      <arg><option>--download-driver</option></arg>
     </cmdsynopsis>
   </refsynopsisdiv>
 
@@ -120,6 +122,13 @@
           <literal>host.docker.internal</literal> rather than
           <literal>127.0.0.1</literal>.
         </para>
+      </listitem>
+      <listitem>
+        <para>
+          If the Edge UI needs the JDBC driver jar, download it once into the
+          local Maven cache and reuse it afterwards:
+        </para>
+        <programlisting language="bash">python3 -m singine.command collibra edge create datasource connection --download-driver</programlisting>
       </listitem>
     </orderedlist>
   </refsect1>
@@ -215,7 +224,10 @@ python3 -m singine.command collibra edge files sync /tmp/singine --dest /tmp/sin
 python3 -m singine.command collibra edge files ls /tmp/singine
 
 # Print PostgreSQL datasource values for the Edge UI
-python3 -m singine.command collibra edge create datasource connection</programlisting>
+python3 -m singine.command collibra edge create datasource connection
+
+# Resolve the latest pgJDBC release and cache the jar under ~/.m2/repository
+python3 -m singine.command collibra edge create datasource connection --download-driver</programlisting>
   </refsect1>
 
   <refsect1>
