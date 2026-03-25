@@ -1,0 +1,682 @@
+.TH SINGINE-EDGE 1 "2026-03-17" "singine 0.3.0" "User Commands"
+.SH NAME
+singine-edge \- build, deploy, and manage the Collibra edge server stack
+.SH SYNOPSIS
+.B singine edge
+.I FAMILY
+[\fICOMMAND\fR]
+[\fIOPTIONS\fR]
+.SH DESCRIPTION
+.B singine edge
+is the lifecycle management surface for the Collibra edge server stack at
+.IR ~/ws/git/github/sindoc/collibra/edge/ .
+It manages two complementary deployment modes:
+.TP
+.B Docker Compose mode (local dev / mock)
+Runs a local stack with an nginx CDN, a custom Collibra Edge Site REST server,
+and (optionally) a Python mock of the Collibra DGC Edge process.  Suitable for
+development and integration testing without a Collibra license or Kubernetes.
+.TP
+.B Kubernetes mode (real Collibra Edge)
+Deploys the official Collibra Edge onto a Kubernetes cluster using the
+site-specific installer bundle (
+.IR installer/ ).
+Communicates with
+.I lutino.collibra.com
+and registers the site as Installed in the Collibra DGC console.
+.PP
+The stack root is
+.I ~/ws/git/github/sindoc/collibra/edge/
+by default.
+Override with the environment variable
+.BR COLLIBRA_EDGE_DIR .
+.SS Docker Compose components
+.TP
+.B CentOS 7 LTS base image
+.RI ( sindoc-collibra-edge-base )
+Java 11, EPEL tooling, and a non-root
+.I edge
+user.  All other compose images derive FROM this base.
+.TP
+.B Collibra DGC Edge node (mock)
+.RI ( sindoc-collibra-edge-mock )
+Python 3.11-slim mock of the Collibra DGC Edge process.  Responds to
+.I /rest/2.0/ping
+and all other DGC REST paths.  Used when
+.I collibra-edge.jar
+is not available or
+.B --dev
+is passed.
+.TP
+.B Edge Site server
+.RI ( sindoc-collibra-edge-site )
+A lightweight Java 11 HTTP server implementing the Collibra Edge Site REST API
+contract
+.RI ( /api/edge/v1/\fI*\fR ).
+On startup, attempts outbound registration with Collibra DGC cloud via
+.IR "POST ${DGC_URL}/rest/2.0/edgeSites/${SITE_ID}/connectionRequests" .
+Hosts static web content under
+.IR /site/ .
+.TP
+.B CDN proxy
+.RI ( sindoc-collibra-cdn )
+nginx TLS-terminating reverse proxy on ports 80 and 443.  Routes
+.IR /api/edge/
+and
+.I /site/
+traffic to the edge site server.  In dev mode also routes
+.I /rest/
+and
+.I /graphql/
+to the local DGC mock.
+.SS Kubernetes components (real Collibra Edge)
+The official Collibra Edge installer deploys the following pods into the
+.I collibra-edge
+namespace:
+.TP
+.B edge-proxy
+Outbound communication proxy from edge to Collibra DGC cloud.
+.TP
+.B edge-controller
+Orchestrates capability execution and job scheduling.
+.TP
+.B edge-cd
+Continuous delivery agent — applies Helm upgrades when Collibra releases a new
+edge version.
+.TP
+.B edge-session-manager
+Manages authenticated sessions between edge capabilities and the DGC.
+.TP
+.B otel-agent
+OpenTelemetry collector — ships metrics, logs, and traces to the DGC.
+.SH COMMAND FAMILIES
+.TP
+.B build
+Build one or all Docker Compose images.  Delegates to the stack
+.BR Makefile .
+.TP
+.B push
+Tag and push images to a container registry.
+.TP
+.B up / down
+Start or stop the compose stack.
+.TP
+.B logs
+Tail compose container log output.
+.TP
+.B status
+Show Docker images, running containers, and governance decision URN.
+.TP
+.B setup
+Full automated compose setup: TLS cert generation, .env creation, JAR build,
+image builds, stack start, health wait.  Runs
+.IR scripts/setup.sh .
+.TP
+.B install
+Full compose install: build all images, prepare the agent Python virtualenv,
+register a governance decision.  Idempotent.
+.TP
+.B deploy
+.B install
+followed by
+.BR "up --detach" .
+.TP
+.B javadoc
+Build HTML and XML Javadoc for the Java interface layer
+.RI ( edge/java/ ).
+.TP
+.B k8s
+Deploy and manage the
+.B real Collibra Edge
+on a Kubernetes cluster.  Uses the site-specific installer bundle at
+.IR installer/ .
+Sub-commands:
+.BR prereqs ,
+.BR install ,
+.BR uninstall ,
+.BR status ,
+.BR logs .
+.TP
+.B agent
+Manage the Claude API edge-agent that generates Kubernetes, OpenShift, and
+Collibra configuration artifacts.
+.SH SUBCOMMANDS
+.SS build
+.TP
+.B singine edge build [\fB--target\fR \fITARGET\fR] [\fB--tag\fR \fITAG\fR] [\fB--no-cache\fR] [\fB--json\fR]
+Build container image(s).
+.RS
+.TP
+.B --target \fITARGET\fR
+One of
+.IR base ,
+.IR collibra-edge ,
+.IR edge-site ,
+.IR cdn ,
+.I all
+(default:
+.IR all ).
+.TP
+.B --tag \fITAG\fR
+Docker image tag.  Default:
+.IR local .
+.TP
+.B --no-cache
+Pass
+.B --no-cache
+to the Docker build.
+.TP
+.B --json
+Emit a JSON envelope with build outcome and metadata.
+.RE
+.SS push
+.TP
+.B singine edge push \fB--registry\fR \fIREGISTRY\fR [\fB--target\fR \fITARGET\fR] [\fB--tag\fR \fITAG\fR] [\fB--json\fR]
+Tag local images and push to a container registry.
+.SS up
+.TP
+.B singine edge up [\fB--detach\fR] [\fB--json\fR]
+Start the edge stack via
+.BR docker\ compose\ up .
+.SS down
+.TP
+.B singine edge down [\fB--json\fR]
+Stop and remove all stack containers.
+.SS logs
+.TP
+.B singine edge logs [\fB--service\fR \fISERVICE\fR] [\fB--follow\fR]
+Print or tail compose container logs.
+.B --service
+restricts output to
+.IR collibra-edge ,
+.IR edge-site ,
+or
+.IR cdn .
+.SS status
+.TP
+.B singine edge status [\fB--json\fR]
+Show a combined view of local Docker images, running compose services, and the
+governance decision URN.
+.SS setup
+.TP
+.B singine edge setup [\fB--dev\fR] [\fB--no-start\fR] [\fB--tag\fR \fITAG\fR] [\fB--json\fR]
+Full automated compose setup.  Generates a self-signed TLS cert, creates
+.IR .env ,
+builds
+.IR edge-site-server.jar ,
+builds all Docker images, and starts the stack.
+.B --dev
+uses the Python mock DGC (auto-enabled when
+.I collibra-edge.jar
+is absent).
+.SS install
+.TP
+.B singine edge install [\fB--tag\fR \fITAG\fR] [\fB--json\fR]
+Full install: build all images, prepare the Claude API agent virtualenv, and
+register a governance decision.  Idempotent.
+.SS deploy
+.TP
+.B singine edge deploy [\fB--tag\fR \fITAG\fR] [\fB--json\fR]
+Equivalent to
+.B install
+followed by
+.BR "up --detach" .
+.SS javadoc
+.TP
+.B singine edge javadoc [\fB--json\fR]
+Runs
+.B ./gradlew alldoc
+in
+.IR edge/java/ ,
+producing:
+.IP \(bu 2
+.I build/docs/javadoc/
+\(em standard HTML Javadoc
+.IP \(bu 2
+.I build/docs/xmldoc/edge-site-api.xml
+\(em XML Javadoc via
+.B xmldoclet
+(com.github.markusbernhardt:xml-doclet)
+.SS k8s
+.TP
+.B singine edge k8s \fICOMMAND\fR [\fIOPTIONS\fR]
+Deploy and manage the real Collibra Edge on Kubernetes using the site-specific
+installer bundle at
+.IR installer/ .
+.RS
+.TP
+.B prereqs [\fB--json\fR]
+Check that all prerequisites are satisfied before attempting an install:
+.RS
+.IP \(bu 2
+.BR helm ,
+.BR kubectl ,
+.BR jq ,
+.BR yq
+are on PATH
+.IP \(bu 2
+A Kubernetes cluster is reachable (
+.BR "kubectl cluster-info" )
+.IP \(bu 2
+.I installer/site-values.yaml
+and
+.I installer/collibra-edge-helm-chart/
+exist
+.RE
+If any check fails, the output identifies the missing item and suggests the fix.
+For Docker Desktop: Settings \(-> Kubernetes \(-> Enable Kubernetes \(-> Apply & Restart.
+.TP
+.B install [\fB--dry-run\fR] [\fB--json\fR]
+Deploy Collibra Edge via
+.B scripts/install-edge-k8s.sh
+which:
+.RS
+.IP 1. 4
+Creates namespace
+.I collibra-edge
+.IP 2. 4
+Creates the image pull secret
+.I edge-repositories
+from
+.I installer/registries.yaml
+(credentials for
+.IR edge-docker-delivery.repository.collibra.io )
+.IP 3. 4
+Applies
+.I installer/resources/manifests/edge-secret.yaml
+(site-embedded credentials)
+.IP 4. 4
+Runs
+.B helm install
+(or
+.B helm upgrade
+if already installed) with
+.I installer/collibra-edge-helm-chart/collibra-edge
+and
+.I installer/site-values.yaml
+.RE
+With
+.B --dry-run
+the Helm chart is rendered and validated but no resources are created.
+After the pods reach Running state,
+.I lutino.collibra.com
+\(-> Settings \(-> Edge Sites \(-> lutino.io.sindoc42
+will show status:
+.BR Installed .
+.TP
+.B uninstall [\fB--json\fR]
+Run
+.B helm uninstall collibra-edge
+and delete the
+.I collibra-edge
+namespace.  All edge pods and configuration are removed.
+.TP
+.B status [\fB--namespace\fR \fINS\fR] [\fB--json\fR]
+Show:
+.RS
+.IP \(bu 2
+Active
+.B kubectl
+context
+.IP \(bu 2
+Helm release:
+.I collibra-edge
+\(em status (DEPLOYED / FAILED / PENDING) and chart version
+.IP \(bu 2
+All pods in the namespace: name, ready, status, restarts, age
+.RE
+.TP
+.B logs \fICOMPONENT\fR [\fB--follow\fR] [\fB--tail\fR \fIN\fR] [\fB--namespace\fR \fINS\fR]
+Stream pod logs for a named Collibra Edge component.
+.I COMPONENT
+is one of:
+.RS
+.TP
+.B edge-proxy
+Outbound proxy communications.
+.TP
+.B edge-controller
+Job orchestration and capability execution.
+.TP
+.B edge-cd
+Continuous delivery / auto-upgrade agent.
+.TP
+.B edge-session-manager
+Authenticated session management.
+.TP
+.B otel-agent
+OpenTelemetry collector — metrics, logs, traces.
+.RE
+.B --follow
+.RI ( -f )
+streams live output.
+.B --tail N
+shows the last
+.I N
+lines (default: 100).
+.RE
+.SS agent
+.TP
+.B singine edge agent \fICOMMAND\fR [\fIOPTIONS\fR]
+Manage the Claude API edge-agent under
+.IR edge/agent/ .
+.RS
+.TP
+.B validate [\fB--json\fR]
+Smoke-test all agent tools without making an Anthropic API call.
+.TP
+.B run \fB--task\fR \fITASK\fR [\fB--output-dir\fR \fIDIR\fR] [\fB--json\fR]
+Run the agent with a natural-language task.  Requires
+.BR ANTHROPIC_API_KEY .
+Artifacts are written to
+.I edge/agent/output/
+by default.
+.TP
+.B install [\fB--json\fR]
+Prepare agent virtualenv and register governance decision.
+.TP
+.B status [\fB--json\fR]
+Print virtualenv path, Python version, package versions, and decision URN.
+.RE
+.SH EDGE SITE REST API
+The edge site server
+.RI ( sindoc-collibra-edge-site )
+implements the Collibra Edge Site REST API.
+.PP
+.nf
+GET  /health
+     {"status":"UP","siteId":"...","registrationState":"...","checkedAt":"..."}
+
+GET  /api/edge/v1/status
+     {"siteId":"...","siteName":"...","dgcUrl":"...","status":"READY",
+      "registrationState":"...","capabilities":[...],"reportedAt":"..."}
+
+POST /api/edge/v1/register
+     Register locally (dev mode).  DGC registration happens automatically
+     on startup via DgcRegistrar when COLLIBRA_EDGE_REG_KEY is set.
+
+GET  /api/edge/v1/capabilities
+     [{"type":"site","capabilityId":"...","status":"READY","properties":{}}]
+
+POST /api/edge/v1/capabilities/{type}/invoke
+     {"invocationId":"...","success":true,"payload":{...},"errorMessage":null}
+.fi
+.PP
+.B Supported capability types
+.TP
+.B connect
+JDBC data source connectivity for on-premises data sampling.
+.TP
+.B catalog
+Asset metadata push to the central Collibra catalog.
+.TP
+.B lineage
+Technical lineage collection from on-premises pipelines.
+.TP
+.B profiling
+On-premises data profiling and classification.
+.TP
+.B site
+Static and dynamic web content served under
+.IR /site/ .
+.TP
+.B workflow
+On-premises workflow step execution triggered by Collibra DGC.
+.SH JAVA INTERFACE LAYER
+The package
+.I io.sindoc.collibra.edge
+(under
+.IR edge/java/ )
+defines the complete contract for the edge site and installer.
+.PP
+.B Core interfaces
+.TP
+.B EdgeSite
+Lifecycle entry point:
+.BR initialize() ,
+.BR shutdown() ,
+.BR getApi() ,
+.BR getCapability() .
+.TP
+.B CollibraEdgeSiteApi
+Full REST contract with request/response records.
+.TP
+.B EdgeSiteCapability
+Per-capability lifecycle:
+.BR activate() ,
+.BR deactivate() ,
+.BR invoke() ,
+.BR health() .
+.TP
+.B EdgeSiteHealth
+Health aggregation across DGC connectivity and all capabilities.
+.TP
+.B EdgeSiteRegistry
+Cloud registration:
+.BR register() ,
+.BR deregister() ,
+.BR renewToken() .
+.TP
+.B EdgeSiteServer
+HTTP server binding:
+.BR start() ,
+.BR stop() ,
+.BR registerCapabilityHandler() .
+.TP
+.B EdgeSiteInstaller
+K8s installer lifecycle:
+.BR install() ,
+.BR uninstall() ,
+.BR status() ,
+.BR checkPrerequisites() ,
+.BR waitForHealthy() .
+Includes nested types
+.BR DeploymentMode
+(K3S, HELM_MANAGED_K8S, HELM_OPENSHIFT),
+.BR InstallerStatus ,
+.BR InstallerResult ,
+and
+.BR PodStatus .
+.PP
+.B Build commands
+.PP
+.nf
+./gradlew javadoc     # HTML Javadoc  → build/docs/javadoc/
+./gradlew xmldoc      # XML Javadoc   → build/docs/xmldoc/edge-site-api.xml
+./gradlew alldoc      # both
+./gradlew jar         # compile
+singine edge javadoc  # same as ./gradlew alldoc (via singine)
+.fi
+.SH ENVIRONMENT
+.TP
+.B COLLIBRA_EDGE_DIR
+Override the default stack root
+.RI ( ~/ws/git/github/sindoc/collibra/edge/ ).
+.TP
+.B COLLIBRA_EDGE_HOSTNAME
+FQDN of the edge node (e.g.\&
+.IR edge.lutino.io ).
+.TP
+.B COLLIBRA_DGC_URL
+Base URL of the Collibra DGC cloud instance (e.g.\&
+.IR https://lutino.collibra.com ).
+.TP
+.B COLLIBRA_EDGE_SITE_ID
+Stable UUID identifier for the edge site.  Shown in the Collibra DGC console
+under Settings \(-> Edge Sites.
+.TP
+.B COLLIBRA_EDGE_SITE_NAME
+Display name shown in the DGC console (e.g.\&
+.IR "Lutino.io's Dev Edge Site" ).
+.TP
+.B COLLIBRA_EDGE_REG_KEY
+Registration key issued by Collibra DGC.  Generate from: Settings \(-> Edge
+Sites \(-> \fIsite\fR \(-> Generate Key.  Stored in
+.I .env
+(gitignored).
+.TP
+.B ANTHROPIC_API_KEY
+Required by
+.BR "singine edge agent run" .
+.TP
+.B KUBECONFIG
+Kubernetes configuration file.  Defaults to
+.IR ~/.kube/config .
+Used by all
+.B k8s
+sub-commands.
+.SH FILES
+.TP
+.I ~/ws/git/github/sindoc/collibra/edge/
+Stack root.  All relative paths below are within this directory.
+.TP
+.I Makefile
+Build/deploy/clean targets including
+.BR edge-install ,
+.BR edge-install-dry-run ,
+.BR edge-uninstall .
+.TP
+.I docker-compose.yml
+Production compose stack (real collibra-edge + edge-site + cdn).
+.TP
+.I docker-compose.dev.yml
+Development compose stack (Python mock DGC + edge-site + cdn).
+.TP
+.I docker-compose.cloud.yml
+Cloud-connected compose stack (edge-site + cdn, DGC_URL → lutino.collibra.com).
+.TP
+.I .env
+Runtime environment variables.  Copy from
+.I .env.example
+and set
+.B COLLIBRA_EDGE_REG_KEY
+before running in cloud mode.  Gitignored.
+.TP
+.I installer/
+Site-specific Collibra Edge installer bundle.  Extracted from the TGZ
+downloaded at: lutino.collibra.com \(-> Settings \(-> Edge Sites \(-> Download Installer.
+Contains
+.IR site-values.yaml ,
+.IR registries.yaml ,
+.IR properties.yaml ,
+.IR collibra-edge-helm-chart/ ,
+and
+.IR edge-cd-helm-chart/ .
+Gitignored (contains embedded site credentials).
+.TP
+.I scripts/install-edge-k8s.sh
+Kubernetes install script.  Invoked by
+.BR "singine edge k8s install" .
+.TP
+.I scripts/setup.sh
+Docker Compose setup script.  Invoked by
+.BR "singine edge setup" .
+.TP
+.I image/base/Dockerfile
+CentOS 7 LTS base: Java 11, EPEL, non-root
+.I edge
+user (uid 10000).
+.TP
+.I image/edge-site/Dockerfile
+Collibra-compatible edge site server.
+.TP
+.I image/cdn/Dockerfile
+nginx CDN with TLS termination.
+.TP
+.I java/
+Java interface layer
+.RI ( io.sindoc.collibra.edge ).
+.TP
+.I java/build.gradle
+Gradle build: standard javadoc + xmldoclet XML output.
+.TP
+.I agent/
+Claude API edge-agent.
+.SH PREREQUISITES
+.TP
+.B Before singine edge setup / build / up
+Docker must be installed and running.
+.TP
+.B Before singine edge k8s install
+.RS
+.IP 1. 4
+.B Docker Desktop Kubernetes
+enabled: Docker Desktop \(-> Settings \(-> Kubernetes \(-> Enable Kubernetes \(-> Apply & Restart.
+.IP 2. 4
+.BR helm ,
+.BR jq ,
+.BR yq
+installed (
+.B singine edge k8s prereqs
+installs missing tools via
+.BR brew ).
+.IP 3. 4
+Installer bundle extracted to
+.IR installer/
+(download TGZ from lutino.collibra.com \(-> Settings \(-> Edge Sites \(-> Download Installer).
+.IP 4. 4
+.B COLLIBRA_EDGE_REG_KEY
+set in
+.I .env
+(generated from the same page).
+.IP 5. 4
+Outbound port 443 access to
+.I lutino.collibra.com
+and
+.IR edge-docker-delivery.repository.collibra.io .
+.RE
+.TP
+.B Before singine edge agent run
+.B ANTHROPIC_API_KEY
+must be set to a valid Anthropic API key.
+.SH EXAMPLES
+.nf
+# Check K8s prerequisites (installs helm/jq/yq via brew if missing).
+singine edge k8s prereqs
+
+# Dry-run the Helm install — renders charts without touching the cluster.
+singine edge k8s install --dry-run
+
+# Deploy the real Collibra Edge onto Docker Desktop Kubernetes.
+singine edge k8s install
+
+# Monitor pods coming up.
+singine edge k8s status
+singine edge k8s status --json
+
+# Stream edge-proxy logs.
+singine edge k8s logs edge-proxy --follow
+
+# Tear down the Kubernetes installation.
+singine edge k8s uninstall
+
+# Local dev compose stack (no license needed, Python mock DGC).
+singine edge setup --dev
+
+# Cloud-connected compose stack (requires COLLIBRA_EDGE_REG_KEY in .env).
+singine edge setup
+
+# Build only the CDN image with a release tag.
+singine edge build --target cdn --tag v1.2.0
+
+# Push all images to a private registry.
+singine edge push --registry registry.example.com --tag v1.2.0
+
+# Build HTML + XML Javadoc for the Java interface layer.
+singine edge javadoc
+
+# Generate a Kubernetes Deployment for Collibra edge on RHEL 7.9.
+export ANTHROPIC_API_KEY=sk-ant-...
+singine edge agent run \\
+  --task "Generate a Collibra edge Deployment and firewalld zone for RHEL 7.9" \\
+  --output-dir /tmp/edge-out
+.fi
+.SH SEE ALSO
+.BR singine (1),
+.BR singine-edge-agent (1),
+.BR singine-domain (1),
+.BR singine-decide (1),
+.BR singine-runtime (1),
+.BR docker-compose (1),
+.BR helm (1),
+.BR kubectl (1)

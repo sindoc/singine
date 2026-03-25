@@ -4,3 +4,4 @@
 !tests/test_multilingual_emotion_bundle.py
 !tests/test_server_surface_commands.py
 !tests/test_domain_commands.py
+!tests/test_query_dispatch.py

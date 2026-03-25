@@ -393,6 +393,12 @@ def cmd_bridge_passthrough(args: argparse.Namespace) -> int:
         command.extend([args.text, "--limit", str(args.limit)])
     elif args.subcommand == "entity":
         command.append(args.iri)
+    elif args.subcommand == "latest-changes":
+        command.extend(["--limit", str(args.limit)])
+        if getattr(args, "realm", None):
+            command.extend(["--realm", args.realm])
+        if getattr(args, "source_kind", None):
+            command.extend(["--source-kind", args.source_kind])
     elif args.subcommand in {"sparql", "graphql"}:
         command.append(args.query)
     return _run_cortex_bridge(["--db", args.db] + command)
@@ -410,6 +416,289 @@ def cmd_xml_matrix(args: argparse.Namespace) -> int:
             "--output-dir", args.output_dir,
         ]
     )
+
+
+def cmd_query_latest_changes(args: argparse.Namespace) -> int:
+    from .atom_query import (
+        build_request_feed,
+        build_response_feed,
+        parse_request_feed,
+        query_latest_changes_api,
+        query_latest_changes_local,
+        write_xml,
+    )
+
+    output_dir = Path(args.output_dir).expanduser()
+    output_dir.mkdir(parents=True, exist_ok=True)
+    request_path = Path(args.request).expanduser() if args.request else (output_dir / "latest-changes.request.atom")
+    response_path = Path(args.response).expanduser() if args.response else (output_dir / "latest-changes.response.atom")
+
+    if args.request and not args.write_request:
+        request_payload = parse_request_feed(request_path)
+    else:
+        request_payload = {
+            "query_name": "latest-changes-across-realms",
+            "query_mode": "api" if args.api_base_url else "local",
+            "limit": args.limit,
+            "realms": args.realm or ["internal-graph", "external-graph", "filesystem"],
+            "api_base_url": args.api_base_url,
+        }
+        write_xml(
+            request_path,
+            build_request_feed(
+                limit=args.limit,
+                realms=request_payload["realms"],
+                query_mode=request_payload["query_mode"],
+                api_base_url=args.api_base_url,
+            ),
+        )
+
+    realms = request_payload.get("realms") or args.realm
+    limit = int(request_payload.get("limit") or args.limit)
+    api_base_url = request_payload.get("api_base_url") or args.api_base_url
+    source_mode = "api" if api_base_url else "local"
+
+    if api_base_url:
+        results = query_latest_changes_api(
+            api_base_url=api_base_url,
+            limit=limit,
+            realms=realms,
+            timeout=args.timeout,
+            emacsclient_bin=args.emacsclient_bin,
+        )
+    else:
+        results = query_latest_changes_local(
+            db_path=Path(args.db).expanduser(),
+            limit=limit,
+            realms=realms,
+            emacsclient_bin=args.emacsclient_bin,
+        )
+
+    write_xml(
+        response_path,
+        build_response_feed(
+            request_payload=request_payload,
+            results=results,
+            source_mode=source_mode,
+        ),
+    )
+
+    payload = {
+        "ok": True,
+        "request_path": str(request_path),
+        "response_path": str(response_path),
+        "query_mode": source_mode,
+        "realms": realms,
+        "counts": {realm: len(rows) for realm, rows in results.items()},
+    }
+    if args.json:
+        print_json(payload)
+    else:
+        print(response_path)
+    return 0
+
+
+def cmd_query_read_atom(args: argparse.Namespace) -> int:
+    from .atom_query import summarize_feed
+
+    payload = summarize_feed(Path(args.atom_path).expanduser())
+    if args.json:
+        print_json(payload)
+    else:
+        print(f"title: {payload.get('title') or '(none)'}")
+        print(f"updated: {payload.get('updated') or '(none)'}")
+        print(f"entries: {payload.get('entry_count', 0)}")
+        for realm, count in sorted((payload.get("realms") or {}).items()):
+            print(f"{realm}: {count}")
+    return 0
+
+
+def cmd_realm_check(args: argparse.Namespace) -> int:
+    from .realm_ops import (
+        build_audit_response_feed,
+        build_request_feed,
+        parse_feed,
+        resolve_schedule_inputs,
+        run_audit,
+        write_xml,
+    )
+
+    output_dir = Path(args.output_dir).expanduser()
+    output_dir.mkdir(parents=True, exist_ok=True)
+    resolved = resolve_schedule_inputs(realms=args.realm, domains=args.domain, services=args.service)
+    request_path = Path(args.request).expanduser() if args.request else (output_dir / "realm-check.request.atom")
+    response_path = Path(args.response).expanduser() if args.response else (output_dir / "realm-check.response.atom")
+
+    if args.read_request:
+        request_payload = parse_feed(request_path)
+    else:
+        request_payload = {
+            "request_kind": "realm-check",
+            **resolved,
+        }
+        write_xml(
+            request_path,
+            build_request_feed(
+                request_kind="realm-check",
+                realms=resolved["realms"],
+                domains=resolved["domains"],
+                services=resolved["services"],
+                output_dir=str(output_dir),
+            ),
+        )
+
+    results = run_audit(
+        realms=request_payload["realms"],
+        domains=request_payload["domains"],
+        services=request_payload["services"],
+    )
+    write_xml(
+        response_path,
+        build_audit_response_feed(request_payload=request_payload, results=results),
+    )
+    payload = {
+        "ok": True,
+        "request_path": str(request_path),
+        "response_path": str(response_path),
+        "realms": request_payload["realms"],
+        "domains": request_payload["domains"],
+        "services": request_payload["services"],
+        "counts": {realm: len(rows) for realm, rows in results.items()},
+    }
+    if args.json:
+        print_json(payload)
+    else:
+        print(response_path)
+    return 0
+
+
+def cmd_realm_cron_write(args: argparse.Namespace) -> int:
+    from .realm_ops import (
+        build_cron_response_feed,
+        build_request_feed,
+        default_audit_command,
+        resolve_schedule_inputs,
+        write_cron_file,
+        write_xml,
+    )
+
+    output_dir = Path(args.output_dir).expanduser()
+    output_dir.mkdir(parents=True, exist_ok=True)
+    resolved = resolve_schedule_inputs(realms=args.realm, domains=args.domain, services=args.service)
+    request_path = Path(args.request).expanduser() if args.request else (output_dir / "realm-cron.request.atom")
+    response_path = Path(args.response).expanduser() if args.response else (output_dir / "realm-cron.response.atom")
+    cron_path = Path(args.cron_file).expanduser() if args.cron_file else (output_dir / "realm-audit.cron")
+    check_response_path = output_dir / "realm-check.response.atom"
+
+    request_payload = {
+        "request_kind": "realm-cron",
+        **resolved,
+        "cron_expression": args.cron,
+        "output_dir": str(output_dir),
+    }
+    write_xml(
+        request_path,
+        build_request_feed(
+            request_kind="realm-cron",
+            realms=resolved["realms"],
+            domains=resolved["domains"],
+            services=resolved["services"],
+            cron_expression=args.cron,
+            output_dir=str(output_dir),
+        ),
+    )
+    command = default_audit_command(
+        request_path=request_path,
+        response_path=check_response_path,
+        realms=resolved["realms"],
+        domains=resolved["domains"],
+        services=resolved["services"],
+    )
+    write_cron_file(cron_path, args.cron, command)
+    write_xml(
+        response_path,
+        build_cron_response_feed(request_payload=request_payload, command=command),
+    )
+    payload = {
+        "ok": True,
+        "request_path": str(request_path),
+        "response_path": str(response_path),
+        "cron_file": str(cron_path),
+        "command": command,
+        "cron_expression": args.cron,
+    }
+    if args.json:
+        print_json(payload)
+    else:
+        print(cron_path)
+    return 0
+
+
+def cmd_realm_broadcast(args: argparse.Namespace) -> int:
+    from .realm_ops import (
+        DEFAULT_TOPIC_TARGETS,
+        build_broadcast_feed,
+        build_request_feed,
+        resolve_schedule_inputs,
+        write_xml,
+    )
+
+    output_dir = Path(args.output_dir).expanduser()
+    output_dir.mkdir(parents=True, exist_ok=True)
+    resolved = resolve_schedule_inputs(realms=args.realm, domains=args.domain, services=None)
+    targets = args.target or list(DEFAULT_TOPIC_TARGETS)
+    request_path = Path(args.request).expanduser() if args.request else (output_dir / "realm-broadcast.request.atom")
+    response_path = Path(args.response).expanduser() if args.response else (output_dir / "realm-broadcast.response.atom")
+    write_xml(
+        request_path,
+        build_request_feed(
+            request_kind="realm-topic-broadcast",
+            realms=resolved["realms"],
+            domains=resolved["domains"],
+            services=[],
+            topic=args.topic,
+            targets=targets,
+            output_dir=str(output_dir),
+        ),
+    )
+    write_xml(
+        response_path,
+        build_broadcast_feed(
+            topic=args.topic,
+            targets=targets,
+            domains=resolved["domains"],
+            realms=resolved["realms"],
+        ),
+    )
+    payload = {
+        "ok": True,
+        "request_path": str(request_path),
+        "response_path": str(response_path),
+        "topic": args.topic,
+        "targets": targets,
+    }
+    if args.json:
+        print_json(payload)
+    else:
+        print(response_path)
+    return 0
+
+
+def cmd_realm_read_atom(args: argparse.Namespace) -> int:
+    from .realm_ops import summarize_feed
+
+    payload = summarize_feed(Path(args.atom_path).expanduser())
+    if args.json:
+        print_json(payload)
+    else:
+        print(f"title: {payload.get('title') or '(none)'}")
+        print(f"updated: {payload.get('updated') or '(none)'}")
+        print(f"entries: {payload.get('entry_count', 0)}")
+        for realm, count in sorted((payload.get("realms") or {}).items()):
+            print(f"{realm}: {count}")
+        for service, count in sorted((payload.get("services") or {}).items()):
+            print(f"{service}: {count}")
+    return 0
 
 
 def cmd_man(args: argparse.Namespace) -> int:
@@ -689,6 +978,8 @@ def cmd_server_bridge(args: argparse.Namespace) -> int:
         query=args.query,
         entity=args.entity,
         limit=args.limit,
+        realm=getattr(args, "realm", None),
+        source_kind=getattr(args, "source_kind", None),
         timeout=args.timeout,
     )
     if args.json:
@@ -1756,6 +2047,13 @@ def build_parser() -> argparse.ArgumentParser:
     bridge_graphql.add_argument("query")
     bridge_graphql.set_defaults(func=cmd_bridge_passthrough)
 
+    bridge_latest = bridge_sub.add_parser("latest-changes", help="List the most recently modified bridge entities across realms")
+    bridge_latest.add_argument("--db", default="/tmp/sqlite.db", help="SQLite database path")
+    bridge_latest.add_argument("--limit", type=int, default=20)
+    bridge_latest.add_argument("--realm", choices=["internal-graph", "external-graph", "filesystem"])
+    bridge_latest.add_argument("--source-kind", help="Exact source kind filter")
+    bridge_latest.set_defaults(func=cmd_bridge_passthrough)
+
     jdbc_parser = sub.add_parser("jdbc-url", help="Print the SQLite JDBC URL")
     jdbc_parser.add_argument("--db", default="/tmp/sqlite.db", help="SQLite database path")
     jdbc_parser.set_defaults(func=cmd_jdbc_url)
@@ -1767,6 +2065,84 @@ def build_parser() -> argparse.ArgumentParser:
     xml_matrix.add_argument("--db", default="/tmp/sqlite.db", help="SQLite database path")
     xml_matrix.add_argument("--output-dir", default="/tmp/singine-xml-matrix", help="Directory for request/response/heatmap XML")
     xml_matrix.set_defaults(func=cmd_xml_matrix)
+
+    query_parser = sub.add_parser(
+        "query",
+        help="Multi-backend query dispatcher (git/emacs/logseq/xml/sql/sparql/graphql/docker/sys) and Atom XML realm queries",
+    )
+    query_sub = query_parser.add_subparsers(dest="query_subcommand")
+    query_parser.set_defaults(func=lambda a: (query_parser.print_help(), 1)[1])
+
+    query_latest = query_sub.add_parser("latest-changes", help="Write an Atom request, query latest changes across realms, and write an Atom response")
+    query_latest.add_argument("--db", default="/tmp/sqlite.db", help="SQLite database path for local mode")
+    query_latest.add_argument("--api-base-url", help="Use the Singine HTTP API bridge instead of local SQLite, e.g. http://127.0.0.1:8080")
+    query_latest.add_argument("--limit", type=int, default=20, help="Maximum entries per realm")
+    query_latest.add_argument(
+        "--realm",
+        action="append",
+        choices=["internal-graph", "external-graph", "filesystem"],
+        default=None,
+        help="Realm to query; repeatable",
+    )
+    query_latest.add_argument("--output-dir", default="/tmp/singine-query-atom", help="Directory for generated Atom files")
+    query_latest.add_argument("--request", help="Existing Atom request file to read, or path to write when used with --write-request")
+    query_latest.add_argument("--response", help="Response Atom output path")
+    query_latest.add_argument("--write-request", action="store_true", help="Always write a fresh request Atom feed before running")
+    query_latest.add_argument("--timeout", type=int, default=10, help="HTTP timeout for API mode")
+    query_latest.add_argument("--emacsclient-bin", help="Optional emacsclient binary for filesystem summaries")
+    query_latest.add_argument("--json", action="store_true", help="Emit JSON")
+    query_latest.set_defaults(func=cmd_query_latest_changes)
+
+    query_read = query_sub.add_parser("read-atom", help="Read a generated Atom request or response feed and summarise it")
+    query_read.add_argument("atom_path", help="Path to an Atom XML file")
+    query_read.add_argument("--json", action="store_true", help="Emit JSON")
+    query_read.set_defaults(func=cmd_query_read_atom)
+
+    from .query_dispatch import add_query_backends
+    add_query_backends(query_sub)
+
+    realm_parser = sub.add_parser("realm", help="Realm-oriented audits, cron specs, and topic broadcast feeds")
+    realm_sub = realm_parser.add_subparsers(dest="realm_subcommand")
+    realm_parser.set_defaults(func=lambda a: (realm_parser.print_help(), 1)[1])
+
+    realm_check = realm_sub.add_parser("check", help="Run DNS/TLS/trust/vault checks across realms and write Atom request/response files")
+    realm_check.add_argument("--realm", action="append", help="Realm name; repeatable. Domain names are also accepted as realm identifiers.")
+    realm_check.add_argument("--domain", action="append", help="Domain or subdomain to audit; repeatable")
+    realm_check.add_argument("--service", action="append", choices=["dns", "tls", "trust", "vault"], help="Service family to check; repeatable")
+    realm_check.add_argument("--output-dir", default="/tmp/singine-realm")
+    realm_check.add_argument("--request", help="Use this request Atom path instead of the default output location")
+    realm_check.add_argument("--response", help="Use this response Atom path instead of the default output location")
+    realm_check.add_argument("--read-request", action="store_true", help="Read an existing request Atom file instead of generating a new one")
+    realm_check.add_argument("--json", action="store_true")
+    realm_check.set_defaults(func=cmd_realm_check)
+
+    realm_cron = realm_sub.add_parser("cron-write", help="Write a cron specification, command line, and Atom request/response files")
+    realm_cron.add_argument("--cron", required=True, help="Cron expression, for example '*/30 * * * *'")
+    realm_cron.add_argument("--realm", action="append", help="Realm name; repeatable")
+    realm_cron.add_argument("--domain", action="append", help="Domain or subdomain to audit; repeatable")
+    realm_cron.add_argument("--service", action="append", choices=["dns", "tls", "trust", "vault"], help="Service family to schedule; repeatable")
+    realm_cron.add_argument("--output-dir", default="/tmp/singine-realm")
+    realm_cron.add_argument("--request", help="Use this request Atom path instead of the default output location")
+    realm_cron.add_argument("--response", help="Use this response Atom path instead of the default output location")
+    realm_cron.add_argument("--cron-file", help="Write the generated cron line here")
+    realm_cron.add_argument("--json", action="store_true")
+    realm_cron.set_defaults(func=cmd_realm_cron_write)
+
+    realm_broadcast = realm_sub.add_parser("broadcast-interest", help="Write an Atom feed that maps a topic to publication and platform targets")
+    realm_broadcast.add_argument("--topic", default="dns-trust-vault-realm-operations")
+    realm_broadcast.add_argument("--target", action="append", help="Named broadcast target; repeatable")
+    realm_broadcast.add_argument("--realm", action="append", help="Realm name; repeatable")
+    realm_broadcast.add_argument("--domain", action="append", help="Domain or subdomain; repeatable")
+    realm_broadcast.add_argument("--output-dir", default="/tmp/singine-realm")
+    realm_broadcast.add_argument("--request", help="Use this request Atom path instead of the default output location")
+    realm_broadcast.add_argument("--response", help="Use this response Atom path instead of the default output location")
+    realm_broadcast.add_argument("--json", action="store_true")
+    realm_broadcast.set_defaults(func=cmd_realm_broadcast)
+
+    realm_read = realm_sub.add_parser("read-atom", help="Read a generated realm Atom request or response feed and summarise it")
+    realm_read.add_argument("atom_path", help="Path to an Atom XML file")
+    realm_read.add_argument("--json", action="store_true", help="Emit JSON")
+    realm_read.set_defaults(func=cmd_realm_read_atom)
 
     man_parser = sub.add_parser("man", help="Open or print Singine manpages")
     man_parser.add_argument("topic", nargs="?", default="singine")
@@ -1853,10 +2229,12 @@ def build_parser() -> argparse.ArgumentParser:
     server_bridge = server_sub.add_parser("bridge", help="Call the Singine /bridge HTTP facade")
     server_bridge.add_argument("--host", default="127.0.0.1", help="Server host (default: 127.0.0.1)")
     server_bridge.add_argument("--port", type=int, default=8080, help="HTTP port (default: 8080)")
-    server_bridge.add_argument("--action", choices=["sources", "search", "entity", "sparql"], default="sources")
-    server_bridge.add_argument("--query", help="Bridge query string for search or sparql actions")
+    server_bridge.add_argument("--action", choices=["sources", "search", "entity", "sparql", "graphql", "latest-changes"], default="sources")
+    server_bridge.add_argument("--query", help="Bridge query string for search, sparql, or graphql actions")
     server_bridge.add_argument("--entity", help="Entity IRI for the entity action")
     server_bridge.add_argument("--limit", type=int, default=20, help="Result limit (default: 20)")
+    server_bridge.add_argument("--realm", choices=["internal-graph", "external-graph", "filesystem"], help="Realm filter for latest-changes")
+    server_bridge.add_argument("--source-kind", help="Exact source kind filter for latest-changes")
     server_bridge.add_argument("--timeout", type=int, default=10, help="HTTP timeout in seconds")
     server_bridge.add_argument("--json", action="store_true", help="Emit JSON")
     server_bridge.set_defaults(func=cmd_server_bridge)
