@@ -81,12 +81,18 @@ def catalog() -> Dict[str, Any]:
             asdict(ModelObject("iata-codes", "reference-data", "Embedded airport and country reference mapping for location resolution.", "core/java/singine/location/IataCodeTable.java")),
             asdict(ModelObject("unicode-mapping", "reference-data", "Unicode reference mapping aligned with Collibra reference data.", "core/src/singine/unicode/mapping.clj")),
             asdict(ModelObject("knowyourai-rdf", "reference-data", "RDF concept pack bridged into Singine for SPARQL inspection.", "singine bridge build")),
+            asdict(ModelObject("dataset-campaign", "reference-data", "Phased dataset collection plan keyed to active contracts, active contacts, and trusted realms.", "singine campaign dataset-plan --brief '...'")),
+            asdict(ModelObject("zip-neighborhood-demo", "reference-data", "Notebook-friendly demo bundle for zip code, neighborhood, life phase, multilingual, and messaging alignment.", "singine demo zip-neighborhood --json")),
+            asdict(ModelObject("platform-blueprint", "reference-data", "Platform scaffold for Docker, OpenShift, Flowable, Collibra CLI attributes, Node.js, Python, and Spring Boot adapters.", "singine platform blueprint --json")),
+            asdict(ModelObject("personal-os-essay", "reference-data", "Essay and artefact bundle linking Logseq, Collibra, SQLite, XML request/response, Ballerina, C, Rust, Pico, SinLisp, SVG, LaTeX, and ixml.", "singine essay personal-os --json")),
+            asdict(ModelObject("template-library", "reference-data", "Persistent library of reusable templates and archetypes materialized through singine template list/materialize and singine archetype.", "singine template list --json")),
         ],
         "entity_families": [
             asdict(ModelObject("data_category", "entity", "CSV/Collibra-exported category entity.", "singine inspect --csv <file> <name>")),
             asdict(ModelObject("ai_concept", "entity", "RDF/SKOS concept mapped through the Collibra lens.", "singine inspect --rdf <file> <name>")),
             asdict(ModelObject("logseq_page", "entity", "Logseq page surfaced as a Collibra-style asset.", "singine inspect 'Page Name'")),
             asdict(ModelObject("todo", "entity", "Logseq task surfaced as an asset and activity.", "singine inspect 'Task text'")),
+            asdict(ModelObject("trusted_realm", "entity", "Governed source or dissemination boundary used by realm operations and dataset campaigns.", "singine realm check --realm molecularimaging.be --domain molecularimaging.be")),
         ],
         "collibra_bridge": {
             "asset_types": COLLIBRA_ASSET_TYPES,

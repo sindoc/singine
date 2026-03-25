@@ -36,14 +36,42 @@ See
 Install the launcher and bundled manpages.
 .TP
 .B template
-Generate Singine-aware project templates for Maven and npm workflows.
+Generate project templates and materialize reusable bundle library entries.
 See
 .BR singine-template (1).
 .TP
-.B runtime
-Inspect runtime capabilities and execute wrapped commands.
+.B archetype
+List and materialize higher-level reusable Singine archetypes such as the
+personal operating system essay bundle and platform blueprint.
 See
-.BR singine-runtime (1).
+.BR singine-archetype (1).
+.TP
+.B dotfiles
+Inspect and capture shell files, vimrc, Dropbox, Claude, and Logseq state into
+a controlled dotfiles repo.
+See
+.BR singine-dotfiles (1).
+.TP
+.B intranet
+Generate local sindoc.local control pages, including a unified machine and edge
+runtime control center, Silkpage-backed publish roots, and TLS/Firefox trust
+artifacts.
+See
+.BR singine-intranet (1).
+.TP
+.B runtime
+Inspect runtime capabilities, execute wrapped commands, and manage language
+runtime versions.  Subcommands include
+.BR inspect ,
+.BR exec ,
+.BR exec-external ,
+and
+.B java
+(resolve and activate Java versions via the Singine registry).
+See
+.BR singine-runtime (1)
+and
+.BR singine-java (1).
 .TP
 .B server
 Inspect or query the local Singine HTTP edge/server surface.
@@ -81,6 +109,24 @@ See
 .TP
 .B model
 Inspect Singine model objects and bridge surfaces.
+.TP
+.B demo
+Generate notebook-friendly demo bundles for messaging, multilingual zip-code
+data, and publication artefacts.
+See
+.BR singine-demo (1).
+.TP
+.B platform
+Generate platform blueprints and starter scaffolds for Node.js, Python, Spring
+Boot, Flowable, OpenShift, and Collibra-aligned execution.
+See
+.BR singine-platform (1).
+.TP
+.B essay
+Generate reflective essay bundles and publication artefacts spanning Markdown,
+HTML, SVG, LaTeX, XML, SinLisp, Ballerina, C, Rust, Pico, and ixml.
+See
+.BR singine-essay (1).
 .TP
 .B policy
 Manage governed policy packs and policy-backed execution workflows.
@@ -140,6 +186,16 @@ File transfer and queue/stack helpers.
 .TP
 .B smtp
 SMTP test and send helpers.
+.TP
+.B mcp
+Singine Collibra MCP server.
+Exposes domain master data (BusinessTerm, BusinessCapability, BusinessProcess,
+DataCategory), domain events, governed transactions, AI sessions, and
+governance decisions as MCP tools and resources for Claude Desktop and
+Claude Code.
+Includes a seed command for testing against a local SQLite database.
+See
+.BR singine-mcp (1).
 .SH AI CONVERSATION DATA
 Singine records every AI conversation — regardless of provider — as a governed
 session. The following command sequence covers the full journey from listing
@@ -235,6 +291,8 @@ with one of these topics:
 .IR singine-idp ,
 .IR singine-decide ,
 .IR singine-model ,
+.IR singine-demo ,
+.IR singine-platform ,
 .IR singine-policy ,
 .IR singine-ai ,
 .IR singine-domain ,
@@ -245,7 +303,10 @@ with one of these topics:
 .IR singine-mv ,
 .IR singine-transfer ,
 or
-.IR singine-smtp .
+.IR singine-smtp ,
+.IR singine-mcp ,
+or
+.IR singine-runtime .
 .SH EXAMPLES
 .nf
 # Quick-start: start a governed Claude conversation.
@@ -328,4 +389,6 @@ singine logseq export-xml \\
 .BR singine-find (1),
 .BR singine-mv (1),
 .BR singine-transfer (1),
-.BR singine-smtp (1)
+.BR singine-smtp (1),
+.BR singine-mcp (1),
+.BR singine-java (1)

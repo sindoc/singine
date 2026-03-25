@@ -1,0 +1,1 @@
+"""Singine MCP server package."""

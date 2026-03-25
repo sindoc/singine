@@ -1,0 +1,7 @@
+tasks.register("photoTest", Exec) {
+    commandLine "python3", "-m", "unittest", "py.tests.test_photo", "-v"
+}
+
+tasks.register("test") {
+    dependsOn("photoTest")
+}

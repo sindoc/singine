@@ -1,0 +1,12 @@
+<project name="singine" default="photo-test">
+  <target name="photo-test">
+    <exec executable="python3" failonerror="true">
+      <arg value="-m"/>
+      <arg value="unittest"/>
+      <arg value="py.tests.test_photo"/>
+      <arg value="-v"/>
+    </exec>
+  </target>
+
+  <target name="test" depends="photo-test"/>
+</project>

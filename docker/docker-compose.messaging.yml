@@ -1,0 +1,131 @@
+version: "3.9"
+
+# docker-compose.messaging.yml — singine messaging stack
+#
+# Layers:
+#   RabbitMQ   raw + staging exchanges  (AMQP 0-9-1, management UI)
+#   Kafka      data streaming topics    (KRaft, no Zookeeper)
+#   Lambda     function execution stub  (Python HTTP, Kafka consumer)
+#
+# Start:   docker compose -f docker/docker-compose.messaging.yml up -d
+# Stop:    docker compose -f docker/docker-compose.messaging.yml down
+# Logs:    docker compose -f docker/docker-compose.messaging.yml logs -f
+# Shell:   docker compose -f docker/docker-compose.messaging.yml exec rabbitmq rabbitmqctl list_queues
+#
+# From a notebook / Python:
+#   import singine
+#   singine.pipeline.send("10001", stage="raw")
+#
+# Ports:
+#   RabbitMQ  AMQP 5672, Management 15672  http://localhost:15672  (guest/guest)
+#   Kafka     9092 (internal), 9093 (external/host), 9094 (controller)
+#   Lambda    8090  http://localhost:8090/invoke
+
+services:
+
+  # ── rabbitmq: raw + staging exchanges ────────────────────────────────────────
+  rabbitmq:
+    image: rabbitmq:3.12-management
+    container_name: singine-rabbitmq
+    hostname: singine-rabbitmq
+    ports:
+      - "5672:5672"    # AMQP
+      - "15672:15672"  # Management UI  →  http://localhost:15672
+    environment:
+      RABBITMQ_DEFAULT_USER: singine
+      RABBITMQ_DEFAULT_PASS: singine
+      RABBITMQ_DEFAULT_VHOST: /
+    volumes:
+      - singine-rabbitmq-data:/var/lib/rabbitmq
+      - ./conf/rabbitmq/definitions.json:/etc/rabbitmq/definitions.json:ro
+      - ./conf/rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - singine-messaging
+
+  # ── kafka: KRaft mode, no Zookeeper ──────────────────────────────────────────
+  kafka:
+    image: apache/kafka:3.7.0
+    container_name: singine-kafka
+    hostname: singine-kafka
+    ports:
+      - "9092:9092"    # internal broker (container-to-container)
+      - "9093:9093"    # external / host access
+      - "9094:9094"    # KRaft controller
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,EXTERNAL://:9093,CONTROLLER://:9094
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:9093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9094
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG_RETENTION_HOURS: 168
+      # Pre-create singine topics
+      KAFKA_CREATE_TOPICS: >-
+        singine.raw.geo:1:1,
+        singine.staging.geo:1:1,
+        singine.datastreaming.zip.v1:1:1,
+        singine.datastreaming.lifecycle.v1:1:1,
+        singine.datastreaming.language.v1:1:1,
+        singine.events.activity:1:1,
+        singine.edge.sync:1:1
+    volumes:
+      - singine-kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null 2>&1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+    networks:
+      - singine-messaging
+
+  # ── singine-lambda: function execution stub ───────────────────────────────────
+  # Consumes from Kafka staging topics; applies transforms; exposes /invoke HTTP.
+  # Replace with AWS Lambda + EventSourceMapping when deploying to cloud.
+  singine-lambda:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.lambda
+    container_name: singine-lambda
+    hostname: singine-lambda
+    ports:
+      - "8090:8090"    # HTTP invocation  →  POST http://localhost:8090/invoke
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      RABBITMQ_URL: amqp://singine:singine@rabbitmq:5672/
+      SINGINE_LAMBDA_PORT: "8090"
+      SINGINE_LAMBDA_TOPICS: "singine.staging.geo,singine.datastreaming.zip.v1"
+      SINGINE_DOMAIN_DB: /data/humble-idp.db
+      SINGINE_LOG_DIR: /data/gitlog
+    volumes:
+      - singine-lambda-data:/data
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8090/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    networks:
+      - singine-messaging
+
+volumes:
+  singine-rabbitmq-data:
+  singine-kafka-data:
+  singine-lambda-data:
+
+networks:
+  singine-messaging:
+    driver: bridge

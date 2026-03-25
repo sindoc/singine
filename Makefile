@@ -5,7 +5,15 @@ SINGINE_KERNEL_SEARCH  ?= singine
 SINGINE_REF            ?= C12
 HUMBLE_IDP_JAVA        ?= $(HOME)/ws/today/cleanUp/X0-DigitalIdentity/humble-idp/java
 
-.PHONY: help status test test-core serve-core repl-core javac-core python-smoke py-test-xml py-test-transfer-flow py-test-multilingual-emotion py-test-photo py-test-surface py-test-domain backlog-status install install-bash install-sh manpath bridge-build bridge-sources xml-matrix knowyourai-list knowyourai-query auth-demo auth-uri auth-code model-catalog brew-clojure transfer-queue-demo transfer-stack-demo logseq-kernel-build logseq-kernel-sources logseq-kernel-search logseq-kernel-commit logseq-kernel-sync domain-schema domain-seed domain-event-log domain-tx-list domain-refdata-list domain-docs docs
+SINGINE_PANEL_PORT     ?= 9090
+SINGINE_PANEL_BIND     ?= 127.0.0.1
+SINGINE_VENV_PYTHON    ?= $(HOME)/ws/git/github/sindoc/singine/py/bin/python3
+FA_PROOF_OUTPUT_DIR    ?= /tmp/farsi-proof
+FA_PROOF_FONT          ?= Amiri
+FA_PROOF_HB_FONT       ?= Noto Naskh Arabic
+FA_PROOF_FONTS         ?= Amiri Geeza\ Pro Al\ Bayan Damascus Baghdad Tahoma
+
+.PHONY: help status test test-core serve-core repl-core javac-core python-smoke py-test-xml py-test-transfer-flow py-test-multilingual-emotion py-test-photo py-test-surface py-test-domain backlog-status install install-bash install-sh manpath bridge-build bridge-sources xml-matrix knowyourai-list knowyourai-query auth-demo auth-uri auth-code model-catalog brew-clojure transfer-queue-demo transfer-stack-demo logseq-kernel-build logseq-kernel-sources logseq-kernel-search logseq-kernel-commit logseq-kernel-sync domain-schema domain-seed domain-event-log domain-tx-list domain-refdata-list domain-docs docs net-status net-ports presence-status panel-serve feeds-generate fa-proof-specimen fa-proof-showcase fa-proof-hb fa-proof-suite
 
 help:
 	@printf "Singine commands:\n"
@@ -38,6 +46,10 @@ help:
 	@printf "  make py-test-transfer-flow  Run the Flowable transfer test suite\n"
 	@printf "  make transfer-queue-demo    Demo queue push/list/pop\n"
 	@printf "  make transfer-stack-demo  Demo stack push/list/pop\n"
+	@printf "  make fa-proof-specimen  Build the multi-font Persian proof PDF\n"
+	@printf "  make fa-proof-showcase  Build the bilingual complex-analysis showcase PDF\n"
+	@printf "  make fa-proof-hb        Build the HarfBuzz preview PDF\n"
+	@printf "  make fa-proof-suite     Build specimen + showcase + HarfBuzz preview\n"
 	@printf "  make logseq-kernel-build   Build bridge from fa-KfK-HDYAT-KRNL-421b kernel\n"
 	@printf "  make logseq-kernel-sources List bridge sources (kernel view)\n"
 	@printf "  make logseq-kernel-search  SINGINE_KERNEL_SEARCH=<term> Search kernel bridge\n"
@@ -187,6 +199,41 @@ domain-docs:
 
 docs: domain-docs
 	@printf "All documentation built.\n"
+
+# ── Net / panel / presence / feeds ───────────────────────────────────────────
+
+net-status:
+	singine net status
+
+net-ports:
+	singine net ports
+
+presence-status:
+	singine presence status
+
+presence-verify:
+	singine presence verify
+
+panel-serve:
+	@printf "Starting singine panel on http://$(SINGINE_PANEL_BIND):$(SINGINE_PANEL_PORT)/\n"
+	$(SINGINE_VENV_PYTHON) -m singine.command panel serve \
+	    --port $(SINGINE_PANEL_PORT) --bind $(SINGINE_PANEL_BIND)
+
+feeds-generate:
+	singine feeds generate --output-dir /tmp/singine-feeds --db "$(SINGINE_DOMAIN_DB)"
+	@printf "Feeds written to /tmp/singine-feeds/\n"
+
+fa-proof-specimen:
+	python3 -m singine.command proof specimen --output-dir "$(FA_PROOF_OUTPUT_DIR)" --fonts $(FA_PROOF_FONTS)
+
+fa-proof-showcase:
+	python3 -m singine.command proof showcase --output-dir "$(FA_PROOF_OUTPUT_DIR)" --font "$(FA_PROOF_FONT)"
+
+fa-proof-hb:
+	python3 -m singine.command proof harfbuzz --output-dir "$(FA_PROOF_OUTPUT_DIR)" --font "$(FA_PROOF_HB_FONT)"
+
+fa-proof-suite:
+	python3 -m singine.command proof suite --output-dir "$(FA_PROOF_OUTPUT_DIR)" --fonts $(FA_PROOF_FONTS) --showcase-font "$(FA_PROOF_FONT)" --hb-font "$(FA_PROOF_HB_FONT)"
 
 # ── Logseq kernel (fa-KfK-HDYAT-KRNL-421b) ──────────────────────────────────
 # Override: make logseq-kernel-search SINGINE_KERNEL_SEARCH="smtp"
