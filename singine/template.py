@@ -1,4 +1,4 @@
-"""Project template generation for Maven and npm ecosystems."""
+"""Project templates and reusable bundle archetypes for Singine."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List
+from typing import Any, Dict, List, Optional
 
 
 def _slugify(value: str) -> str:
@@ -78,6 +78,86 @@ class TemplateResult:
             "package_name": self.package_name,
             "metadata": self.metadata,
         }
+
+
+@dataclass(frozen=True)
+class LibraryEntry:
+    name: str
+    family: str
+    description: str
+    reference_command: str
+    default_output_dir: str
+
+    def to_dict(self) -> Dict[str, str]:
+        return {
+            "name": self.name,
+            "family": self.family,
+            "description": self.description,
+            "reference_command": self.reference_command,
+            "default_output_dir": self.default_output_dir,
+        }
+
+
+def builtin_template_library() -> List[LibraryEntry]:
+    return [
+        LibraryEntry(
+            name="personal-os-essay",
+            family="archetype",
+            description="Reflective bundle spanning Markdown, HTML, SVG, LaTeX, XML, SinLisp, Ballerina, C, Rust, Pico, and ixml.",
+            reference_command="singine essay personal-os --output-dir <dir> --json",
+            default_output_dir="/tmp/singine-personal-os",
+        ),
+        LibraryEntry(
+            name="platform-blueprint",
+            family="archetype",
+            description="Platform contract for OpenShift, Docker, Flowable, Node.js, Python, Spring Boot, and Collibra-aligned execution.",
+            reference_command="singine platform blueprint --output-dir <dir> --json",
+            default_output_dir="/tmp/singine-platform-blueprint",
+        ),
+        LibraryEntry(
+            name="zip-neighborhood-demo",
+            family="template",
+            description="Notebook-friendly messaging demo across RabbitMQ, Kafka, publication artefacts, zip codes, and multilingual mappings.",
+            reference_command="singine demo zip-neighborhood --output-dir <dir> --json",
+            default_output_dir="/tmp/singine-zip-neighborhood-demo",
+        ),
+    ]
+
+
+def list_template_library(*, family: Optional[str] = None) -> List[Dict[str, str]]:
+    items = [entry for entry in builtin_template_library() if family in (None, "", entry.family)]
+    return [entry.to_dict() for entry in items]
+
+
+def materialize_library_entry(
+    *,
+    name: str,
+    output_dir: Path,
+    title: Optional[str] = None,
+) -> Dict[str, Any]:
+    target = name.strip().lower()
+    if target == "personal-os-essay":
+        from .personal_os import write_personal_os_bundle
+
+        return write_personal_os_bundle(
+            output_dir=output_dir,
+            title=title or "Singine Personal Operating System",
+        )
+    if target == "platform-blueprint":
+        from .platform_blueprint import write_platform_blueprint_bundle
+
+        return write_platform_blueprint_bundle(
+            output_dir=output_dir,
+            title=title or "Singine Multi-Model Platform Blueprint",
+        )
+    if target == "zip-neighborhood-demo":
+        from .zip_neighborhood_demo import write_zip_neighborhood_demo_bundle
+
+        return write_zip_neighborhood_demo_bundle(
+            output_dir=output_dir,
+            title=title or "Zip Neighborhood Messaging Demo",
+        )
+    raise KeyError(name)
 
 
 def create_maven_template(

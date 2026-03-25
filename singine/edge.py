@@ -618,6 +618,222 @@ def cmd_edge_k8s_logs(args: argparse.Namespace) -> int:
     return subprocess.run(cmd, text=True).returncode
 
 
+# ── K8s test suite ────────────────────────────────────────────────────────────
+
+def _k8s_namespace_exists(ns: str) -> bool:
+    r = subprocess.run(
+        ["kubectl", "get", "namespace", ns],
+        capture_output=True, text=True,
+    )
+    return r.returncode == 0
+
+
+def _kubectl_json(args_list: List[str]) -> Any:
+    r = subprocess.run(
+        ["kubectl"] + args_list + ["-o", "json"],
+        capture_output=True, text=True,
+    )
+    if r.returncode != 0:
+        return None
+    try:
+        return json.loads(r.stdout)
+    except json.JSONDecodeError:
+        return None
+
+
+# Pods that must be Running for the edge site to pulse on lutino.collibra.com
+# Labels from the Collibra Edge Helm chart (app.kubernetes.io/name)
+_CRITICAL_PODS = {
+    "edge-proxy":                   "app.kubernetes.io/name=collibra-edge-proxy",
+    "edge-controller":              "app.kubernetes.io/name=collibra-edge-controller",
+    "edge-session-manager":         "app.kubernetes.io/name=edge-session-manager",
+    "collibra-edge-objects-server": "app.kubernetes.io/name=edge-objects-server",
+}
+# Pods that are useful but not required for the core pulse
+_OPTIONAL_PODS = {
+    "collibra-otel-agent": "app.kubernetes.io/name=opentelemetry-collector",
+    "collibra-edge-cd":    "app.kubernetes.io/name=edge-cd",
+}
+
+
+def _pod_phase(ns: str, label: str) -> str:
+    """Return phase string of the first pod matching label, or 'not found'."""
+    data = _kubectl_json(["get", "pods", "-n", ns, "-l", label])
+    if not data:
+        return "not found"
+    items = data.get("items", [])
+    if not items:
+        return "not found"
+    return items[0].get("status", {}).get("phase", "Unknown")
+
+
+def _pod_logs_recent(ns: str, label: str, lines: int = 200) -> str:
+    r = subprocess.run(
+        ["kubectl", "logs", "-n", ns, "-l", label,
+         "--tail", str(lines), "--container-name-pattern", ".*"],
+        capture_output=True, text=True,
+    )
+    # fallback without container filter
+    if r.returncode != 0:
+        r = subprocess.run(
+            ["kubectl", "logs", "-n", ns, "-l", label, "--tail", str(lines)],
+            capture_output=True, text=True,
+        )
+    return r.stdout
+
+
+def cmd_edge_k8s_test(args: argparse.Namespace) -> int:
+    """Test suite for the real Collibra Edge K8s deployment.
+
+    Checks:
+      1. kubectl cluster reachable
+      2. Helm release collibra-edge: deployed
+      3-6. Critical pods Running: edge-proxy, edge-controller,
+           edge-session-manager, collibra-edge-objects-server
+      7. edge-proxy: OAuth token refreshed (logs)
+      8. edge-controller: heartbeat sent to lutino.collibra.com (logs)
+      9. edge-controller: no heartbeat errors (last 5 min)
+      10. Optional pods: otel-agent, collibra-edge-cd
+    """
+    ns = args.namespace
+    use_json = args.json
+
+    results: List[Dict[str, Any]] = []
+    overall_ok = True
+
+    def _check(name: str, ok: bool, detail: str = "") -> None:
+        nonlocal overall_ok
+        if not ok:
+            overall_ok = False
+        results.append({"test": name, "ok": ok, "detail": detail})
+        if not use_json:
+            icon = "✓" if ok else "✗"
+            suffix = f"  {detail}" if detail and not ok else (f"  {detail}" if detail and ok else "")
+            print(f"  {icon}  {name}{suffix}")
+
+    if not use_json:
+        print(f"\n[edge k8s test] namespace={ns}")
+        print(f"[edge k8s test] ── Cluster & release ────────────────────────")
+
+    # 1. Cluster reachable
+    r = subprocess.run(["kubectl", "cluster-info"], capture_output=True, text=True)
+    _check("kubectl cluster reachable", r.returncode == 0,
+           "cluster-info failed" if r.returncode != 0 else "")
+
+    # 2. Namespace exists
+    ns_ok = _k8s_namespace_exists(ns)
+    _check(f"namespace {ns} exists", ns_ok, "not found" if not ns_ok else "")
+
+    # 3. Helm release deployed
+    helm_r = subprocess.run(
+        ["helm", "status", "collibra-edge", "-n", ns, "--output", "json"],
+        capture_output=True, text=True,
+    )
+    helm_status = ""
+    helm_version = ""
+    if helm_r.returncode == 0:
+        try:
+            hd = json.loads(helm_r.stdout)
+            helm_status = hd.get("info", {}).get("status", "")
+            helm_version = hd.get("chart", {}).get("metadata", {}).get("version", "")
+        except json.JSONDecodeError:
+            pass
+    helm_deployed = helm_status == "deployed"
+    _check("helm release: deployed",
+           helm_deployed,
+           f"status={helm_status or 'not installed'}  version={helm_version}" if not helm_deployed
+           else f"version={helm_version}")
+
+    if not use_json:
+        print(f"[edge k8s test] ── Critical pods ─────────────────────────────")
+
+    # 4-7. Critical pods Running
+    pod_phases: Dict[str, str] = {}
+    for pod_name, label in _CRITICAL_PODS.items():
+        phase = _pod_phase(ns, label)
+        pod_phases[pod_name] = phase
+        _check(f"pod:{pod_name} Running", phase == "Running",
+               f"phase={phase}" if phase != "Running" else "")
+
+    if not use_json:
+        print(f"[edge k8s test] ── Heartbeat & auth ──────────────────────────")
+
+    # 8. edge-proxy: OAuth token refreshed
+    if pod_phases.get("edge-proxy") == "Running":
+        proxy_logs = _pod_logs_recent(ns, "app.kubernetes.io/name=collibra-edge-proxy", lines=300)
+        oauth_ok = "OAuth Token refreshed successfully" in proxy_logs
+        _check("edge-proxy: OAuth token refreshed", oauth_ok,
+               "not seen in recent logs" if not oauth_ok else "")
+
+        # Check proxy is polling lutino (not just getting timeout errors)
+        polling_started = "Started polling thread on:" in proxy_logs
+        _check("edge-proxy: polling lutino.collibra.com", polling_started,
+               "polling start message not found" if not polling_started else "")
+    else:
+        _check("edge-proxy: OAuth token refreshed", False, "pod not Running — skipped")
+        _check("edge-proxy: polling lutino.collibra.com", False, "pod not Running — skipped")
+
+    # 9. edge-controller: heartbeat sent
+    # 10. edge-controller: no heartbeat errors
+    if pod_phases.get("edge-controller") == "Running":
+        ctrl_logs = _pod_logs_recent(ns, "app.kubernetes.io/name=collibra-edge-controller", lines=300)
+        hb_ok = "Sending a controller heartbeat from siteId:" in ctrl_logs
+        _check("edge-controller: heartbeat sent", hb_ok,
+               "heartbeat message not found in recent logs" if not hb_ok else "")
+
+        # Count heartbeat lines and look for errors immediately after
+        hb_lines = [l for l in ctrl_logs.splitlines() if "heartbeat" in l.lower()]
+        hb_error_lines = [l for l in hb_lines if '"level":"ERROR"' in l or '"level":"WARN"' in l]
+        no_hb_errors = len(hb_error_lines) == 0
+        _check("edge-controller: heartbeat no errors",
+               no_hb_errors,
+               f"{len(hb_error_lines)} error(s) in heartbeat lines" if not no_hb_errors else
+               f"{len(hb_lines)} heartbeat(s) sent")
+    else:
+        _check("edge-controller: heartbeat sent", False, "pod not Running — skipped")
+        _check("edge-controller: heartbeat no errors", False, "pod not Running — skipped")
+
+    if not use_json:
+        print(f"[edge k8s test] ── Optional pods ────────────────────────────")
+
+    # 11-12. Optional pods (warn but don't fail)
+    for pod_name, label in _OPTIONAL_PODS.items():
+        phase = _pod_phase(ns, label)
+        running = phase == "Running"
+        # Mark optional failures as ok=True with detail note
+        _check(f"pod:{pod_name} Running (optional)", running,
+               f"phase={phase} (non-blocking)" if not running else "")
+        if not running:
+            # Don't count optional failures against overall
+            results[-1]["optional"] = True
+            overall_ok = overall_ok  # unchanged
+
+    # Re-evaluate overall_ok excluding optional checks
+    overall_ok = all(r["ok"] for r in results if not r.get("optional"))
+
+    passed = sum(1 for r in results if r["ok"])
+    total = len(results)
+
+    if use_json:
+        print(json.dumps(_envelope(
+            overall_ok, "edge k8s test",
+            namespace=ns,
+            passed=passed,
+            total=total,
+            results=results,
+        )))
+    else:
+        print(f"\n[edge k8s test] {'PASSED' if overall_ok else 'FAILED'}  {passed}/{total} checks")
+        if not overall_ok:
+            failed = [r for r in results if not r["ok"] and not r.get("optional")]
+            print(f"[edge k8s test] Failed checks:")
+            for r in failed:
+                print(f"  ✗  {r['test']}  {r.get('detail', '')}")
+        return 0 if overall_ok else 1
+
+    return 0 if overall_ok else 1
+
+
 # ── Cloud mode up ─────────────────────────────────────────────────────────────
 
 def cmd_edge_cloud(args: argparse.Namespace) -> int:
@@ -817,6 +1033,80 @@ def cmd_edge_test(args: argparse.Namespace) -> int:
     site_ok = status == 200
     _check("GET /site/ → 200", site_ok, err or str(status) if not site_ok else "")
 
+    # ── 7. K8s edge stack (auto-detected or --k8s flag) ───────────────────────
+    run_k8s = getattr(args, "k8s", False)
+    if not run_k8s:
+        # auto-detect: check if kubectl is available and namespace exists
+        kc = subprocess.run(["which", "kubectl"], capture_output=True, text=True)
+        if kc.returncode == 0 and _k8s_namespace_exists(_K8S_NAMESPACE):
+            run_k8s = True
+
+    if run_k8s:
+        if not use_json:
+            print(f"[edge test] ── K8s edge stack ({_K8S_NAMESPACE}) ─────────────────")
+        # Run k8s checks and merge results
+        k8s_ns = argparse.Namespace(namespace=_K8S_NAMESPACE, json=False)
+        _orig_print = None
+        # Collect k8s results without re-printing header
+        k8s_results: List[Dict[str, Any]] = []
+        k8s_ok = True
+
+        def _k8s_check(name: str, ok: bool, detail: str = "") -> None:
+            nonlocal k8s_ok
+            if not ok and not name.startswith("pod:collibra-otel") and not name.startswith("pod:collibra-edge-cd"):
+                k8s_ok = False
+            k8s_results.append({"test": f"k8s/{name}", "ok": ok, "detail": detail,
+                                 "optional": name.endswith("(optional)")})
+            if not use_json:
+                icon = "✓" if ok else "✗"
+                suffix = f"  {detail}" if detail else ""
+                print(f"  {icon}  k8s/{name}{suffix}")
+
+        # cluster
+        r = subprocess.run(["kubectl", "cluster-info"], capture_output=True, text=True)
+        _k8s_check("cluster reachable", r.returncode == 0)
+
+        # helm release
+        helm_r = subprocess.run(
+            ["helm", "status", "collibra-edge", "-n", _K8S_NAMESPACE, "--output", "json"],
+            capture_output=True, text=True,
+        )
+        helm_status_str = ""
+        if helm_r.returncode == 0:
+            try:
+                hd = json.loads(helm_r.stdout)
+                helm_status_str = hd.get("info", {}).get("status", "")
+            except json.JSONDecodeError:
+                pass
+        _k8s_check("helm:collibra-edge deployed", helm_status_str == "deployed",
+                   f"status={helm_status_str or 'not installed'}")
+
+        # critical pods
+        for pod_name, label in _CRITICAL_PODS.items():
+            phase = _pod_phase(_K8S_NAMESPACE, label)
+            _k8s_check(f"pod:{pod_name} Running", phase == "Running",
+                       f"phase={phase}" if phase != "Running" else "")
+
+        # heartbeat
+        ctrl_logs = _pod_logs_recent(_K8S_NAMESPACE, "app.kubernetes.io/name=collibra-edge-controller", lines=300)
+        hb_sent = "Sending a controller heartbeat from siteId:" in ctrl_logs
+        _k8s_check("edge-controller heartbeat sent", hb_sent,
+                   "not seen in recent logs" if not hb_sent else "")
+        hb_err_lines = [l for l in ctrl_logs.splitlines()
+                        if "heartbeat" in l.lower() and '"level":"ERROR"' in l]
+        _k8s_check("edge-controller heartbeat no errors", len(hb_err_lines) == 0,
+                   f"{len(hb_err_lines)} error(s)" if hb_err_lines else "")
+
+        # oauth
+        proxy_logs = _pod_logs_recent(_K8S_NAMESPACE, "app.kubernetes.io/name=collibra-edge-proxy", lines=300)
+        oauth_ok = "OAuth Token refreshed successfully" in proxy_logs
+        _k8s_check("edge-proxy OAuth token refreshed", oauth_ok,
+                   "not seen in recent logs" if not oauth_ok else "")
+
+        results.extend(k8s_results)
+        if not k8s_ok:
+            overall_ok = False
+
     # ── Summary ───────────────────────────────────────────────────────────────
     passed = sum(1 for r in results if r["ok"])
     total = len(results)
@@ -832,7 +1122,7 @@ def cmd_edge_test(args: argparse.Namespace) -> int:
     else:
         print(f"\n[edge test] {'PASSED' if overall_ok else 'FAILED'}  {passed}/{total} checks")
         if not overall_ok:
-            failed = [r for r in results if not r["ok"]]
+            failed = [r for r in results if not r["ok"] and not r.get("optional")]
             print(f"[edge test] Failed checks:")
             for r in failed:
                 print(f"  ✗  {r['test']}  {r.get('detail', '')}")
@@ -967,6 +1257,20 @@ def add_edge_parser(sub: argparse._SubParsersAction) -> None:
         help="Skip TLS certificate verification (for self-signed certs, default: True)",
         default=True,
     )
+    k8s_group = p.add_mutually_exclusive_group()
+    k8s_group.add_argument(
+        "--k8s",
+        action="store_true",
+        dest="k8s",
+        default=False,
+        help="Force-include K8s edge pod checks (auto-detected when namespace exists)",
+    )
+    k8s_group.add_argument(
+        "--no-k8s",
+        action="store_false",
+        dest="k8s",
+        help="Skip K8s edge pod checks",
+    )
     p.add_argument("--json", action="store_true", help="Emit JSON envelope with full test results")
     p.set_defaults(func=cmd_edge_test)
 
@@ -1016,6 +1320,18 @@ def add_edge_parser(sub: argparse._SubParsersAction) -> None:
     )
     p.add_argument("--json", action="store_true")
     p.set_defaults(func=cmd_edge_k8s_status)
+
+    p = k8s_sub.add_parser(
+        "test",
+        help="Run the K8s edge test suite: pod health, heartbeat, OAuth token",
+    )
+    p.add_argument(
+        "--namespace", "-n",
+        default=_K8S_NAMESPACE,
+        help=f"Kubernetes namespace (default: {_K8S_NAMESPACE})",
+    )
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_edge_k8s_test)
 
     p = k8s_sub.add_parser(
         "logs",

@@ -26,6 +26,15 @@ singine-ai \- governed AI session recording and conversation-data centralisation
 .B singine ai session show
 \fIID\fR [\fB--root-dir\fR \fIPATH\fR]
 .PP
+.B singine ai session dashboard
+[\fB--root-dir\fR \fIPATH\fR]
+[\fB--repo-ai-dir\fR \fIPATH\fR]
+[\fB--output-dir\fR \fIPATH\fR]
+[\fB--provider\fR \fIPROVIDER\fR]
+[\fB--title\fR \fITEXT\fR]
+[\fB--site-url\fR \fIURL\fR]
+[\fB--json\fR]
+.PP
 .B singine ai status
 [\fB--json\fR]
 .PP
@@ -109,6 +118,14 @@ session picker.
 .B session show \fIID\fR
 Show the full recorded session bundle: manifest, interactions, and mandates.
 .TP
+.B session dashboard
+Generate an HTML dashboard that combines the governed JSON session store under
+.I ~/.singine/ai/sessions/
+with repo-backed EDN command-session records under
+.IR singine/ai/sessions/ .
+The output is intended to be served locally, for example from
+.IR sindoc.local .
+.TP
 .B status
 Show configured AI provider registry information.
 .TP
@@ -191,7 +208,15 @@ singine ai session show SESSION-ID
 singine ai last session data --db /tmp/singine-ai.db
 .fi
 .PP
-.B Step 6 — Access the centralised data
+.B Step 6 — Build an HTML dashboard for Claude and Codex sessions
+.nf
+singine ai session dashboard \\
+  --output-dir /Users/skh/ws/git/github/sindoc/singine/target/sindoc.local/sessions \\
+  --json
+singine web /Users/skh/ws/git/github/sindoc/singine/target/sindoc.local --port 8080
+.fi
+.PP
+.B Step 7 — Access the centralised data
 .nf
 singine jdbc-url --db /tmp/singine-ai.db
 singine bridge sources --db /tmp/singine-ai.db
@@ -226,6 +251,12 @@ singine ai session list --root-dir /tmp/singine-ai
 # Show one session in full.
 singine ai session show 123e4567-e89b-12d3-a456-426614174000 \\
   --root-dir /tmp/singine-ai
+
+# Build and serve a local HTML dashboard for Claude and Codex sessions.
+singine ai session dashboard \\
+  --output-dir /Users/skh/ws/git/github/sindoc/singine/target/sindoc.local \\
+  --json
+singine web /Users/skh/ws/git/github/sindoc/singine/target/sindoc.local --port 8080
 
 # Centralise the latest session bundle.
 singine ai last session data \\

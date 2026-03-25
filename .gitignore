@@ -39,6 +39,8 @@ ai/sessions/
 core/out
 core/target/
 docs/target/
+target/
+.gradle/
 
 # Personal/organizational workspace directories (numbered buckets)
 00-*/

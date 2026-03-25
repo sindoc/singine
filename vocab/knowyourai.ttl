@@ -1,0 +1,253 @@
+# vocab/knowyourai.ttl
+# #knowyourai — SKOS vocabulary for human/machine activity attestation
+#
+# Aligned with:
+#   - SKOS Simple Knowledge Organization System (W3C)
+#   - singine IDP JWT claims
+#   - RSS 1.0 / Atom activity feeds
+#   - singine domain event log
+#
+# URN scheme: urn:knowyourai:vocab#<Concept>
+#
+# Usage in Atom/RSS items:
+#   <dc:subject rdf:resource="urn:knowyourai:vocab#HumanLedActivity"/>
+#   <kya:requiresHumanPresence>true</kya:requiresHumanPresence>
+#
+# Usage in singine JWT:
+#   { "knowyourai:humanPresence": true,
+#     "knowyourai:method": "1password-biometric",
+#     "knowyourai:verifiedAt": "2026-03-22T..." }
+
+@prefix rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:   <http://www.w3.org/2002/07/owl#> .
+@prefix skos:  <http://www.w3.org/2004/02/skos/core#> .
+@prefix xsd:   <http://www.w3.org/2001/XMLSchema#> .
+@prefix dc:    <http://purl.org/dc/elements/1.1/> .
+@prefix kya:   <urn:knowyourai:vocab#> .
+@prefix sg:    <urn:singine:vocab#> .
+
+# ── Ontology header ────────────────────────────────────────────────────────────
+
+kya:
+    a owl:Ontology ;
+    dc:title        "#knowyourai vocabulary"@en ;
+    dc:description  "SKOS vocabulary for attesting human vs machine activity in the singine ecosystem."@en ;
+    dc:creator      "Sina Heshmati (@surenkierkegaard)"@en ;
+    dc:date         "2026-03-22"^^xsd:date ;
+    owl:versionInfo "0.1" .
+
+# ── Concept scheme ─────────────────────────────────────────────────────────────
+
+kya:KnowYourAI
+    a skos:ConceptScheme ;
+    skos:prefLabel       "#knowyourai"@en ;
+    skos:definition      "A vocabulary for distinguishing human-led from machine-led activities, and for recording human presence attestation."@en ;
+    skos:hasTopConcept   kya:Activity, kya:PresenceAttestation, kya:VerificationMethod .
+
+# ── Top concepts ───────────────────────────────────────────────────────────────
+
+kya:Activity
+    a skos:Concept ;
+    skos:inScheme    kya:KnowYourAI ;
+    skos:prefLabel   "Activity"@en ;
+    skos:definition  "Any action performed within the singine ecosystem, whether by a human or a machine."@en .
+
+kya:PresenceAttestation
+    a skos:Concept ;
+    skos:inScheme    kya:KnowYourAI ;
+    skos:prefLabel   "Presence Attestation"@en ;
+    skos:definition  "The act of verifying that a human being is present and actively sanctioning an activity."@en ;
+    skos:broader     kya:Activity .
+
+kya:VerificationMethod
+    a skos:Concept ;
+    skos:inScheme    kya:KnowYourAI ;
+    skos:prefLabel   "Verification Method"@en ;
+    skos:definition  "The mechanism used to verify human presence."@en .
+
+# ── Activity types ─────────────────────────────────────────────────────────────
+
+kya:HumanLedActivity
+    a skos:Concept ;
+    skos:inScheme    kya:KnowYourAI ;
+    skos:prefLabel   "Human-Led Activity"@en ;
+    skos:altLabel    "human-initiated"@en, "sanction-required"@en ;
+    skos:definition  "An activity that must be initiated, sanctioned, or approved by a verified human. A presence attestation JWT is required."@en ;
+    skos:broader     kya:Activity ;
+    skos:notation    "HLA" .
+
+kya:MachineLedActivity
+    a skos:Concept ;
+    skos:inScheme    kya:KnowYourAI ;
+    skos:prefLabel   "Machine-Led Activity"@en ;
+    skos:altLabel    "automated"@en, "unattended"@en ;
+    skos:definition  "An activity performed autonomously by a machine without requiring real-time human presence. May still require prior human authorisation."@en ;
+    skos:broader     kya:Activity ;
+    skos:notation    "MLA" .
+
+kya:AssistedActivity
+    a skos:Concept ;
+    skos:inScheme    kya:KnowYourAI ;
+    skos:prefLabel   "Assisted Activity"@en ;
+    skos:altLabel    "human-in-the-loop"@en, "co-piloted"@en ;
+    skos:definition  "An activity co-performed by a human and a machine. The human reviews and approves machine-generated proposals."@en ;
+    skos:broader     kya:Activity ;
+    skos:related     kya:HumanLedActivity, kya:MachineLedActivity ;
+    skos:notation    "AA" .
+
+# ── Presence attestation concepts ─────────────────────────────────────────────
+
+kya:PresenceRequired
+    a skos:Concept ;
+    skos:inScheme    kya:KnowYourAI ;
+    skos:prefLabel   "Presence Required"@en ;
+    skos:definition  "This activity cannot proceed without a valid human presence attestation (JWT with knowyourai:humanPresence=true)."@en ;
+    skos:broader     kya:HumanLedActivity .
+
+kya:PresenceOptional
+    a skos:Concept ;
+    skos:inScheme    kya:KnowYourAI ;
+    skos:prefLabel   "Presence Optional"@en ;
+    skos:definition  "This activity may proceed without human presence, but human involvement is recorded if available."@en ;
+    skos:broader     kya:AssistedActivity .
+
+kya:PresenceNotRequired
+    a skos:Concept ;
+    skos:inScheme    kya:KnowYourAI ;
+    skos:prefLabel   "Presence Not Required"@en ;
+    skos:definition  "This activity runs fully unattended. No human presence attestation is needed."@en ;
+    skos:broader     kya:MachineLedActivity .
+
+# ── Verification methods ───────────────────────────────────────────────────────
+
+kya:BiometricVerification
+    a skos:Concept ;
+    skos:inScheme    kya:KnowYourAI ;
+    skos:prefLabel   "Biometric Verification"@en ;
+    skos:altLabel    "Touch ID"@en, "Face ID"@en, "fingerprint"@en ;
+    skos:definition  "Human presence verified via biometric sensor (Touch ID, Face ID)."@en ;
+    skos:broader     kya:VerificationMethod ;
+    sg:singineMethod "1password-biometric"^^xsd:string, "macos-touchid"^^xsd:string .
+
+kya:TOTPVerification
+    a skos:Concept ;
+    skos:inScheme    kya:KnowYourAI ;
+    skos:prefLabel   "TOTP Verification"@en ;
+    skos:altLabel    "two-factor"@en, "2FA"@en ;
+    skos:definition  "Human presence verified via Time-based One-Time Password (RFC 6238)."@en ;
+    skos:broader     kya:VerificationMethod ;
+    sg:singineMethod "singine-totp"^^xsd:string .
+
+kya:PassphraseVerification
+    a skos:Concept ;
+    skos:inScheme    kya:KnowYourAI ;
+    skos:prefLabel   "Passphrase Verification"@en ;
+    skos:altLabel    "password challenge"@en ;
+    skos:definition  "Human presence verified via passphrase challenge on a TTY."@en ;
+    skos:broader     kya:VerificationMethod ;
+    sg:singineMethod "passphrase"^^xsd:string .
+
+kya:OnePasswordVerification
+    a skos:Concept ;
+    skos:inScheme    kya:KnowYourAI ;
+    skos:prefLabel   "1Password CLI Verification"@en ;
+    skos:definition  "Human presence verified via 1Password CLI (op) with biometric unlock. The user's 1Password identity is the authoritative proof of presence."@en ;
+    skos:broader     kya:BiometricVerification ;
+    sg:singineMethod "1password-biometric"^^xsd:string .
+
+# ── Properties ─────────────────────────────────────────────────────────────────
+
+kya:requiresHumanPresence
+    a owl:DatatypeProperty ;
+    rdfs:label    "requiresHumanPresence"@en ;
+    rdfs:comment  "True if this activity requires a valid presence attestation JWT."@en ;
+    rdfs:domain   kya:Activity ;
+    rdfs:range    xsd:boolean .
+
+kya:humanPresence
+    a owl:DatatypeProperty ;
+    rdfs:label    "humanPresence"@en ;
+    rdfs:comment  "JWT claim: true if the token holder has been verified as a human."@en ;
+    rdfs:range    xsd:boolean .
+
+kya:attestedBy
+    a owl:ObjectProperty ;
+    rdfs:label    "attestedBy"@en ;
+    rdfs:comment  "Links an activity to the verification method used."@en ;
+    rdfs:domain   kya:Activity ;
+    rdfs:range    kya:VerificationMethod .
+
+kya:verifiedAt
+    a owl:DatatypeProperty ;
+    rdfs:label    "verifiedAt"@en ;
+    rdfs:comment  "ISO-8601 timestamp of when presence was last verified."@en ;
+    rdfs:range    xsd:dateTime .
+
+kya:method
+    a owl:DatatypeProperty ;
+    rdfs:label    "method"@en ;
+    rdfs:comment  "The singine method string used for verification (matches sg:singineMethod values)."@en ;
+    rdfs:range    xsd:string .
+
+kya:humanLed
+    a owl:DatatypeProperty ;
+    rdfs:label    "humanLed"@en ;
+    rdfs:comment  "Feed item annotation: true if this activity was initiated by a human."@en ;
+    rdfs:range    xsd:boolean .
+
+# ── singine-specific activity registry ────────────────────────────────────────
+#
+# Tag singine commands and capabilities with their presence requirements.
+
+sg:SingineActivity
+    a skos:Concept ;
+    skos:inScheme  kya:KnowYourAI ;
+    skos:prefLabel "Singine Activity"@en ;
+    skos:broader   kya:Activity .
+
+sg:PanelAction
+    a skos:Concept, kya:HumanLedActivity ;
+    skos:prefLabel           "Panel Action"@en ;
+    skos:definition          "An action invoked from the singine net panel web UI."@en ;
+    kya:requiresHumanPresence true ;
+    skos:broader             sg:SingineActivity .
+
+sg:GovernanceDecision
+    a skos:Concept, kya:HumanLedActivity ;
+    skos:prefLabel           "Governance Decision"@en ;
+    kya:requiresHumanPresence true ;
+    skos:broader             sg:SingineActivity .
+
+sg:DeployAction
+    a skos:Concept, kya:HumanLedActivity ;
+    skos:prefLabel           "Deploy Action"@en ;
+    skos:definition          "singine www deploy — requires human presence."@en ;
+    kya:requiresHumanPresence true ;
+    skos:broader             sg:SingineActivity .
+
+sg:CertRenewal
+    a skos:Concept, kya:HumanLedActivity ;
+    skos:prefLabel           "Certificate Renewal"@en ;
+    kya:requiresHumanPresence true ;
+    skos:broader             sg:SingineActivity .
+
+sg:BridgeSearch
+    a skos:Concept, kya:MachineLedActivity ;
+    skos:prefLabel           "Bridge Search"@en ;
+    skos:definition          "singine bridge search — automated, no presence needed."@en ;
+    kya:requiresHumanPresence false ;
+    skos:broader             sg:SingineActivity .
+
+sg:FeedGeneration
+    a skos:Concept, kya:MachineLedActivity ;
+    skos:prefLabel           "Feed Generation"@en ;
+    kya:requiresHumanPresence false ;
+    skos:broader             sg:SingineActivity .
+
+sg:PresenceAttestation
+    a skos:Concept, kya:HumanLedActivity ;
+    skos:prefLabel           "Presence Attestation"@en ;
+    skos:definition          "The act of verifying human presence every 30 minutes."@en ;
+    kya:requiresHumanPresence true ;
+    skos:broader             sg:SingineActivity .

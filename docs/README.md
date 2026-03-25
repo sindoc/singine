@@ -22,13 +22,23 @@ human-facing output formats:
 
 Current notable guide:
 
+- `singine-web.md` for the full web asset management surface: `singine www` (deploy pipeline via git + Dropbox + rsync/scp), `singine vww` (TLS cert check, HTTP security scan, asset audit), `singine wingine` (build engine: cortex/python for markupware.com, Maven WAR for lutino.io), and `singine wsec` (TLS certificate renewal, ed25519 SSH deploy keys, IDP JWT tokens). Man page: `man singine-web(1)`.
 - `knowyourai-sparql.md` for the first documented SPARQL query pack against the KnowYourAI RDF corpus through Singine's local bridge
 - `auth-and-model-cli.md` for TOTP login bootstrap and the Singine model catalog surface
 - `idp-saml-web-sso.md` for the current local/demo SAML 2.0 Web SSO scenario built around humble-idp
 - `idp-code-passthrough-architecture.md` for the recommended authorization-code passthrough architecture across Node, Singine core, and XML/SAML services
 - `ai-policy-canonify.md` for testing the LDAP-backed policy canonifier and understanding its current boundary
 - `ai-access-governance.md` for the governed access gate, persisted approvals, counters, and decision artefacts
+- `ai-session-dashboard.md` for the mixed Claude/Codex session dashboard that merges `~/.singine/ai` JSON sessions with repo-backed EDN command logs into a local HTML site
+- `dotfiles-control.md` for inspection and controlled capture of shell files, vimrc, Dropbox, Claude, and Logseq state into the versioned dotfiles repo
+- `control-center.md` for the unified local machine and live Docker edge control-plane page under `sindoc.local/control/`
+- `intranet-deploy.md` for publishing `sindoc.local` through Silkpage-style deploy roots, Apache vhosts, TLS readiness, and Firefox trust handling
 - `realm-ops.md` for Atom-backed realm audits, cron schedules, DNS/TLS checks, trust-store inventory, and vault inventory
+- `dataset-campaigns.md` for phased dataset collection plans linked to contracts, contacts, vocabulary, and trusted realms
+- `zip-neighborhood-demo.md` for the first messaging-and-publication demo spanning RabbitMQ, Kafka, notebook imports, and multilingual zip-code mappings
+- `platform-blueprint.md` for the generated Singine/Collibra/Flowable/OpenShift platform scaffold and contract
+- `personal-os-essay.md` for the essay-and-artefact bundle that binds Logseq, Collibra, XML request/response, Ballerina, C, Rust, Pico, SinLisp, SVG, LaTeX, and ixml into one reflective publication set
+- `template-library.md` for the persistent library of reusable templates and archetypes materialized through `singine template` and `singine archetype`
 
 Reproducible development workflow:
 
