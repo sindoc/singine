@@ -1,0 +1,73 @@
+.TH SINGINE-PG 1 "2026-03-25" "singine 0.3.0" "User Commands"
+.SH NAME
+singine-pg \- provision PostgreSQL and import SQLite databases
+.SH SYNOPSIS
+.B singine pg create database fromSQLite
+.I SQLITE_DB
+[\fB--db-name\fR \fINAME\fR]
+[\fB--container\fR \fINAME\fR]
+[\fB--image\fR \fIIMAGE\fR]
+[\fB--host-port\fR \fIPORT\fR]
+[\fB--user\fR \fIUSER\fR]
+[\fB--password\fR \fIPASSWORD\fR]
+[\fB--replace\fR]
+[\fB--json\fR]
+.SH DESCRIPTION
+.B singine pg
+provides pragmatic PostgreSQL workflows for Singine.
+The primary workflow provisions a local PostgreSQL instance in Docker and
+imports a SQLite database into it, so tools such as Collibra Edge can use a
+network-reachable JDBC endpoint instead of a pod-local SQLite file path.
+.SH COMMANDS
+.SS create database fromSQLite
+.TP
+.B singine pg create database fromSQLite \fISQLITE_DB\fR
+Create or reuse a local PostgreSQL Docker container, create a target database,
+translate the SQLite schema into PostgreSQL DDL, and bulk-load the rows.
+Default container and connection settings:
+.RS
+.IP \(bu 2
+container: \fBsingine-pg\fR
+.IP \(bu 2
+image: \fBpostgres:16-alpine\fR
+.IP \(bu 2
+host: \fB127.0.0.1\fR
+.IP \(bu 2
+port: \fB55432\fR
+.IP \(bu 2
+user: \fBsingine\fR
+.IP \(bu 2
+password: \fBsingine\fR
+.RE
+.PP
+The target database name defaults to the sanitized stem of the SQLite file.
+For example:
+.RS
+.IP 1. 4
+Import \fI/tmp/singine/sqlite.db\fR:
+.BR "python3 -m singine.command pg create database fromSQLite /tmp/singine/sqlite.db"
+.IP 2. 4
+Reuse a fixed database name:
+.BR "python3 -m singine.command pg create database fromSQLite /tmp/singine/sqlite.db --db-name singine_bridge"
+.IP 3. 4
+Rebuild the target from scratch:
+.BR "python3 -m singine.command pg create database fromSQLite /tmp/singine/sqlite.db --db-name singine_bridge --replace"
+.RE
+.PP
+Successful runs print the JDBC URL and credentials to use from Collibra Edge,
+for example:
+.BR "jdbc:postgresql://127.0.0.1:55432/singine_bridge" .
+.PP
+When the caller is inside Docker Desktop Kubernetes, prefer:
+.BR "jdbc:postgresql://host.docker.internal:55432/singine_bridge" .
+.SH NOTES
+.IP \(bu 2
+This workflow depends on Docker rather than a native \fBpsql\fR installation.
+.IP \(bu 2
+The generated PostgreSQL endpoint is network-reachable from the local machine.
+.IP \(bu 2
+To make it reachable from Kubernetes or Collibra Edge, ensure the chosen host
+and port are reachable from the runtime that executes the JDBC capability.
+.SH SEE ALSO
+.BR singine (1),
+.BR singine-edge (1)

@@ -47,6 +47,14 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import posixpath
+import subprocess
+import sys
+import urllib.request
+import xml.etree.ElementTree as ET
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -674,6 +682,27 @@ _OPTIONAL_PODS = {
     "collibra-edge-cd":    "app.kubernetes.io/name=edge-cd",
 }
 
+_FILE_SYNC_COMPONENTS = {
+    **_CRITICAL_PODS,
+    **_OPTIONAL_PODS,
+}
+
+_DEFAULT_PG_CONTAINER = "singine-pg"
+_DEFAULT_PG_HOST = "host.docker.internal"
+_DEFAULT_PG_LOCAL_HOST = "127.0.0.1"
+_DEFAULT_PG_PORT = 55432
+_DEFAULT_PG_DATABASE = "singine_bridge"
+_DEFAULT_PG_USER = "singine"
+_DEFAULT_PG_PASSWORD = "singine"
+_DEFAULT_PG_DRIVER_CLASS = "org.postgresql.Driver"
+_DEFAULT_PG_DRIVER_GROUP = "org.postgresql"
+_DEFAULT_PG_DRIVER_ARTIFACT = "postgresql"
+_DEFAULT_PG_DRIVER_COORD = "org.postgresql:postgresql"
+_DEFAULT_PG_FALLBACK_VERSION = "42.7.10"
+_MAVEN_CENTRAL_METADATA_URL = (
+    "https://repo1.maven.org/maven2/org/postgresql/postgresql/maven-metadata.xml"
+)
+
 
 def _pod_phase(ns: str, label: str) -> str:
     """Return phase string of the first pod matching label, or 'not found'."""
@@ -684,6 +713,392 @@ def _pod_phase(ns: str, label: str) -> str:
     if not items:
         return "not found"
     return items[0].get("status", {}).get("phase", "Unknown")
+
+
+def _component_label(component: str) -> Optional[str]:
+    return _FILE_SYNC_COMPONENTS.get(component)
+
+
+def _first_running_pod(ns: str, label: str) -> Optional[str]:
+    data = _kubectl_json(["get", "pods", "-n", ns, "-l", label])
+    if not data:
+        return None
+    items = data.get("items", [])
+    if not items:
+        return None
+    running = [
+        item["metadata"]["name"]
+        for item in items
+        if item.get("status", {}).get("phase") == "Running"
+    ]
+    if running:
+        return running[0]
+    return items[0].get("metadata", {}).get("name")
+
+
+def _kubectl_exec(
+    ns: str,
+    pod: str,
+    argv: Sequence[str],
+    *,
+    capture: bool = False,
+    input_bytes: Optional[bytes] = None,
+) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        ["kubectl", "exec", "-n", ns, "-i", pod, "--", *argv],
+        capture_output=capture,
+        text=False,
+        input=input_bytes,
+    )
+
+
+def _remote_mkdir(ns: str, pod: str, remote_dir: str) -> subprocess.CompletedProcess:
+    return _kubectl_exec(
+        ns,
+        pod,
+        ["sh", "-lc", 'mkdir -p "$1"', "sh", remote_dir],
+    )
+
+
+def _copy_file_to_pod(ns: str, pod: str, local_path: Path, remote_path: str) -> subprocess.CompletedProcess:
+    with local_path.open("rb") as handle:
+        data = handle.read()
+    return _kubectl_exec(
+        ns,
+        pod,
+        ["sh", "-lc", 'cat > "$1"', "sh", remote_path],
+        input_bytes=data,
+    )
+
+
+def _remote_file_size(ns: str, pod: str, remote_path: str) -> Optional[int]:
+    result = _kubectl_exec(
+        ns,
+        pod,
+        ["sh", "-lc", 'wc -c < "$1"', "sh", remote_path],
+        capture=True,
+    )
+    if result.returncode != 0:
+        return None
+    try:
+        return int(result.stdout.decode().strip())
+    except ValueError:
+        return None
+
+
+def _sync_manifest(source: Path, dest: str) -> List[Tuple[Path, str]]:
+    if source.is_file():
+        remote_path = dest
+        if dest.endswith("/"):
+            remote_path = posixpath.join(dest, source.name)
+        return [(source, remote_path)]
+
+    manifest: List[Tuple[Path, str]] = []
+    for path in sorted(source.rglob("*")):
+        if not path.is_file():
+            continue
+        rel = path.relative_to(source).as_posix()
+        manifest.append((path, posixpath.join(dest, rel)))
+    return manifest
+
+
+def cmd_edge_files_sync(args: argparse.Namespace) -> int:
+    source = Path(args.source).expanduser()
+    ns = args.namespace
+    component = args.component
+    dest = args.dest
+    use_json = args.json
+
+    if not source.exists():
+        msg = f"Local source not found: {source}"
+        if use_json:
+            print(json.dumps(_envelope(False, "edge files sync", error=msg)))
+        else:
+            print(f"[edge files sync] ERROR: {msg}", file=sys.stderr)
+        return 1
+
+    selector = _component_label(component)
+    if not selector:
+        msg = f"Unsupported component: {component}"
+        if use_json:
+            print(json.dumps(_envelope(False, "edge files sync", error=msg)))
+        else:
+            print(f"[edge files sync] ERROR: {msg}", file=sys.stderr)
+        return 1
+
+    pod = args.pod or _first_running_pod(ns, selector)
+    if not pod:
+        msg = f"No pod found for component {component} in namespace {ns}"
+        if use_json:
+            print(json.dumps(_envelope(False, "edge files sync", error=msg)))
+        else:
+            print(f"[edge files sync] ERROR: {msg}", file=sys.stderr)
+        return 1
+
+    manifest = _sync_manifest(source, dest)
+    total_bytes = sum(path.stat().st_size for path, _ in manifest)
+
+    if not use_json:
+        print(
+            f"[edge files sync] source={source} pod={pod} component={component} "
+            f"dest={dest} files={len(manifest)} bytes={total_bytes}"
+        )
+
+    if args.dry_run:
+        preview = [{"local": str(path), "remote": remote} for path, remote in manifest]
+        if use_json:
+            print(json.dumps(_envelope(
+                True,
+                "edge files sync",
+                namespace=ns,
+                component=component,
+                pod=pod,
+                source=str(source),
+                dest=dest,
+                files=preview,
+                dry_run=True,
+            )))
+        else:
+            for item in preview:
+                print(f"  {item['local']} -> {item['remote']}")
+        return 0
+
+    mkdirs = {posixpath.dirname(remote) or "/" for _, remote in manifest}
+    if source.is_dir():
+        mkdirs.add(dest)
+    for remote_dir in sorted(mkdirs):
+        result = _remote_mkdir(ns, pod, remote_dir)
+        if result.returncode != 0:
+            msg = f"mkdir failed for {remote_dir}"
+            if use_json:
+                print(json.dumps(_envelope(False, "edge files sync", error=msg, pod=pod, namespace=ns)))
+            else:
+                print(f"[edge files sync] ERROR: {msg}", file=sys.stderr)
+            return result.returncode
+
+    copied: List[Dict[str, Any]] = []
+    for local_path, remote_path in manifest:
+        result = _copy_file_to_pod(ns, pod, local_path, remote_path)
+        if result.returncode != 0:
+            msg = f"copy failed for {local_path} -> {remote_path}"
+            if use_json:
+                print(json.dumps(_envelope(False, "edge files sync", error=msg, pod=pod, namespace=ns)))
+            else:
+                print(f"[edge files sync] ERROR: {msg}", file=sys.stderr)
+            return result.returncode
+        remote_size = _remote_file_size(ns, pod, remote_path)
+        copied.append({
+            "local": str(local_path),
+            "remote": remote_path,
+            "bytes": local_path.stat().st_size,
+            "remote_bytes": remote_size,
+        })
+
+    if use_json:
+        print(json.dumps(_envelope(
+            True,
+            "edge files sync",
+            namespace=ns,
+            component=component,
+            pod=pod,
+            source=str(source),
+            dest=dest,
+            file_count=len(copied),
+            bytes=total_bytes,
+            copied=copied,
+        )))
+    else:
+        print(f"[edge files sync] synced {len(copied)} file(s) into {pod}:{dest}")
+    return 0
+
+
+def cmd_edge_files_ls(args: argparse.Namespace) -> int:
+    ns = args.namespace
+    component = args.component
+    use_json = args.json
+
+    selector = _component_label(component)
+    if not selector:
+        msg = f"Unsupported component: {component}"
+        if use_json:
+            print(json.dumps(_envelope(False, "edge files ls", error=msg)))
+        else:
+            print(f"[edge files ls] ERROR: {msg}", file=sys.stderr)
+        return 1
+
+    pod = args.pod or _first_running_pod(ns, selector)
+    if not pod:
+        msg = f"No pod found for component {component} in namespace {ns}"
+        if use_json:
+            print(json.dumps(_envelope(False, "edge files ls", error=msg)))
+        else:
+            print(f"[edge files ls] ERROR: {msg}", file=sys.stderr)
+        return 1
+
+    result = _kubectl_exec(
+        ns,
+        pod,
+        ["sh", "-lc", 'ls -la "$1"', "sh", args.path],
+        capture=True,
+    )
+    output = result.stdout.decode(errors="replace")
+    if use_json:
+        print(json.dumps(_envelope(
+            result.returncode == 0,
+            "edge files ls",
+            namespace=ns,
+            component=component,
+            pod=pod,
+            path=args.path,
+            output=output,
+        )))
+    else:
+        print(output, end="" if output.endswith("\n") else "\n")
+    return result.returncode
+
+
+def _m2_repo() -> Path:
+    return Path.home() / ".m2" / "repository"
+
+
+def _pgjdbc_cached_versions() -> List[str]:
+    root = _m2_repo() / "org" / "postgresql" / "postgresql"
+    if not root.exists():
+        return []
+    versions = [path.name for path in root.iterdir() if path.is_dir()]
+    return sorted(versions)
+
+
+def _latest_pg_driver_version(timeout: int = 10) -> str:
+    req = urllib.request.Request(_MAVEN_CENTRAL_METADATA_URL, headers={"Accept": "application/xml"})
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        xml_bytes = resp.read()
+    root = ET.fromstring(xml_bytes)
+    release = root.findtext("./versioning/release")
+    latest = root.findtext("./versioning/latest")
+    return (release or latest or "").strip()
+
+
+def _resolve_pg_driver_version(requested: str) -> str:
+    if requested and requested != "latest":
+        return requested
+    try:
+        latest = _latest_pg_driver_version()
+        if latest:
+            return latest
+    except Exception:
+        pass
+    cached = _pgjdbc_cached_versions()
+    if cached:
+        return cached[-1]
+    return _DEFAULT_PG_FALLBACK_VERSION
+
+
+def _ensure_pg_driver(*, version: str, jar_name: str, timeout: int = 30) -> Tuple[bool, str]:
+    target = _m2_repo() / "org" / "postgresql" / "postgresql" / version / jar_name
+    if target.exists():
+        return True, "cached"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    url = (
+        "https://repo1.maven.org/maven2/org/postgresql/postgresql/"
+        f"{version}/{jar_name}"
+    )
+    req = urllib.request.Request(url, headers={"User-Agent": "singine-edge/1.0"})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            data = resp.read()
+        target.write_bytes(data)
+    except Exception as exc:
+        return False, f"unable to download {url}: {exc}"
+    return True, "downloaded"
+
+
+def cmd_edge_create_datasource_connection(args: argparse.Namespace) -> int:
+    host = args.host
+    local_host = args.local_host
+    port = args.port
+    database = args.database
+    user = args.user
+    password = args.password
+    name = args.name or database
+    driver_class = args.driver_class
+    use_json = args.json
+    version = _resolve_pg_driver_version(args.driver_version)
+    driver_coordinate = args.driver_coordinate or f"{_DEFAULT_PG_DRIVER_COORD}:{version}"
+    driver_jar = args.driver_jar or f"postgresql-{version}.jar"
+    driver_path = _m2_repo() / "org" / "postgresql" / "postgresql" / version / driver_jar
+    driver_status = "cached" if driver_path.exists() else "missing"
+    if args.download_driver:
+        ok, detail = _ensure_pg_driver(version=version, jar_name=driver_jar)
+        if not ok:
+            if use_json:
+                print(json.dumps(_envelope(False, "edge create datasource connection", error=detail)))
+            else:
+                print(f"[edge create datasource connection] ERROR: {detail}", file=sys.stderr)
+            return 1
+        driver_status = detail
+
+    payload = {
+        "ok": True,
+        "command": "edge create datasource connection",
+        "datasource": {
+            "name": name,
+            "database_type": "PostgreSQL",
+            "jdbc_url": f"jdbc:postgresql://{host}:{port}/{database}",
+            "local_jdbc_url": f"jdbc:postgresql://{local_host}:{port}/{database}",
+            "host": host,
+            "local_host": local_host,
+            "port": port,
+            "database": database,
+            "user": user,
+            "password": password,
+            "driver_class": driver_class,
+            "driver_coordinate": driver_coordinate,
+            "driver_jar": driver_jar,
+            "driver_version": version,
+            "driver_path": str(driver_path),
+            "driver_status": driver_status,
+        },
+        "edge_screen_fields": [
+            {"label": "Connection name", "value": name},
+            {"label": "Database type", "value": "PostgreSQL"},
+            {"label": "Driver class", "value": driver_class},
+            {"label": "JDBC URL", "value": f"jdbc:postgresql://{host}:{port}/{database}"},
+            {"label": "Host", "value": host},
+            {"label": "Port", "value": str(port)},
+            {"label": "Database", "value": database},
+            {"label": "Username", "value": user},
+            {"label": "Password", "value": password},
+            {"label": "Driver JAR", "value": driver_jar},
+            {"label": "Driver Maven coordinate", "value": driver_coordinate},
+            {"label": "Driver local path", "value": str(driver_path)},
+        ],
+        "notes": [
+            "Use the host.docker.internal JDBC URL from Collibra Edge or Kubernetes workloads.",
+            "Use the 127.0.0.1 JDBC URL only from the local workstation.",
+            "If the Edge UI requires a JDBC driver upload, use the PostgreSQL JDBC jar matching the listed Maven coordinate.",
+        ],
+    }
+    if use_json:
+        print(json.dumps(payload))
+        return 0
+
+    print(f"[edge create datasource connection] name={name}  database=PostgreSQL")
+    print(f"  JDBC URL (Edge):  jdbc:postgresql://{host}:{port}/{database}")
+    print(f"  JDBC URL (local): jdbc:postgresql://{local_host}:{port}/{database}")
+    print(f"  Driver class:     {driver_class}")
+    print(f"  Driver JAR:       {driver_jar}")
+    print(f"  Driver Maven:     {driver_coordinate}")
+    print(f"  Driver version:   {version}")
+    print(f"  Driver path:      {driver_path}")
+    print(f"  Driver status:    {driver_status}")
+    print(f"  Host:             {host}")
+    print(f"  Port:             {port}")
+    print(f"  Database:         {database}")
+    print(f"  Username:         {user}")
+    print(f"  Password:         {password}")
+    print("  Note:             host.docker.internal resolves inside the live Edge runtime.")
+    return 0
 
 
 def _pod_logs_recent(ns: str, label: str, lines: int = 200) -> str:
@@ -1384,6 +1799,91 @@ def add_edge_parser(sub: argparse._SubParsersAction, *, name: str = "edge", help
     p.add_argument("--dry-run", action="store_true", help="Render/install without mutating the cluster")
     p.add_argument("--json", action="store_true")
     p.set_defaults(func=cmd_edge_site_init)
+
+    # ── create datasource connection ────────────────────────────────────────
+    create_parser = edge_sub.add_parser(
+        "create",
+        help="Generate repeatable Edge-side configuration payloads",
+    )
+    create_parser.set_defaults(func=lambda a: (create_parser.print_help(), 1)[1])
+    create_sub = create_parser.add_subparsers(dest="edge_create_subject")
+
+    datasource_parser = create_sub.add_parser(
+        "datasource",
+        help="Generate datasource configuration values for the Edge UI",
+    )
+    datasource_parser.set_defaults(func=lambda a: (datasource_parser.print_help(), 1)[1])
+    datasource_sub = datasource_parser.add_subparsers(dest="edge_create_datasource_action")
+
+    p = datasource_sub.add_parser(
+        "connection",
+        help="Print PostgreSQL datasource connection details for the Collibra Edge screens",
+    )
+    p.add_argument("--name", help="Connection name (default: database name)")
+    p.add_argument("--host", default=_DEFAULT_PG_HOST,
+                   help=f"Host visible from Edge workloads (default: {_DEFAULT_PG_HOST})")
+    p.add_argument("--local-host", default=_DEFAULT_PG_LOCAL_HOST,
+                   help=f"Host visible from the local workstation (default: {_DEFAULT_PG_LOCAL_HOST})")
+    p.add_argument("--port", type=int, default=_DEFAULT_PG_PORT,
+                   help=f"PostgreSQL port (default: {_DEFAULT_PG_PORT})")
+    p.add_argument("--database", default=_DEFAULT_PG_DATABASE,
+                   help=f"Database name (default: {_DEFAULT_PG_DATABASE})")
+    p.add_argument("--user", default=_DEFAULT_PG_USER,
+                   help=f"Database username (default: {_DEFAULT_PG_USER})")
+    p.add_argument("--password", default=_DEFAULT_PG_PASSWORD,
+                   help=f"Database password (default: {_DEFAULT_PG_PASSWORD})")
+    p.add_argument("--driver-class", default=_DEFAULT_PG_DRIVER_CLASS,
+                   help=f"JDBC driver class (default: {_DEFAULT_PG_DRIVER_CLASS})")
+    p.add_argument("--driver-version", default="latest",
+                   help="JDBC driver version or 'latest' (default: latest)")
+    p.add_argument("--driver-coordinate",
+                   help="Suggested JDBC driver Maven coordinate (default: resolved dynamically)")
+    p.add_argument("--driver-jar",
+                   help="Suggested JDBC driver jar filename (default: resolved dynamically)")
+    p.add_argument("--download-driver", action="store_true",
+                   help="Download the PostgreSQL JDBC jar into ~/.m2/repository if it is not already cached")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_edge_create_datasource_connection)
+
+    # ── files ────────────────────────────────────────────────────────────────
+    files_parser = edge_sub.add_parser(
+        "files",
+        help="Copy local files into a live Collibra Edge Kubernetes pod",
+    )
+    files_parser.set_defaults(func=lambda a: (files_parser.print_help(), 1)[1])
+    files_sub = files_parser.add_subparsers(dest="edge_files_action")
+
+    p = files_sub.add_parser(
+        "sync",
+        help="Sync a local file or directory into a running edge pod",
+    )
+    p.add_argument("source", help="Local file or directory to copy")
+    p.add_argument("--component", default="collibra-edge-objects-server",
+                   choices=sorted(_FILE_SYNC_COMPONENTS),
+                   help="Target edge component (default: collibra-edge-objects-server)")
+    p.add_argument("--namespace", default=_K8S_NAMESPACE,
+                   help=f"Kubernetes namespace (default: {_K8S_NAMESPACE})")
+    p.add_argument("--pod", help="Specific pod name override")
+    p.add_argument("--dest", default="/tmp/singine",
+                   help="Remote destination path inside the pod (default: /tmp/singine)")
+    p.add_argument("--dry-run", action="store_true", help="Print the copy plan without writing to the pod")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_edge_files_sync)
+
+    p = files_sub.add_parser(
+        "ls",
+        help="List files inside a running edge pod",
+    )
+    p.add_argument("path", nargs="?", default="/tmp/singine",
+                   help="Remote path to inspect (default: /tmp/singine)")
+    p.add_argument("--component", default="collibra-edge-objects-server",
+                   choices=sorted(_FILE_SYNC_COMPONENTS),
+                   help="Target edge component (default: collibra-edge-objects-server)")
+    p.add_argument("--namespace", default=_K8S_NAMESPACE,
+                   help=f"Kubernetes namespace (default: {_K8S_NAMESPACE})")
+    p.add_argument("--pod", help="Specific pod name override")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_edge_files_ls)
 
     # ── test ──────────────────────────────────────────────────────────────────
     p = edge_sub.add_parser(

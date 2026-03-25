@@ -121,6 +121,17 @@ Bootstrap a real Collibra Edge site from the installer bundle and verify it.
 Primary entry point:
 .BR "singine collibra edge site init NAME" .
 .TP
+.B files
+Copy local files into a live Collibra Edge Kubernetes pod.  Primary entry
+points:
+.BR "singine collibra edge files sync SOURCE"
+and
+.BR "singine collibra edge files ls [PATH]" .
+.TP
+.B create
+Generate repeatable Edge-side configuration payloads.  Primary entry point:
+.BR "singine collibra edge create datasource connection" .
+.TP
 .B deploy
 .B install
 followed by
@@ -255,6 +266,66 @@ The
 argument is a local bootstrap label for Singine output; the actual site identity
 comes from
 .IR installer/site-values.yaml .
+.SS files
+.TP
+.B singine collibra edge files sync \fISOURCE\fR [\fB--component\fR \fICOMPONENT\fR] [\fB--namespace\fR \fINAMESPACE\fR] [\fB--dest\fR \fIPATH\fR] [\fB--dry-run\fR] [\fB--json\fR]
+Copy a local file or directory into a running Edge Kubernetes pod.  The default
+target component is
+.IR collibra-edge-objects-server
+and the default destination is
+.IR /tmp/singine .
+Use this to stage files such as
+.IR /tmp/singine/sqlite.db
+inside the live Edge runtime.
+.TP
+.B singine collibra edge files ls [\fIPATH\fR] [\fB--component\fR \fICOMPONENT\fR] [\fB--namespace\fR \fINAMESPACE\fR] [\fB--json\fR]
+List files inside a running Edge Kubernetes pod.  Defaults to
+.IR /tmp/singine .
+Repeatable operator workflow:
+.RS
+.IP 1. 4
+Prepare a local staging directory such as
+.IR /tmp/singine .
+.IP 2. 4
+Sync it into the live Edge pod:
+.BR "python3 -m singine.command collibra edge files sync /tmp/singine --dest /tmp/singine"
+.IP 3. 4
+Verify the staged files:
+.BR "python3 -m singine.command collibra edge files ls /tmp/singine" .
+.RE
+For another local directory, repeat the same pattern with a matching
+.B --dest
+path, for example:
+.BR "python3 -m singine.command collibra edge files sync /tmp/my-dataset --dest /tmp/my-dataset" .
+.SS create
+.TP
+.B singine collibra edge create datasource connection [\fB--name\fR \fINAME\fR] [\fB--host\fR \fIHOST\fR] [\fB--port\fR \fIPORT\fR] [\fB--database\fR \fINAME\fR] [\fB--user\fR \fIUSER\fR] [\fB--password\fR \fIPASSWORD\fR] [\fB--driver-version\fR \fIVERSION|latest\fR] [\fB--download-driver\fR] [\fB--json\fR]
+Print the PostgreSQL datasource values to copy into the Collibra Edge
+connection screens.
+Default Edge-facing values are aligned with the Singine PostgreSQL import
+workflow:
+.RS
+.IP \(bu 2
+JDBC URL:
+.BR "jdbc:postgresql://host.docker.internal:55432/singine_bridge"
+.IP \(bu 2
+Driver class:
+.BR "org.postgresql.Driver"
+.IP \(bu 2
+Username:
+.BR "singine"
+.IP \(bu 2
+Password:
+.BR "singine"
+.RE
+With
+.B --download-driver
+the command resolves the driver version dynamically from Maven Central and
+downloads the jar into
+.IR ~/.m2/repository/
+only when it is not already cached locally.
+Use this after:
+.BR "python3 -m singine.command pg create database fromSQLite /tmp/singine/sqlite.db --db-name singine_bridge --replace" .
 .SS javadoc
 .TP
 .B singine edge javadoc [\fB--json\fR]

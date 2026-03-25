@@ -11,6 +11,7 @@ import argparse
 import json
 import os
 import secrets
+import shlex
 import shutil
 import stat
 import subprocess
@@ -303,6 +304,51 @@ def install_xmldoclet_tool(json_output: bool = False) -> int:
     return 0 if payload["ok"] else 1
 
 
+def install_git_filter_repo_tool(json_output: bool = False) -> int:
+    existing = shutil.which("git-filter-repo")
+    if existing:
+        payload = {"ok": True, "tool": "git-filter-repo", "installed": False, "path": existing}
+        if json_output:
+            print_json(payload)
+        else:
+            print(f"git-filter-repo already installed: {existing}")
+        return 0
+
+    brew = shutil.which("brew")
+    if not brew:
+        payload = {
+            "ok": False,
+            "tool": "git-filter-repo",
+            "installed": False,
+            "error": "Homebrew is not available on PATH; cannot install git-filter-repo automatically.",
+        }
+        if json_output:
+            print_json(payload)
+        else:
+            print(payload["error"], file=sys.stderr)
+        return 1
+
+    proc = subprocess.run([brew, "install", "git-filter-repo"], capture_output=True, text=True, timeout=1800)
+    payload = {
+        "ok": proc.returncode == 0,
+        "tool": "git-filter-repo",
+        "installed": proc.returncode == 0,
+        "stdout": proc.stdout,
+        "stderr": proc.stderr,
+        "path": shutil.which("git-filter-repo"),
+    }
+    if json_output:
+        print_json(payload)
+    else:
+        if proc.stdout:
+            print(proc.stdout, end="")
+        if proc.stderr:
+            print(proc.stderr, end="", file=sys.stderr)
+        if payload["ok"] and payload["path"]:
+            print(f"git-filter-repo installed: {payload['path']}")
+    return 0 if payload["ok"] else 1
+
+
 def print_json(value: Any) -> None:
     print(json.dumps(value, indent=2))
 
@@ -323,6 +369,272 @@ def run_capture(cmd: List[str]) -> Dict[str, Any]:
             "stdout": "",
             "stderr": str(exc),
         }
+
+
+def _git_capture(args: Sequence[str], *, cwd: Path, check: bool = True, timeout: int = 60) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        ["git", *args],
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        check=check,
+        timeout=timeout,
+    )
+
+
+def _normalize_public_dir(raw_path: str) -> str:
+    value = raw_path.strip().replace("\\", "/").strip("/")
+    if not value:
+        raise ValueError("public directory path must not be empty")
+    if raw_path.startswith("/"):
+        raise ValueError("public directory path must be relative, not absolute")
+    parts = [part for part in value.split("/") if part]
+    if any(part in {".", ".."} for part in parts):
+        raise ValueError("public directory path must not contain '.' or '..'")
+    return "/".join(parts)
+
+
+def _remote_aliases(remote_url: str, repo_root: Path) -> List[str]:
+    aliases: List[str] = []
+    cleaned = (remote_url or "").strip()
+    if cleaned.endswith(".git"):
+        cleaned = cleaned[:-4]
+    if "github.com:" in cleaned:
+        cleaned = cleaned.split("github.com:", 1)[1]
+    elif "github.com/" in cleaned:
+        cleaned = cleaned.split("github.com/", 1)[1]
+    cleaned = cleaned.strip("/")
+    if cleaned:
+        aliases.extend([
+            f"github/{cleaned}",
+            cleaned,
+            cleaned.split("/")[-1],
+        ])
+    repo_name = repo_root.name
+    if repo_name not in aliases:
+        aliases.append(repo_name)
+    short_alias = f"github/{repo_name}"
+    if short_alias not in aliases:
+        aliases.append(short_alias)
+    seen: List[str] = []
+    for alias in aliases:
+        if alias not in seen:
+            seen.append(alias)
+    return seen
+
+
+def _render_shell_lines(commands: List[List[str]]) -> List[str]:
+    return [shlex.join(cmd) for cmd in commands]
+
+
+def _list_local_branches(repo_root: Path) -> List[str]:
+    result = _git_capture(["for-each-ref", "--format=%(refname:short)", "refs/heads"], cwd=repo_root, check=False)
+    if result.returncode != 0:
+        return []
+    return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+
+
+def _branch_contains_path(repo_root: Path, branch: str, pathspec: str) -> bool:
+    result = _git_capture(["rev-list", "-n", "1", branch, "--", pathspec], cwd=repo_root, check=False)
+    return result.returncode == 0 and bool(result.stdout.strip())
+
+
+def _plan_git_rm_public_dir(args: argparse.Namespace) -> Dict[str, Any]:
+    repo_dir = Path(args.repo_dir).expanduser().resolve()
+    git_bin = shutil.which("git")
+    filter_repo_bin = shutil.which("git-filter-repo")
+    normalized_dir = _normalize_public_dir(args.public_dir)
+    dir_with_slash = f"{normalized_dir}/"
+    requested_branches = list(dict.fromkeys(args.branch or []))
+
+    payload: Dict[str, Any] = {
+        "ok": True,
+        "repo": args.repo,
+        "repo_dir": str(repo_dir),
+        "remote": args.remote,
+        "public_dir": normalized_dir,
+        "public_dir_filter": dir_with_slash,
+        "branches": [],
+        "refs": [],
+        "all_branches": bool(getattr(args, "all_branches", False)),
+        "git_available": bool(git_bin),
+        "filter_repo_available": bool(filter_repo_bin),
+        "warnings": [],
+    }
+
+    if not git_bin:
+        payload["ok"] = False
+        payload["warnings"].append("git is not on PATH")
+        return payload
+
+    top = _git_capture(["rev-parse", "--show-toplevel"], cwd=repo_dir, check=False)
+    if top.returncode != 0:
+        payload["ok"] = False
+        payload["warnings"].append("repo-dir is not inside a git worktree")
+        payload["git_stderr"] = top.stderr.strip()
+        return payload
+
+    repo_root = Path(top.stdout.strip())
+    payload["repo_root"] = str(repo_root)
+
+    remote_result = _git_capture(["remote", "get-url", args.remote], cwd=repo_root, check=False)
+    remote_url = remote_result.stdout.strip() if remote_result.returncode == 0 else ""
+    payload["remote_url"] = remote_url
+    aliases = _remote_aliases(remote_url, repo_root)
+    payload["repo_aliases"] = aliases
+    payload["repo_matches_current_repo"] = args.repo in aliases
+    if not payload["repo_matches_current_repo"]:
+        payload["warnings"].append(
+            f"requested repo '{args.repo}' does not match detected aliases {aliases}"
+        )
+
+    auto_branches: List[str] = []
+    if getattr(args, "all_branches", False):
+        local_branches = _list_local_branches(repo_root)
+        auto_branches = [branch for branch in local_branches if _branch_contains_path(repo_root, branch, dir_with_slash)]
+        payload["all_branch_scan"] = {
+            "scope": "local-heads",
+            "scanned": local_branches,
+            "matched": auto_branches,
+        }
+        payload["warnings"].append(
+            "all-branch discovery only scans local heads; fetch any missing branches before rewriting"
+        )
+
+    branches = list(dict.fromkeys(requested_branches + auto_branches))
+    if not branches:
+        if getattr(args, "all_branches", False):
+            raise ValueError(f"no local branches contain '{dir_with_slash}'")
+        raise ValueError("at least one --branch is required unless you pass -all")
+    payload["branches"] = branches
+    payload["refs"] = [f"refs/heads/{branch}" for branch in branches]
+
+    branch_status: List[Dict[str, Any]] = []
+    for branch in branches:
+        ref = f"refs/heads/{branch}"
+        show_ref = _git_capture(["show-ref", "--verify", ref], cwd=repo_root, check=False)
+        branch_status.append({
+            "branch": branch,
+            "ref": ref,
+            "exists_locally": show_ref.returncode == 0,
+        })
+        if show_ref.returncode != 0:
+            payload["warnings"].append(f"branch '{branch}' is not present locally under {ref}")
+    payload["branch_status"] = branch_status
+
+    rewrite_commands = [
+        shlex.join(["git", "filter-repo", "--path", dir_with_slash, "--invert-paths", "--refs", *payload["refs"]]),
+        "git for-each-ref --format='delete %(refname)' refs/original | git update-ref --stdin",
+        shlex.join(["git", "reflog", "expire", "--expire=now", "--all"]),
+        shlex.join(["git", "gc", "--prune=now"]),
+    ]
+    push_commands = [
+        ["git", "push", "--force-with-lease", args.remote, f"refs/heads/{branch}:refs/heads/{branch}"]
+        for branch in branches
+    ]
+    verify_commands = [
+        ["git", "fetch", args.remote, "--prune"],
+        ["git", "log", "--", dir_with_slash],
+    ]
+    payload["commands"] = {
+        "rewrite": rewrite_commands,
+        "push": _render_shell_lines(push_commands),
+        "verify": _render_shell_lines(verify_commands),
+    }
+    payload["recommended_workflow"] = [
+        "Work in a dedicated rewrite clone, not in your normal development checkout.",
+        "Rewrite every affected branch with git-filter-repo so the directory disappears from history, not just from HEAD.",
+        "Force-push each rewritten branch after temporarily handling any branch protection rules.",
+        "Ask collaborators to reclone or hard-reset after the rewrite so the deleted history does not get reintroduced.",
+    ]
+    if not filter_repo_bin:
+        payload["warnings"].append("git-filter-repo is not on PATH; install it before running the rewrite step")
+    return payload
+
+
+def _print_git_rm_public_dir_plan(payload: Dict[str, Any]) -> None:
+    print(f"repo: {payload['repo']} ({payload.get('remote_url') or 'remote URL unavailable'})")
+    print(f"repo dir: {payload['repo_dir']}")
+    print(f"public dir: {payload['public_dir_filter']}")
+    print(f"branches: {', '.join(payload['branches'])}")
+    print("")
+    print("Why this is not plain git rm:")
+    print("Removing the directory from the current branch tip is not enough.")
+    print("You need a history rewrite so the directory disappears from every targeted branch history.")
+    print("")
+    print("Recommended workflow:")
+    for step in payload["recommended_workflow"]:
+        print(f"- {step}")
+    print("")
+    print("Rewrite commands:")
+    for line in payload["commands"]["rewrite"]:
+        print(f"  {line}")
+    print("")
+    print("Push commands:")
+    for line in payload["commands"]["push"]:
+        print(f"  {line}")
+    print("")
+    print("Verification commands:")
+    for line in payload["commands"]["verify"]:
+        print(f"  {line}")
+    if payload.get("warnings"):
+        print("")
+        print("Warnings:")
+        for warning in payload["warnings"]:
+            print(f"- {warning}")
+
+
+def cmd_git_rm_public_dir(args: argparse.Namespace) -> int:
+    try:
+        payload = _plan_git_rm_public_dir(args)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+
+    if args.execute:
+        if not payload.get("ok"):
+            if args.json:
+                print_json(payload)
+            else:
+                _print_git_rm_public_dir_plan(payload)
+            return 1
+        if not payload.get("filter_repo_available"):
+            print("git-filter-repo is required for --execute", file=sys.stderr)
+            return 1
+        repo_root = Path(payload["repo_root"])
+        rewrite = subprocess.run(
+            [
+                "git-filter-repo",
+                "--path", payload["public_dir_filter"],
+                "--invert-paths",
+                "--refs", *payload["refs"],
+            ],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+        )
+        payload["execute"] = {
+            "ran": True,
+            "returncode": rewrite.returncode,
+            "stdout": rewrite.stdout,
+            "stderr": rewrite.stderr,
+        }
+        if args.json:
+            print_json(payload)
+        else:
+            _print_git_rm_public_dir_plan(payload)
+            print("")
+            if rewrite.stdout.strip():
+                print(rewrite.stdout.rstrip())
+            if rewrite.stderr.strip():
+                print(rewrite.stderr.rstrip(), file=sys.stderr)
+        return 0 if rewrite.returncode == 0 else 1
+
+    if args.json:
+        print_json(payload)
+    else:
+        _print_git_rm_public_dir_plan(payload)
+    return 0 if payload.get("ok") else 1
 
 
 def runtime_capabilities() -> Dict[str, Any]:
@@ -744,17 +1056,25 @@ def cmd_install(args: argparse.Namespace) -> int:
         return install_ant_tool(json_output=getattr(args, "json", False))
     if getattr(args, "subject", "singine") == "xmldoclet":
         return install_xmldoclet_tool(json_output=getattr(args, "json", False))
+    if getattr(args, "subject", "singine") == "git-filter-repo":
+        return install_git_filter_repo_tool(json_output=getattr(args, "json", False))
 
     prefix = Path(args.prefix).expanduser()
     launcher = install_launcher(prefix)
     install_manpages(prefix)
     shell_updates = ensure_shell_paths(prefix, args.shell)
+    installed_tools: List[Dict[str, Any]] = []
+    if getattr(args, "mode", "base") == "workstation":
+        tool_result = {"tool": "git-filter-repo", "ok": install_git_filter_repo_tool(json_output=False) == 0}
+        installed_tools.append(tool_result)
     payload = {
         "prefix": str(prefix),
         "launcher": str(launcher),
         "manpath": str(installed_man_path(prefix)),
         "shell_init": shell_updates,
         "shell": args.shell,
+        "mode": getattr(args, "mode", "base"),
+        "tools": installed_tools,
     }
     if args.json:
         print_json(payload)
@@ -762,9 +1082,325 @@ def cmd_install(args: argparse.Namespace) -> int:
         print(f"installed launcher: {launcher}")
         print(f"installed manpages: {installed_man_path(prefix)}")
         print(f"updated shell init: {shell_updates}")
+        if installed_tools:
+            print(f"install mode: {payload['mode']}")
+            for item in installed_tools:
+                print(f"tool {item['tool']}: {'ok' if item['ok'] else 'failed'}")
         print("open a new shell or run:")
         for _, rc in shell_updates.items():
             print(f". {rc}")
+    if any(not item["ok"] for item in installed_tools):
+        return 1
+    return 0
+
+
+def cmd_template_create(args: argparse.Namespace) -> int:
+    from .template import (
+        create_maven_template,
+        create_npm_template,
+        default_java_package,
+        default_maven_args,
+        default_npm_args,
+    )
+
+    name = args.name
+    target_dir_arg = Path(args.dir).expanduser() if args.dir else None
+
+    if args.kind == "maven":
+        defaults = default_maven_args(name)
+        group_id = args.group_id or defaults["group_id"]
+        artifact_id = args.artifact_id or defaults["artifact_id"]
+        target_dir = target_dir_arg if target_dir_arg is not None else Path.cwd() / artifact_id
+        try:
+            result = create_maven_template(
+                name=name,
+                target_dir=target_dir,
+                group_id=group_id,
+                artifact_id=artifact_id,
+                version=args.version,
+                package_name=args.package_name or default_java_package(group_id, artifact_id),
+                java_version=args.java_version,
+                description=args.description or f"{name} generated by Singine for Maven builds.",
+                force=args.force,
+            )
+        except OSError as exc:
+            payload = {"ok": False, "kind": args.kind, "error": str(exc), "target_dir": str(target_dir)}
+            if args.json:
+                print_json(payload)
+            else:
+                print(f"template creation failed: {payload['error']}", file=sys.stderr)
+                print(f"target dir: {payload['target_dir']}", file=sys.stderr)
+            return 1
+    else:
+        defaults = default_npm_args(name, scope=args.scope or "")
+        version = args.version if args.version != "0.1.0-SNAPSHOT" else "0.1.0"
+        package_name = args.package_name or defaults["package_name"]
+        target_leaf = package_name.split("/", 1)[-1] if package_name.startswith("@") else package_name
+        target_dir = target_dir_arg if target_dir_arg is not None else Path.cwd() / target_leaf
+        try:
+            result = create_npm_template(
+                name=name,
+                target_dir=target_dir,
+                package_name=package_name,
+                version=version,
+                description=args.description or f"{name} generated by Singine for npm workflows.",
+                module_type=args.module_type,
+                force=args.force,
+            )
+        except OSError as exc:
+            payload = {"ok": False, "kind": args.kind, "error": str(exc), "target_dir": str(target_dir)}
+            if args.json:
+                print_json(payload)
+            else:
+                print(f"template creation failed: {payload['error']}", file=sys.stderr)
+                print(f"target dir: {payload['target_dir']}", file=sys.stderr)
+            return 1
+
+    payload = result.to_dict()
+    if args.json:
+        print_json(payload)
+    else:
+        print(f"created {payload['kind']} template: {payload['target_dir']}")
+        print(f"package: {payload['package_name']}")
+        for file_path in payload["files"]:
+            print(f"  {file_path}")
+    return 0
+
+
+def cmd_template_list(args: argparse.Namespace) -> int:
+    from .template import list_template_library
+
+    payload = {
+        "ok": True,
+        "items": list_template_library(family=getattr(args, "family", None)),
+    }
+    if args.json:
+        print_json(payload)
+    else:
+        for item in payload["items"]:
+            print(f"{item['name']} [{item['family']}]")
+            print(f"  {item['description']}")
+            print(f"  {item['reference_command']}")
+    return 0
+
+
+def cmd_template_materialize(args: argparse.Namespace) -> int:
+    from .template import materialize_library_entry
+
+    try:
+        payload = materialize_library_entry(
+            name=args.name,
+            output_dir=Path(args.output_dir).expanduser(),
+            title=getattr(args, "title", None),
+        )
+    except KeyError:
+        error = {"ok": False, "error": f"unknown template library entry: {args.name}"}
+        if args.json:
+            print_json(error)
+        else:
+            print(error["error"], file=sys.stderr)
+        return 1
+
+    if args.json:
+        print_json(payload)
+    else:
+        print(payload["artifacts"].get("markdown") or payload["artifacts"].get("json"))
+    return 0
+
+
+def cmd_dotfiles_inspect(args: argparse.Namespace) -> int:
+    from .dotfiles import build_payload
+
+    payload = build_payload(
+        home_dir=Path(args.home_dir).expanduser(),
+        dotfiles_repo=Path(args.dotfiles_repo).expanduser(),
+    )
+    print_json(payload)
+    return 0
+
+
+def cmd_dotfiles_dashboard(args: argparse.Namespace) -> int:
+    from .dotfiles import write_dashboard
+
+    payload = write_dashboard(
+        output_dir=Path(args.output_dir).expanduser(),
+        home_dir=Path(args.home_dir).expanduser(),
+        dotfiles_repo=Path(args.dotfiles_repo).expanduser(),
+    )
+    if args.json:
+        print_json(payload)
+    else:
+        print(payload["artifacts"]["html"])
+    return 0
+
+
+def cmd_dotfiles_capture(args: argparse.Namespace) -> int:
+    from .dotfiles import capture_target
+
+    try:
+        payload = capture_target(
+            name=args.name,
+            home_dir=Path(args.home_dir).expanduser(),
+            dotfiles_repo=Path(args.dotfiles_repo).expanduser(),
+        )
+    except KeyError:
+        print_json({"ok": False, "error": f"unknown dotfile target: {args.name}"})
+        return 1
+    except FileNotFoundError as exc:
+        print_json({"ok": False, "error": f"missing source path: {exc}"})
+        return 1
+    if args.json:
+        print_json(payload)
+    else:
+        print(payload["target"])
+    return 0
+
+
+def cmd_intranet_control_center(args: argparse.Namespace) -> int:
+    from .control_center import write_control_center
+
+    payload = write_control_center(
+        output_dir=Path(args.output_dir).expanduser(),
+        home_dir=Path(args.home_dir).expanduser(),
+        dotfiles_repo=Path(args.dotfiles_repo).expanduser(),
+        ai_root_dir=Path(args.ai_root_dir).expanduser(),
+        repo_ai_dir=Path(args.repo_ai_dir).expanduser(),
+        repo_root=REPO_ROOT,
+    )
+    if args.json:
+        print_json(payload)
+    else:
+        print(payload["artifacts"]["html"])
+    return 0
+
+
+def cmd_intranet_publish(args: argparse.Namespace) -> int:
+    from .intranet_deploy import write_publish_bundle
+
+    payload = write_publish_bundle(
+        site_root=Path(args.site_root).expanduser(),
+        deploy_root=Path(args.deploy_root).expanduser(),
+        silkpage_root=Path(args.silkpage_root).expanduser(),
+        ssl_dir=Path(args.ssl_dir).expanduser(),
+        domain=args.domain,
+        sync=not args.no_sync,
+    )
+    if args.json:
+        print_json(payload)
+    else:
+        print(payload["artifacts"]["html"])
+    return 0
+
+
+def cmd_intranet_cert_bootstrap(args: argparse.Namespace) -> int:
+    from .intranet_deploy import bootstrap_local_tls
+
+    payload = bootstrap_local_tls(
+        ssl_dir=Path(args.ssl_dir).expanduser(),
+        domain=args.domain,
+        force=args.force,
+    )
+    if args.json:
+        print_json(payload)
+    else:
+        print(payload["server_cert"])
+    return 0
+
+
+def cmd_gen_command_capture(args: argparse.Namespace) -> int:
+    from .cmdlib import record_command
+
+    payload = record_command(
+        raw_command=args.raw,
+        shell=args.shell,
+        pwd=args.pwd,
+        exit_code=args.exit_code,
+        history_id=args.history_id,
+        pid=args.pid,
+        session=args.session,
+        root_dir=Path(args.root_dir).expanduser() if args.root_dir else None,
+    )
+    if args.json:
+        print_json(payload)
+    else:
+        print(payload["history_path"])
+    return 0
+
+
+def cmd_gen_command_list(args: argparse.Namespace) -> int:
+    from .cmdlib import write_command_list
+
+    payload = write_command_list(
+        root_dir=Path(args.root_dir).expanduser() if args.root_dir else None,
+        output_dir=Path(args.output_dir).expanduser() if args.output_dir else None,
+        since_days=args.since_days,
+        limit=args.limit,
+    )
+    if args.json:
+        print_json(payload)
+    else:
+        print(payload["artifacts"]["html"])
+    return 0
+
+
+def cmd_proof_specimen(args: argparse.Namespace) -> int:
+    from .font_proof import build_specimen
+
+    payload = build_specimen(
+        output_dir=Path(args.output_dir).expanduser(),
+        fonts=args.fonts,
+        title=args.title,
+    )
+    if args.json:
+        print_json(payload)
+    else:
+        print(payload["artifacts"]["pdf"])
+    return 0
+
+
+def cmd_proof_showcase(args: argparse.Namespace) -> int:
+    from .font_proof import build_showcase
+
+    payload = build_showcase(
+        output_dir=Path(args.output_dir).expanduser(),
+        font=args.font,
+        title=args.title,
+    )
+    if args.json:
+        print_json(payload)
+    else:
+        print(payload["artifacts"]["pdf"])
+    return 0
+
+
+def cmd_proof_harfbuzz(args: argparse.Namespace) -> int:
+    from .font_proof import build_harfbuzz_preview
+
+    payload = build_harfbuzz_preview(
+        font=args.font,
+        text=args.text,
+        output_dir=Path(args.output_dir).expanduser(),
+    )
+    if args.json:
+        print_json(payload)
+    else:
+        print(payload["artifacts"]["pdf"])
+    return 0
+
+
+def cmd_proof_suite(args: argparse.Namespace) -> int:
+    from .font_proof import build_suite
+
+    payload = build_suite(
+        output_dir=Path(args.output_dir).expanduser(),
+        specimen_fonts=args.fonts,
+        showcase_font=args.showcase_font,
+        hb_font=args.hb_font,
+    )
+    if args.json:
+        print_json(payload)
+    else:
+        print(payload["showcase"]["artifacts"]["pdf"])
     return 0
 
 
@@ -1186,6 +1822,782 @@ def cmd_runtime_exec_external(args: argparse.Namespace) -> int:
         }
     print_json(payload)
     return 0 if result["ok"] else 1
+
+
+# ── Java runtime governance (singine runtime java) ───────────────────────────
+
+def _java_registry_path() -> Path:
+    """Locate the Singine Java runtime registry.
+
+    Resolution order:
+      1. SINGINE_REGISTRY env var (explicit path to registry.json)
+      2. SINGINE_ROOT env var + /runtime/java/registry.json
+      3. Hardcoded canonical location
+    """
+    if r := os.environ.get("SINGINE_REGISTRY"):
+        return Path(r)
+    if root := os.environ.get("SINGINE_ROOT"):
+        return Path(root) / "runtime" / "java" / "registry.json"
+    return Path("/private/tmp/singine-personal-os/runtime/java/registry.json")
+
+
+def _java_load_registry() -> Dict[str, Any]:
+    path = _java_registry_path()
+    if not path.exists():
+        raise FileNotFoundError(
+            f"Java registry not found at {path}. "
+            "Set SINGINE_ROOT or SINGINE_REGISTRY to point to the registry."
+        )
+    import json as _json
+    return _json.loads(path.read_text(encoding="utf-8"))
+
+
+def _java_resolve_alias(registry: Dict[str, Any], alias: str) -> Dict[str, Any]:
+    for v in registry.get("versions", []):
+        if v["alias"] == alias:
+            return v
+    known = [v["alias"] for v in registry.get("versions", [])]
+    raise ValueError(f"Unknown Java alias '{alias}'. Known aliases: {', '.join(known)}")
+
+
+def _java_read_reqs_singine(directory: Path) -> Optional[str]:
+    """Extract :java alias from reqs.singine in the given directory."""
+    cfg = directory / "reqs.singine"
+    if not cfg.exists():
+        return None
+    import re
+    text = cfg.read_text(encoding="utf-8")
+    m = re.search(r':java\s+"([^"]+)"', text)
+    return m.group(1) if m else None
+
+
+def _java_resolve_for_dir(registry: Dict[str, Any], directory: Path) -> tuple[str, str]:
+    """Return (alias, source) via the three-step resolution chain."""
+    # Step 1: reqs.singine
+    alias = _java_read_reqs_singine(directory)
+    if alias:
+        return alias, "reqs.singine"
+    # Step 2: application-map (keyed by directory base name)
+    appmap = registry.get("application_map", {})
+    alias = appmap.get(directory.name)
+    if alias:
+        return alias, "application-map"
+    # Step 3: policy default
+    alias = registry.get("policy", {}).get("default", "lts")
+    return alias, "policy-default"
+
+
+def _java_sdkman_home() -> Path:
+    return Path(os.environ.get("SDKMAN_DIR", str(Path.home() / ".sdkman")))
+
+
+def cmd_runtime_java_list(args: argparse.Namespace) -> int:
+    try:
+        registry = _java_load_registry()
+    except FileNotFoundError as exc:
+        print(f"[singine runtime java] ERROR: {exc}", file=sys.stderr)
+        return 1
+
+    versions = registry.get("versions", [])
+    appmap = registry.get("application_map", {})
+    default = registry.get("policy", {}).get("default", "lts")
+
+    if getattr(args, "json", False):
+        print_json({"versions": versions, "application_map": appmap, "default": default})
+        return 0
+
+    print()
+    print(f"{'ALIAS':<12}  {'SDKMAN ID':<28}  {'MAJOR':<8}  {'STATUS':<10}  NOTES")
+    print("─" * 80)
+    for v in versions:
+        marker = " ◀ default" if v["alias"] == default else ""
+        print(f"{v['alias']:<12}  {v['sdkman_id']:<28}  {str(v['major']):<8}  {v['status']:<10}  {v.get('notes','')}{marker}")
+    print()
+    if appmap:
+        print(f"{'APPLICATION':<30}  ALIAS")
+        print("─" * 45)
+        for app, alias in appmap.items():
+            print(f"{app:<30}  {alias}")
+        print()
+    return 0
+
+
+def cmd_runtime_java_inspect(args: argparse.Namespace) -> int:
+    try:
+        registry = _java_load_registry()
+    except FileNotFoundError as exc:
+        print(f"[singine runtime java] ERROR: {exc}", file=sys.stderr)
+        return 1
+
+    directory = Path(args.dir).resolve() if getattr(args, "dir", None) else Path.cwd()
+    alias, source = _java_resolve_for_dir(registry, directory)
+    try:
+        version_entry = _java_resolve_alias(registry, alias)
+    except ValueError as exc:
+        print(f"[singine runtime java] ERROR: {exc}", file=sys.stderr)
+        return 1
+
+    sdkman_home = _java_sdkman_home()
+    candidate = sdkman_home / "candidates" / "java" / version_entry["sdkman_id"]
+
+    payload = {
+        "directory": str(directory),
+        "source": source,
+        "alias": alias,
+        "sdkman_id": version_entry["sdkman_id"],
+        "major": version_entry["major"],
+        "distribution": version_entry["distribution"],
+        "status": version_entry["status"],
+        "installed": candidate.exists(),
+        "java_home": str(candidate),
+    }
+
+    if getattr(args, "json", False):
+        print_json(payload)
+        return 0
+
+    print(f"directory   : {payload['directory']}")
+    print(f"source      : {payload['source']}")
+    print(f"alias       : {payload['alias']}")
+    print(f"sdkman_id   : {payload['sdkman_id']}")
+    print(f"major       : {payload['major']}  ({payload['distribution']})")
+    print(f"status      : {payload['status']}")
+    print(f"installed   : {'yes' if payload['installed'] else 'no — run: singine runtime java install ' + alias}")
+    print(f"java_home   : {payload['java_home']}")
+    return 0
+
+
+def cmd_runtime_java_env(args: argparse.Namespace) -> int:
+    """Print export statements so callers can eval: eval $(singine runtime java env)"""
+    try:
+        registry = _java_load_registry()
+    except FileNotFoundError as exc:
+        print(f"[singine runtime java] ERROR: {exc}", file=sys.stderr)
+        return 1
+
+    if getattr(args, "alias", None):
+        alias = args.alias
+        source = "explicit"
+    else:
+        alias, source = _java_resolve_for_dir(registry, Path.cwd())
+
+    try:
+        version_entry = _java_resolve_alias(registry, alias)
+    except ValueError as exc:
+        print(f"[singine runtime java] ERROR: {exc}", file=sys.stderr)
+        return 1
+
+    sdkman_home = _java_sdkman_home()
+    java_home = sdkman_home / "candidates" / "java" / version_entry["sdkman_id"]
+
+    if getattr(args, "json", False):
+        print_json({"alias": alias, "source": source, "java_home": str(java_home),
+                    "sdkman_id": version_entry["sdkman_id"]})
+        return 0
+
+    # Shell-eval-safe output
+    print(f'export JAVA_HOME="{java_home}"')
+    print(f'export PATH="{java_home}/bin:$PATH"')
+    return 0
+
+
+def cmd_runtime_java_install(args: argparse.Namespace) -> int:
+    try:
+        registry = _java_load_registry()
+        version_entry = _java_resolve_alias(registry, args.alias)
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"[singine runtime java] ERROR: {exc}", file=sys.stderr)
+        return 1
+
+    sdkman_id = version_entry["sdkman_id"]
+    sdkman_init = _java_sdkman_home() / "bin" / "sdkman-init.sh"
+    if not sdkman_init.exists():
+        print(f"[singine runtime java] ERROR: SDKMAN not found at {sdkman_init}", file=sys.stderr)
+        return 1
+
+    print(f"[singine runtime java] Installing {sdkman_id} via SDKMAN...")
+    cmd = ["bash", "-c", f'source "{sdkman_init}" && sdk install java "{sdkman_id}"']
+    result = subprocess.run(cmd)
+    return result.returncode
+
+
+# ── JVM language registry (Groovy, Clojure) ──────────────────────────────────
+
+def _jvm_registry_path() -> Path:
+    if r := os.environ.get("SINGINE_JVM_REGISTRY"):
+        return Path(r)
+    if root := os.environ.get("SINGINE_ROOT"):
+        return Path(root) / "runtime" / "jvm" / "registry.json"
+    return Path("/private/tmp/singine-personal-os/runtime/jvm/registry.json")
+
+
+def _jvm_load_registry() -> Dict[str, Any]:
+    path = _jvm_registry_path()
+    if not path.exists():
+        raise FileNotFoundError(
+            f"JVM registry not found at {path}. "
+            "Set SINGINE_ROOT or SINGINE_JVM_REGISTRY."
+        )
+    import json as _json
+    return _json.loads(path.read_text(encoding="utf-8"))
+
+
+def _jvm_lang_read_reqs(directory: Path, lang: str) -> Optional[str]:
+    """Read :groovy / :clojure key from reqs.singine."""
+    import re
+    cfg = directory / "reqs.singine"
+    if not cfg.exists():
+        return None
+    m = re.search(rf':{lang}\s+"([^"]+)"', cfg.read_text(encoding="utf-8"))
+    return m.group(1) if m else None
+
+
+def _jvm_lang_resolve_for_dir(registry: Dict, lang: str, directory: Path) -> tuple[str, str]:
+    alias = _jvm_lang_read_reqs(directory, lang)
+    if alias:
+        return alias, "reqs.singine"
+    appmap = registry.get(lang, {}).get("application_map", {})
+    alias = appmap.get(directory.name)
+    if alias:
+        return alias, "application-map"
+    alias = registry.get(lang, {}).get("policy", {}).get("default", "lts")
+    return alias, "policy-default"
+
+
+def _jvm_lang_resolve_entry(registry: Dict, lang: str, alias: str) -> Dict[str, Any]:
+    for v in registry.get(lang, {}).get("versions", []):
+        if v["alias"] == alias:
+            return v
+    known = [v["alias"] for v in registry.get(lang, {}).get("versions", [])]
+    raise ValueError(f"Unknown {lang} alias '{alias}'. Known: {', '.join(known)}")
+
+
+def _make_runtime_lang_commands(lang: str) -> tuple:
+    """Factory returning (list_fn, inspect_fn, env_fn, install_fn) for a JVM language."""
+
+    def cmd_list(args: argparse.Namespace) -> int:
+        try:
+            registry = _jvm_load_registry()
+        except FileNotFoundError as exc:
+            print(f"[singine runtime {lang}] ERROR: {exc}", file=sys.stderr)
+            return 1
+        versions = registry.get(lang, {}).get("versions", [])
+        default = registry.get(lang, {}).get("policy", {}).get("default", "")
+        manager = registry.get(lang, {}).get("manager", "sdkman")
+        if getattr(args, "json", False):
+            print_json({"lang": lang, "manager": manager, "versions": versions, "default": default})
+            return 0
+        print(f"\n{lang.upper()} versions  (manager: {manager})\n")
+        print(f"{'ALIAS':<12}  {'VERSION/ID':<28}  {'STATUS':<10}  NOTES")
+        print("─" * 72)
+        for v in versions:
+            vid = v.get("sdkman_id") or v.get("cli_version") or v.get("lib_version", "?")
+            marker = " ◀ default" if v["alias"] == default else ""
+            print(f"{v['alias']:<12}  {vid:<28}  {v['status']:<10}  {v.get('notes','')}{marker}")
+        print()
+        return 0
+
+    def cmd_inspect(args: argparse.Namespace) -> int:
+        try:
+            registry = _jvm_load_registry()
+        except FileNotFoundError as exc:
+            print(f"[singine runtime {lang}] ERROR: {exc}", file=sys.stderr)
+            return 1
+        directory = Path(args.dir).resolve() if getattr(args, "dir", None) else Path.cwd()
+        alias, source = _jvm_lang_resolve_for_dir(registry, lang, directory)
+        try:
+            entry = _jvm_lang_resolve_entry(registry, lang, alias)
+        except ValueError as exc:
+            print(f"[singine runtime {lang}] ERROR: {exc}", file=sys.stderr)
+            return 1
+        manager = registry.get(lang, {}).get("manager", "sdkman")
+        payload = {"lang": lang, "manager": manager, "directory": str(directory),
+                   "source": source, "alias": alias, **entry}
+        if manager == "sdkman":
+            sdkman_id = entry.get("sdkman_id", alias)
+            candidate = _java_sdkman_home() / "candidates" / lang / sdkman_id
+            payload["installed"] = candidate.exists()
+            payload["home"] = str(candidate)
+        elif manager == "brew":
+            import shutil
+            payload["installed"] = bool(shutil.which(lang) or shutil.which("clj"))
+        if getattr(args, "json", False):
+            print_json(payload)
+            return 0
+        for k, v in payload.items():
+            print(f"{k:<12}: {v}")
+        return 0
+
+    def cmd_env(args: argparse.Namespace) -> int:
+        try:
+            registry = _jvm_load_registry()
+        except FileNotFoundError as exc:
+            print(f"[singine runtime {lang}] ERROR: {exc}", file=sys.stderr)
+            return 1
+        alias = getattr(args, "alias", None) or _jvm_lang_resolve_for_dir(registry, lang, Path.cwd())[0]
+        try:
+            entry = _jvm_lang_resolve_entry(registry, lang, alias)
+        except ValueError as exc:
+            print(f"[singine runtime {lang}] ERROR: {exc}", file=sys.stderr)
+            return 1
+        manager = registry.get(lang, {}).get("manager", "sdkman")
+        if manager == "sdkman":
+            sdkman_id = entry.get("sdkman_id", alias)
+            home = _java_sdkman_home() / "candidates" / lang / sdkman_id
+            payload = {"alias": alias, "sdkman_id": sdkman_id, "home": str(home)}
+            if getattr(args, "json", False):
+                print_json(payload)
+                return 0
+            print(f'export {lang.upper()}_HOME="{home}"')
+            print(f'export PATH="{home}/bin:$PATH"')
+        else:
+            payload = {"alias": alias, "manager": "brew", "note": f"Managed by brew; run: brew upgrade {lang}"}
+            if getattr(args, "json", False):
+                print_json(payload)
+                return 0
+            print(f"# {lang} is brew-managed; activate via: brew upgrade {registry.get(lang, {}).get('brew_formula', lang)}")
+        return 0
+
+    def cmd_install(args: argparse.Namespace) -> int:
+        try:
+            registry = _jvm_load_registry()
+            entry = _jvm_lang_resolve_entry(registry, lang, args.alias)
+        except (FileNotFoundError, ValueError) as exc:
+            print(f"[singine runtime {lang}] ERROR: {exc}", file=sys.stderr)
+            return 1
+        manager = registry.get(lang, {}).get("manager", "sdkman")
+        if manager == "sdkman":
+            sdkman_id = entry.get("sdkman_id", args.alias)
+            sdkman_init = _java_sdkman_home() / "bin" / "sdkman-init.sh"
+            if not sdkman_init.exists():
+                print(f"[singine runtime {lang}] ERROR: SDKMAN not found", file=sys.stderr)
+                return 1
+            print(f"[singine runtime {lang}] Installing {sdkman_id} via SDKMAN...")
+            result = subprocess.run(["bash", "-c", f'source "{sdkman_init}" && sdk install {lang} "{sdkman_id}"'])
+            return result.returncode
+        else:
+            formula = registry.get(lang, {}).get("brew_formula", lang)
+            print(f"[singine runtime {lang}] {lang.capitalize()} is brew-managed. Run:")
+            print(f"  brew install {formula}")
+            return 0
+
+    return cmd_list, cmd_inspect, cmd_env, cmd_install
+
+
+_groovy_list, _groovy_inspect, _groovy_env, _groovy_install = _make_runtime_lang_commands("groovy")
+_clojure_list, _clojure_inspect, _clojure_env, _clojure_install = _make_runtime_lang_commands("clojure")
+
+
+# ── JVM dependency aggregation (singine runtime jvm deps) ─────────────────────
+
+def _m2_exists(group: str, artifact: str, version: str) -> bool:
+    """Check if a Maven artifact exists in the local ~/.m2 cache."""
+    m2 = Path.home() / ".m2" / "repository"
+    jar = m2 / group.replace(".", "/") / artifact / version / f"{artifact}-{version}.jar"
+    return jar.exists()
+
+
+def _jvm_parse_lein(path: Path) -> List[Dict[str, Any]]:
+    """Parse :dependencies from a Leiningen project.clj."""
+    import re
+    text = path.read_text(encoding="utf-8")
+    deps: List[Dict[str, Any]] = []
+    in_deps = False
+    for line in text.splitlines():
+        stripped = line.strip()
+        if ":dependencies" in stripped:
+            in_deps = True
+        if not in_deps:
+            continue
+        m = re.search(r'\[([a-zA-Z0-9._\-]+(?:/[a-zA-Z0-9._\-]+)?)\s+"([^"]+)"\]', stripped)
+        if m:
+            coord, version = m.group(1), m.group(2)
+            if "/" in coord:
+                group, artifact = coord.split("/", 1)
+            else:
+                group = artifact = coord
+            deps.append({"group": group, "artifact": artifact, "version": version, "scope": "compile"})
+        # Stop when we exit the :dependencies vector
+        if in_deps and stripped.startswith(":") and ":dependencies" not in stripped and deps:
+            break
+    return deps
+
+
+def _jvm_parse_deps_edn(path: Path) -> List[Dict[str, Any]]:
+    """Parse :deps from a Clojure CLI deps.edn."""
+    import re
+    text = path.read_text(encoding="utf-8")
+    deps: List[Dict[str, Any]] = []
+    for m in re.finditer(r'([a-zA-Z0-9._\-]+/[a-zA-Z0-9._\-]+)\s*\{:mvn/version\s+"([^"]+)"\}', text):
+        coord, version = m.group(1), m.group(2)
+        group, artifact = coord.split("/", 1)
+        deps.append({"group": group, "artifact": artifact, "version": version, "scope": "compile"})
+    return deps
+
+
+def _jvm_parse_gradle(path: Path) -> List[Dict[str, Any]]:
+    """Parse dependencies from a Gradle Groovy DSL build.gradle."""
+    import re
+    text = path.read_text(encoding="utf-8")
+    deps: List[Dict[str, Any]] = []
+    scope_kw = r'(?:compileOnly|implementation|runtimeOnly|api|testImplementation|xmlDoclet|annotationProcessor)'
+    for m in re.finditer(
+        rf'({scope_kw})\s+[\'"]([a-zA-Z0-9._\-]+):([a-zA-Z0-9._\-]+):([0-9][^\s\'"]*)[\'"]',
+        text,
+    ):
+        scope, group, artifact, version = m.group(1), m.group(2), m.group(3), m.group(4)
+        deps.append({"group": group, "artifact": artifact, "version": version, "scope": scope})
+    return deps
+
+
+def _jvm_aggregate_deps() -> Dict[str, Any]:
+    """Aggregate JVM deps from singine, collibra, and silkpage."""
+    configs = [
+        {
+            "name": "singine-core",
+            "path": Path.home() / "ws/git/github/sindoc/singine/core",
+            "parsers": [("project.clj", _jvm_parse_lein), ("deps.edn", _jvm_parse_deps_edn)],
+        },
+        {
+            "name": "collibra-edge",
+            "path": Path.home() / "ws/git/github/sindoc/collibra/edge/java",
+            "parsers": [("build.gradle", _jvm_parse_gradle)],
+        },
+        {
+            "name": "silkpage-core",
+            "path": Path.home() / "ws/git/github/sindoc/silkpage/core",
+            "parsers": [],
+        },
+    ]
+
+    projects: List[Dict[str, Any]] = []
+    all_deps: Dict[str, Dict] = {}  # (group, artifact, version) → dep + which projects use it
+
+    for cfg in configs:
+        seen: set = set()
+        project_deps: List[Dict] = []
+        sources: List[str] = []
+
+        for filename, parser_fn in cfg["parsers"]:
+            build_file = cfg["path"] / filename
+            if not build_file.exists():
+                continue
+            sources.append(filename)
+            for dep in parser_fn(build_file):
+                key = (dep["group"], dep["artifact"], dep["version"])
+                if key in seen:
+                    continue
+                seen.add(key)
+                dep["in_m2"] = _m2_exists(dep["group"], dep["artifact"], dep["version"])
+                project_deps.append(dep)
+                if key not in all_deps:
+                    all_deps[key] = {**dep, "used_by": []}
+                all_deps[key]["used_by"].append(cfg["name"])
+
+        projects.append({
+            "name": cfg["name"],
+            "path": str(cfg["path"]),
+            "sources": sources,
+            "deps": project_deps,
+        })
+
+    shared = [v for v in all_deps.values() if len(v["used_by"]) > 1]
+    return {"projects": projects, "total_unique": len(all_deps), "shared": shared}
+
+
+def cmd_runtime_jvm_deps(args: argparse.Namespace) -> int:
+    project_filter = getattr(args, "project", None)
+    data = _jvm_aggregate_deps()
+
+    if project_filter:
+        data["projects"] = [p for p in data["projects"] if p["name"] == project_filter]
+        if not data["projects"]:
+            known = [p["name"] for p in _jvm_aggregate_deps()["projects"]]
+            print(f"[singine runtime jvm] Unknown project '{project_filter}'. Known: {', '.join(known)}", file=sys.stderr)
+            return 1
+
+    if getattr(args, "json", False):
+        print_json(data)
+        return 0
+
+    for proj in data["projects"]:
+        header = f"── {proj['name']}  ({', '.join(proj['sources']) or 'no build files found'})  {proj['path']}"
+        print(f"\n{header}")
+        print("─" * min(len(header), 100))
+        if not proj["deps"]:
+            print("  (no Maven/Gradle dependencies declared)")
+            continue
+        print(f"  {'SCOPE':<14}  {'GROUP':<30}  {'ARTIFACT':<28}  {'VERSION':<14}  M2")
+        print(f"  {'─'*14}  {'─'*30}  {'─'*28}  {'─'*14}  ──")
+        for dep in proj["deps"]:
+            m2 = "✓" if dep["in_m2"] else "·"
+            print(f"  {dep['scope']:<14}  {dep['group']:<30}  {dep['artifact']:<28}  {dep['version']:<14}  {m2}")
+    print(f"\nTotal unique deps: {data['total_unique']}")
+    if data["shared"]:
+        print(f"Shared across projects ({len(data['shared'])}):")
+        for dep in data["shared"]:
+            print(f"  {dep['group']}:{dep['artifact']}:{dep['version']}  ← {', '.join(dep['used_by'])}")
+    print()
+    return 0
+
+
+def cmd_server_inspect(args: argparse.Namespace) -> int:
+    from .server_surface import server_descriptor
+
+    payload = server_descriptor(
+        REPO_ROOT,
+        host=args.host,
+        port=args.port,
+        environment_type=args.environment_type,
+    )
+    if args.json:
+        print_json(payload)
+    else:
+        server = payload["server"]
+        print(f"environment: {payload['environment_type']}")
+        print(f"base_url: {server['base_url']}")
+        print(f"bind_host: {server['bind_host']}")
+        print(f"activity taxonomy: {payload['activity_api']['taxonomy_path']}")
+        print(f"activity count: {payload['activity_api']['activity_count']}")
+        print(f"docker edge compose: {payload['docker']['edge_compose']}")
+        print(f"git branch: {payload['git']['branch'] or '(unknown)'}")
+    return 0
+
+
+def cmd_server_health(args: argparse.Namespace) -> int:
+    from .server_surface import ping_server
+
+    base_url = f"http://{args.host}:{args.port}"
+    payload = ping_server(base_url, timeout=args.timeout)
+    if args.json:
+        print_json(payload)
+    else:
+        if payload.get("ok"):
+            print(f"{base_url}/health -> {payload.get('status')} {payload.get('raw_text', '')}")
+        else:
+            print(f"{base_url}/health -> error: {payload.get('error')}", file=sys.stderr)
+    return 0 if payload.get("ok") else 1
+
+
+def cmd_server_bridge(args: argparse.Namespace) -> int:
+    from .server_surface import query_bridge
+
+    base_url = f"http://{args.host}:{args.port}"
+    payload = query_bridge(
+        base_url,
+        action=args.action,
+        query=args.query,
+        entity=args.entity,
+        limit=args.limit,
+        realm=getattr(args, "realm", None),
+        source_kind=getattr(args, "source_kind", None),
+        timeout=args.timeout,
+    )
+    if args.json:
+        print_json(payload)
+    else:
+        if payload.get("ok"):
+            data = payload.get("data")
+            if isinstance(data, str):
+                print(data)
+            else:
+                print(json.dumps(data, indent=2))
+        else:
+            print(payload.get("error", "bridge request failed"), file=sys.stderr)
+    return 0 if payload.get("ok") else 1
+
+
+def cmd_server_test_case(args: argparse.Namespace) -> int:
+    from .server_surface import create_server_test_case
+
+    case_root = Path(args.case_root).expanduser()
+    try:
+        payload = create_server_test_case(
+            case_root,
+            REPO_ROOT,
+            host=args.host,
+            port=args.port,
+            logseq_url=args.logseq_url,
+        )
+        if args.run:
+            proc = subprocess.run(
+                [sys.executable, "-m", "unittest", "py.tests.test_server_surface_commands", "-v"],
+                cwd=REPO_ROOT,
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+            payload["runner"] = {
+                "command": "python3 -m unittest py.tests.test_server_surface_commands -v",
+                "ok": proc.returncode == 0,
+                "exit_code": proc.returncode,
+                "stdout": proc.stdout,
+                "stderr": proc.stderr,
+            }
+    except Exception as exc:
+        payload = {"ok": False, "error": str(exc)}
+
+    if args.json:
+        print_json(payload)
+        return 0 if payload.get("ok") else 1
+
+    if not payload.get("ok"):
+        print(payload.get("error", "server test case generation failed"), file=sys.stderr)
+        return 1
+
+    print(f"Created test case at {payload['case_root']}")
+    print(f"Readme: {payload['readme_path']}")
+    print(f"Activity: {payload['activity_path']}")
+    for command in payload["commands"]:
+        print(command)
+    if args.run and "runner" in payload:
+        print(f"Runner exit: {payload['runner']['exit_code']}")
+    return 0
+
+
+def cmd_logseq_inspect(args: argparse.Namespace) -> int:
+    from .server_surface import logseq_descriptor
+
+    payload = logseq_descriptor(REPO_ROOT, base_url=args.base_url)
+    if args.json:
+        print_json(payload)
+    else:
+        print(f"base_url: {payload['base_url']}")
+        print(f"api_endpoint: {payload['api_endpoint']}")
+        print(f"token_present: {payload['token_present']}")
+        print(f"filesystem fallback: {payload['filesystem_hint']}")
+    return 0
+
+
+def cmd_logseq_ping(args: argparse.Namespace) -> int:
+    from .server_surface import ping_logseq
+
+    token = args.token or os.environ.get("LOGSEQ_API_TOKEN")
+    payload = ping_logseq(args.base_url, token=token, timeout=args.timeout)
+    if args.json:
+        print_json(payload)
+    else:
+        if payload.get("ok"):
+            print(f"{payload['base_url']}/api -> {payload.get('status')}")
+        else:
+            print(payload.get("error", "logseq API request failed"), file=sys.stderr)
+    return 0 if payload.get("ok") else 1
+
+
+def cmd_logseq_graphs(args: argparse.Namespace) -> int:
+    from .logseq_org import discover_graphs
+
+    roots = [Path(root).expanduser() for root in args.root] if args.root else None
+    graphs = discover_graphs(roots)
+    payload = {
+        "ok": True,
+        "search_roots": [str(root) for root in (roots or [])],
+        "graphs": [graph.to_dict() for graph in graphs],
+    }
+    if args.json:
+        print_json(payload)
+    else:
+        for graph in graphs:
+            print(f"{graph.name}\t{graph.root}\t{graph.source_kind}")
+    return 0
+
+
+def cmd_logseq_export_org(args: argparse.Namespace) -> int:
+    from .logseq_org import resolve_graph, render_graph_to_org, write_graph_org
+
+    if args.pages_only and args.journals_only:
+        print("--pages-only and --journals-only are mutually exclusive", file=sys.stderr)
+        return 1
+    roots = [Path(root).expanduser() for root in args.root] if args.root else None
+    graph = resolve_graph(args.graph, roots)
+    include_pages = not args.journals_only
+    include_journals = not args.pages_only
+    if args.output:
+        output_path = write_graph_org(
+            graph,
+            Path(args.output),
+            include_pages=include_pages,
+            include_journals=include_journals,
+            limit=args.limit,
+        )
+        payload = {
+            "ok": True,
+            "graph": graph.to_dict(),
+            "output_path": str(output_path),
+            "limit": args.limit,
+        }
+        if args.json:
+            print_json(payload)
+        else:
+            print(output_path)
+        return 0
+
+    org_text = render_graph_to_org(
+        graph,
+        include_pages=include_pages,
+        include_journals=include_journals,
+        limit=args.limit,
+    )
+    if args.json:
+        print_json({"ok": True, "graph": graph.to_dict(), "org": org_text})
+    else:
+        print(org_text, end="")
+    return 0
+
+
+def cmd_logseq_export_xml(args: argparse.Namespace) -> int:
+    from .logseq_org import export_org_to_xml, resolve_graph, write_graph_org
+
+    if args.pages_only and args.journals_only:
+        print("--pages-only and --journals-only are mutually exclusive", file=sys.stderr)
+        return 1
+    roots = [Path(root).expanduser() for root in args.root] if args.root else None
+    graph = resolve_graph(args.graph, roots)
+    org_path = write_graph_org(
+        graph,
+        Path(args.org_output),
+        include_pages=not args.journals_only,
+        include_journals=not args.pages_only,
+        limit=args.limit,
+    )
+    payload = export_org_to_xml(
+        org_path,
+        Path(args.xml_output),
+        Path(args.om_to_xml_repo),
+        emacs_bin=args.emacs_bin,
+        extra_load_paths=[Path(path) for path in args.elisp_load_path],
+    )
+    payload["graph"] = graph.to_dict()
+    payload["generated_org_path"] = str(org_path)
+    if args.json:
+        print_json(payload)
+    else:
+        if payload.get("ok"):
+            print(payload["xml_path"])
+        else:
+            print(payload.get("stderr") or "Emacs XML export failed", file=sys.stderr)
+    return 0 if payload.get("ok") else 1
+
+
+def cmd_snapshot_save(args: argparse.Namespace) -> int:
+    from .server_surface import save_snapshot
+
+    output_path = Path(args.output).expanduser()
+    token = args.logseq_token or os.environ.get("LOGSEQ_API_TOKEN")
+    payload = save_snapshot(
+        output_path,
+        REPO_ROOT,
+        host=args.host,
+        port=args.port,
+        environment_type=args.environment_type,
+        logseq_url=args.logseq_url,
+        logseq_token=token,
+    )
+    if args.json:
+        print_json(payload)
+    else:
+        print(f"saved snapshot: {payload['output_path']}")
+    return 0
 
 
 # ── Java runtime governance (singine runtime java) ───────────────────────────
@@ -2869,6 +4281,414 @@ def build_parser() -> argparse.ArgumentParser:
     )
     sub = parser.add_subparsers(dest="command")
 
+def _ai_dir() -> Path:
+    return REPO_ROOT / "ai"
+
+
+def _ai_sessions_dir() -> Path:
+    return _ai_dir() / "sessions"
+
+
+def _ai_mandates_dir() -> Path:
+    return _ai_dir() / "mandates"
+
+
+def _ai_config_dir() -> Path:
+    return _ai_dir() / "config"
+
+
+def _edn_str(text: str, key: str, default: str = "") -> str:
+    """Extract :key "string" from loose EDN text."""
+    import re
+    m = re.search(rf"{re.escape(key)}\s+\"([^\"]*)\"", text)
+    return m.group(1) if m else default
+
+
+def _edn_keyword(text: str, key: str, default: str = "") -> str:
+    """Extract :key :KEYWORD from loose EDN text."""
+    import re
+    m = re.search(rf"{re.escape(key)}\s+:(\S+)", text)
+    return m.group(1) if m else default
+
+
+def _edn_int(text: str, key: str, default: int = 0) -> int:
+    """Extract :key 42 from loose EDN text."""
+    import re
+    m = re.search(rf"{re.escape(key)}\s+(\d+)", text)
+    return int(m.group(1)) if m else default
+
+
+def _load_session(session_dir: Path) -> Dict[str, Any]:
+    """Load a session directory into a plain dict."""
+    s: Dict[str, Any] = {"id": session_dir.name, "dir": str(session_dir)}
+    manifest  = session_dir / "manifest.edn"
+    perms_f   = session_dir / "permissions.edn"
+    commands_f = session_dir / "commands.edn"
+    if manifest.exists():
+        t = _read_text(manifest)
+        s.update({
+            "provider":        _edn_keyword(t, ":session/provider"),
+            "model":           _edn_str(t, ":session/model"),
+            "status":          _edn_keyword(t, ":session/status"),
+            "started_at":      _edn_str(t, ":session/started-at"),
+            "ended_at":        _edn_str(t, ":session/ended-at"),
+            "topic":           _edn_str(t, ":session/topic"),
+            "user":            _edn_str(t, ":session/user"),
+            "command_count":   _edn_int(t, ":session/command-count"),
+            "outcome_type":    _edn_keyword(t, ":outcome/type"),
+            "outcome_summary": _edn_str(t, ":outcome/summary"),
+            "manifest_raw":    t,
+        })
+    if perms_f.exists():
+        import re
+        t = _read_text(perms_f)
+        s["permissions_granted"] = len(re.findall(r":permission/id", t))
+        s["permissions_denied"]  = len(re.findall(r":permission/id", _edn_str(t, ":permissions/denied", "")))
+        s["permissions_raw"] = t
+    if commands_f.exists():
+        s["commands_raw"] = _read_text(commands_f)
+    return s
+
+
+def cmd_ai_session_list(args: argparse.Namespace) -> int:
+    """List all recorded sessions in singine/ai/sessions/."""
+    sd = _ai_sessions_dir()
+    if not sd.exists():
+        print(f"[ai session list] no sessions directory: {sd}", file=sys.stderr)
+        return 1
+    sessions = sorted([d for d in sd.iterdir() if d.is_dir()])
+    if not sessions:
+        print("[ai session list] no sessions recorded")
+        return 0
+    loaded = [_load_session(s) for s in sessions]
+    if getattr(args, "json", False):
+        clean = [{k: v for k, v in s.items() if not k.endswith("_raw")} for s in loaded]
+        print(json.dumps(clean, indent=2))
+    else:
+        print(f"{'ID':<40} {'PROVIDER':<10} {'MODEL':<26} {'STATUS':<10} STARTED")
+        print("─" * 102)
+        for s in loaded:
+            print(
+                f"{s['id']:<40} {s.get('provider','?'):<10} "
+                f"{s.get('model','?'):<26} {s.get('status','?'):<10} "
+                f"{s.get('started_at','?')[:10]}"
+            )
+    return 0
+
+
+def cmd_ai_session_show(args: argparse.Namespace) -> int:
+    """Print manifest, permissions, and outcome for a session."""
+    session_dir = _ai_sessions_dir() / args.id
+    if not session_dir.exists():
+        print(f"[ai session show] unknown session: {args.id}", file=sys.stderr)
+        return 1
+    s = _load_session(session_dir)
+    if getattr(args, "json", False):
+        clean = {k: v for k, v in s.items() if not k.endswith("_raw")}
+        print(json.dumps(clean, indent=2))
+        return 0
+    print(f"\nSession  : {s['id']}")
+    print(f"  Provider : {s.get('provider','?')}  ({s.get('model','?')})")
+    print(f"  Status   : {s.get('status','?')}")
+    print(f"  User     : {s.get('user','?')}")
+    print(f"  Period   : {s.get('started_at','?')[:10]}  →  {s.get('ended_at','?')[:10]}")
+    print(f"  Topic    : {s.get('topic','?')[:80]}")
+    print(f"  Commands : {s.get('command_count','?')}")
+    print(f"  Outcome  : {s.get('outcome_type','?')} — {s.get('outcome_summary','')[:80]}")
+    print(f"  Perms    : {s.get('permissions_granted', 0)} granted / {s.get('permissions_denied', 0)} denied")
+    if getattr(args, "permissions", False) and "permissions_raw" in s:
+        print("\n── permissions.edn " + "─" * 58)
+        print(s["permissions_raw"])
+    elif "permissions_raw" in s:
+        print("\n  hint: use --permissions to show full permissions.edn")
+    return 0
+
+
+def cmd_ai_session_export(args: argparse.Namespace) -> int:
+    """Export a session in the requested format (json or edn)."""
+    session_dir = _ai_sessions_dir() / args.id
+    if not session_dir.exists():
+        print(f"[ai session export] unknown session: {args.id}", file=sys.stderr)
+        return 1
+    fmt = getattr(args, "fmt", "json")
+    if fmt == "edn":
+        for f in sorted(session_dir.glob("*.edn")):
+            print(f";; ── {f.name} " + "─" * (60 - len(f.name)))
+            print(_read_text(f))
+        return 0
+    s = _load_session(session_dir)
+    if not getattr(args, "raw", False):
+        s = {k: v for k, v in s.items() if not k.endswith("_raw")}
+    print(json.dumps(s, indent=2))
+    return 0
+
+
+def cmd_ai_session_dashboard(args: argparse.Namespace) -> int:
+    from .session_dashboard import write_dashboard
+
+    payload = write_dashboard(
+        output_dir=Path(args.output_dir).expanduser(),
+        json_root_dir=Path(args.root_dir).expanduser(),
+        repo_ai_dir=Path(args.repo_ai_dir).expanduser(),
+        providers=args.provider,
+        title=args.title,
+        site_url=args.site_url,
+    )
+    if args.json:
+        print_json(payload)
+    else:
+        print(payload["artifacts"]["html"])
+    return 0
+
+
+def cmd_ai_mandate_list(args: argparse.Namespace) -> int:
+    """List all stored mandates in singine/ai/mandates/."""
+    md = _ai_mandates_dir()
+    if not md.exists():
+        print(f"[ai mandate list] no mandates directory: {md}", file=sys.stderr)
+        return 1
+    mandates = sorted(md.glob("*.edn"))
+    if not mandates:
+        print("[ai mandate list] no mandates stored")
+        return 0
+    if getattr(args, "json", False):
+        out = []
+        for m in mandates:
+            t = _read_text(m)
+            out.append({
+                "file":      m.name,
+                "id":        _edn_str(t, ":mandate/id"),
+                "grantor":   _edn_str(t, ":mandate/grantor"),
+                "grantee":   _edn_str(t, ":mandate/grantee"),
+                "status":    _edn_keyword(t, ":mandate/status"),
+                "issued_at": _edn_str(t, ":mandate/issued-at"),
+            })
+        print(json.dumps(out, indent=2))
+    else:
+        print(f"{'FILE':<30} {'GRANTOR':<12} {'STATUS':<12} ISSUED")
+        print("─" * 72)
+        for m in mandates:
+            t = _read_text(m)
+            print(
+                f"{m.name:<30} {_edn_str(t, ':mandate/grantor'):<12} "
+                f"{_edn_keyword(t, ':mandate/status'):<12} "
+                f"{_edn_str(t, ':mandate/issued-at')[:10]}"
+            )
+    return 0
+
+
+def cmd_ai_mandate_show(args: argparse.Namespace) -> int:
+    """Print a mandate's full permissions and status."""
+    import re
+    md = _ai_mandates_dir()
+    candidates: List[Path] = []
+    if md.exists():
+        candidates = list(md.glob(f"{args.id}*.edn"))
+        if not candidates:
+            candidates = [c for c in md.glob("*.edn") if args.id in c.stem]
+    if not candidates:
+        print(f"[ai mandate show] unknown mandate: {args.id}", file=sys.stderr)
+        return 1
+    m = candidates[0]
+    t = _read_text(m)
+    if getattr(args, "json", False):
+        perms = re.findall(
+            r':action "([^"]+)"\s+:resource "([^"]+)"\s+:decision "([^"]+)"', t
+        )
+        print(json.dumps({
+            "file":       m.name,
+            "id":         _edn_str(t, ":mandate/id"),
+            "grantor":    _edn_str(t, ":mandate/grantor"),
+            "status":     _edn_keyword(t, ":mandate/status"),
+            "issued_at":  _edn_str(t, ":mandate/issued-at"),
+            "expires_at": _edn_str(t, ":mandate/expires-at"),
+            "permissions": [
+                {"action": a, "resource": r, "decision": d} for a, r, d in perms
+            ],
+        }, indent=2))
+    else:
+        print(t)
+    return 0
+
+
+def cmd_ai_status(args: argparse.Namespace) -> int:
+    """Show provider configuration and enabled status."""
+    import re
+    providers_edn = _ai_config_dir() / "providers.edn"
+    if not providers_edn.exists():
+        print(f"[ai status] providers.edn not found: {providers_edn}", file=sys.stderr)
+        return 1
+    t = _read_text(providers_edn)
+    blocks = re.split(r"\{:provider/id", t)[1:]
+    providers = []
+    for block in blocks:
+        pid   = re.search(r'"([^"]+)"', block)
+        ptype = re.search(r":provider/type\s+:(\S+)", block)
+        pname = re.search(r":provider/name\s+\"([^\"]+)\"", block)
+        pendp = re.search(r":provider/endpoint\s+\"([^\"]*)\"", block)
+        pver  = re.search(r":provider/version\s+\"([^\"]+)\"", block)
+        penab = re.search(r":provider/enabled\s+(true|false)", block)
+        providers.append({
+            "id":       pid.group(1)   if pid   else "?",
+            "type":     ptype.group(1) if ptype else "?",
+            "name":     pname.group(1) if pname else "?",
+            "endpoint": pendp.group(1) if pendp else "",
+            "version":  pver.group(1)  if pver  else "?",
+            "enabled":  penab.group(1) == "true" if penab else False,
+        })
+    if getattr(args, "json", False):
+        print(json.dumps(providers, indent=2))
+        return 0
+    print(f"{'ID':<12} {'TYPE':<12} {'VERSION':<28} {'ON':<4} ENDPOINT")
+    print("─" * 85)
+    for p in providers:
+        tick = "✓" if p["enabled"] else "✗"
+        print(f"{p['id']:<12} {p['type']:<12} {p['version']:<28} {tick:<4} {p['endpoint']}")
+    return 0
+
+
+def cmd_ai_flush(args: argparse.Namespace) -> int:
+    """Flush session EDN files to disk; optionally git-commit."""
+    sd = _ai_sessions_dir()
+    if not sd.exists():
+        print(f"[ai flush] sessions dir not found: {sd}", file=sys.stderr)
+        return 1
+    session_id = getattr(args, "session", None)
+    if session_id:
+        targets = [sd / session_id]
+        if not targets[0].exists():
+            print(f"[ai flush] session not found: {session_id}", file=sys.stderr)
+            return 1
+    else:
+        targets = [d for d in sorted(sd.iterdir()) if d.is_dir()]
+    for t in targets:
+        edns = list(t.glob("*.edn"))
+        print(f"[ai flush] {t.name}  ({len(edns)} EDN files)")
+    if getattr(args, "commit", False):
+        files = [str(f) for tgt in targets for f in tgt.glob("*.edn")]
+        if files:
+            r = subprocess.run(["git", "add"] + files, cwd=REPO_ROOT,
+                               capture_output=True, text=True)
+            if r.returncode != 0:
+                print(f"[ai flush] git add failed: {r.stderr.strip()}", file=sys.stderr)
+                return 1
+            ids = ", ".join(t.name for t in targets)
+            msg = f"singine ai flush: {len(files)} EDN file(s) [{ids}]"
+            r = subprocess.run(["git", "commit", "-m", msg], cwd=REPO_ROOT,
+                               capture_output=True, text=True)
+            if r.returncode != 0:
+                print(f"[ai flush] git commit failed: {r.stderr.strip()}", file=sys.stderr)
+                return 1
+            print(f"[ai flush] committed: {msg}")
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# collibra — live REST API operations
+# ---------------------------------------------------------------------------
+
+def _collibra_ok(result: dict, args: argparse.Namespace) -> int:
+    """Print collibra result envelope and return exit code."""
+    if getattr(args, "json", True):
+        print_json(result)
+    else:
+        data = result.get("data", [])
+        if isinstance(data, list):
+            for item in data:
+                name = item.get("name") or item.get("displayName") or str(item)
+                print(name)
+        else:
+            print(str(data))
+    return 0 if result.get("ok") else 1
+
+
+def _collibra_err(exc: Exception) -> int:
+    print_json({"ok": False, "error": str(exc)})
+    return 1
+
+
+def cmd_collibra_env(args: argparse.Namespace) -> int:
+    """Validate Collibra environment configuration."""
+    from .collibra_rest import check_env
+    print_json(check_env())
+    return 0
+
+
+def cmd_collibra_fetch_community(args: argparse.Namespace) -> int:
+    from .collibra_rest import fetch_communities
+    try:
+        return _collibra_ok(
+            fetch_communities(name=getattr(args, "name", None), limit=args.limit), args
+        )
+    except Exception as exc:
+        return _collibra_err(exc)
+
+
+def cmd_collibra_fetch_domain(args: argparse.Namespace) -> int:
+    from .collibra_rest import fetch_domains
+    try:
+        return _collibra_ok(
+            fetch_domains(
+                community_id=getattr(args, "community", None),
+                domain_type=getattr(args, "type", None),
+                limit=args.limit,
+            ),
+            args,
+        )
+    except Exception as exc:
+        return _collibra_err(exc)
+
+
+def cmd_collibra_fetch_asset_type(args: argparse.Namespace) -> int:
+    from .collibra_rest import fetch_asset_types
+    try:
+        return _collibra_ok(fetch_asset_types(), args)
+    except Exception as exc:
+        return _collibra_err(exc)
+
+
+def cmd_collibra_fetch_view(args: argparse.Namespace) -> int:
+    from .collibra_rest import fetch_views
+    try:
+        return _collibra_ok(
+            fetch_views(location=getattr(args, "location", None), limit=args.limit), args
+        )
+    except Exception as exc:
+        return _collibra_err(exc)
+
+
+def cmd_collibra_fetch_workflow(args: argparse.Namespace) -> int:
+    from .collibra_rest import fetch_workflows
+    try:
+        return _collibra_ok(fetch_workflows(limit=args.limit), args)
+    except Exception as exc:
+        return _collibra_err(exc)
+
+
+def cmd_collibra_search(args: argparse.Namespace) -> int:
+    from .collibra_rest import search_assets
+    try:
+        return _collibra_ok(
+            search_assets(
+                query=args.query,
+                asset_type=getattr(args, "type", None),
+                domain_id=getattr(args, "domain", None),
+                limit=args.limit,
+            ),
+            args,
+        )
+    except Exception as exc:
+        return _collibra_err(exc)
+
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="singine",
+        description="Singine bridge, context, runtime, XML matrix, and local control command.",
+    )
+    sub = parser.add_subparsers(dest="command")
+
     context_parser = sub.add_parser("context", help="Show terminal context and sourced environment")
     context_parser.add_argument("--shell", choices=["bash", "sh"], help="Report context for a specific shell")
     context_parser.add_argument("--json", action="store_true", help="Emit JSON")
@@ -3032,11 +4852,31 @@ def build_parser() -> argparse.ArgumentParser:
     man_parser.set_defaults(func=cmd_man)
 
     install_parser = sub.add_parser("install", help="Install singine or selected local tool dependencies")
+    install_parser.add_argument("subject", nargs="?", choices=["singine", "ant", "xmldoclet", "git-filter-repo"], default="singine")
     install_parser.add_argument("subject", nargs="?", choices=["singine", "ant", "xmldoclet"], default="singine")
     install_parser.add_argument("--prefix", default=str(DEFAULT_PREFIX))
     install_parser.add_argument("--shell", choices=["bash", "sh", "all"], default="all")
+    install_parser.add_argument("--mode", choices=["base", "workstation"], default="base")
     install_parser.add_argument("--json", action="store_true")
     install_parser.set_defaults(func=cmd_install)
+
+    git_parser = sub.add_parser("git", help="Git rewrite and repository hygiene helpers")
+    git_sub = git_parser.add_subparsers(dest="git_subcommand")
+    git_parser.set_defaults(func=lambda a: (git_parser.print_help(), 1)[1])
+
+    git_rm_public_dir = git_sub.add_parser(
+        "rm-public-dir",
+        help="Plan or run a git-filter-repo rewrite that removes one public directory from selected branch histories",
+    )
+    git_rm_public_dir.add_argument("repo", help="Repo identifier, for example github/singine or github/sindoc/singine")
+    git_rm_public_dir.add_argument("public_dir", help="Relative directory path to remove from history, for example prod/Q3")
+    git_rm_public_dir.add_argument("--branch", action="append", help="Branch to rewrite; repeatable")
+    git_rm_public_dir.add_argument("-all", "--all", dest="all_branches", action="store_true", help="Discover every local branch whose history contains the target directory")
+    git_rm_public_dir.add_argument("--remote", default="origin", help="Git remote to inspect and push later")
+    git_rm_public_dir.add_argument("--repo-dir", default=".", help="Local clone to inspect or rewrite")
+    git_rm_public_dir.add_argument("--execute", action="store_true", help="Run git-filter-repo locally after planning")
+    git_rm_public_dir.add_argument("--json", action="store_true", help="Emit the plan as JSON")
+    git_rm_public_dir.set_defaults(func=cmd_git_rm_public_dir)
 
     template_parser = sub.add_parser("template", help="Generate Singine-aware project templates")
     template_sub = template_parser.add_subparsers(dest="template_command")
@@ -3597,6 +5437,9 @@ def build_parser() -> argparse.ArgumentParser:
     from .domain import add_domain_parser
     add_domain_parser(sub)
 
+    from .pg import add_pg_parser
+    add_pg_parser(sub)
+
     from .edge import add_edge_parser
     add_edge_parser(sub)
 
@@ -3723,6 +5566,70 @@ def build_parser() -> argparse.ArgumentParser:
         cmd_transfer_project, cmd_transfer_analyze_result, cmd_transfer_move,
         cmd_transfer_find,
     )
+
+    find_parser = sub.add_parser(
+        "find",
+        help="Find filesystem paths related to a topic",
+    )
+    find_parser.add_argument(
+        "activity",
+        choices=["filesAboutTopic"],
+        help="Activity to invoke. Use filesAboutTopic to search path names by topic.",
+    )
+    find_parser.add_argument("topic", help="Topic fragment to match in file or directory names")
+    find_parser.add_argument(
+        "--root-dir",
+        default=".",
+        help="Directory to search from (default: current directory)",
+    )
+    find_parser.add_argument(
+        "--max-depth",
+        type=int,
+        default=3,
+        help="Maximum directory depth to traverse below the root (default: 3)",
+    )
+    find_parser.add_argument(
+        "--type",
+        dest="path_type",
+        choices=["any", "file", "dir"],
+        default="any",
+        help="Restrict matches to files, directories, or either (default: any)",
+    )
+    find_parser.add_argument(
+        "-0", "--null",
+        action="store_true",
+        help="Emit NUL-delimited paths instead of newline-delimited paths",
+    )
+    find_parser.add_argument("--json", action="store_true", help="Emit JSON")
+    find_parser.set_defaults(func=cmd_transfer_find)
+
+    mv_parser = sub.add_parser(
+        "mv",
+        help="Move filesystem paths from stdin into a destination directory",
+    )
+    mv_parser.add_argument(
+        "activity",
+        choices=["fileListTo"],
+        help="Activity to invoke. Use fileListTo to move stdin-listed files into a directory.",
+    )
+    mv_parser.add_argument("dest_dir", help="Destination directory")
+    mv_parser.add_argument(
+        "-0", "--null",
+        action="store_true",
+        help="Read NUL-delimited paths from stdin instead of newline-delimited paths",
+    )
+    mv_parser.add_argument(
+        "--mkdir",
+        action="store_true",
+        help="Create the destination directory if it does not exist",
+    )
+    mv_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Report planned moves without changing the filesystem",
+    )
+    mv_parser.add_argument("--json", action="store_true", help="Emit JSON")
+    mv_parser.set_defaults(func=cmd_transfer_move)
 
     find_parser = sub.add_parser(
         "find",
