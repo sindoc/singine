@@ -1,0 +1,293 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  photos/dependency-graph.xml — Photo transfer dependency graph
+  ──────────────────────────────────────────────────────────────
+  Models the dependency relationships between photo batches as they
+  flow through the Google Photos ↔ Apple Photos compression pipeline.
+
+  Queryable via XPath 3.1:
+    //batch[@status='pending']
+    //batch[compliance/sanctions/@risk = 'high']
+    //photo[exif/country-code = 'US']
+    //sprint[@deadline le xs:date('2028-03-20')]
+
+  XProc 3.0 inclusion:
+    This document is loaded by pipeline.xpl via p:document and traversed
+    by the dependency resolver step before batches are scheduled.
+
+  Entities in dialog (see dialog.xml for the envelope format):
+    google   — Google Photos source/target
+    apple    — Apple Photos source/target
+
+  ISO 8601 dates used throughout.  All deadlines are qualified with
+  timezone offset; the canonical reference timezone is UTC+00:00.
+
+  Batch status values
+  ───────────────────
+    pending     — not yet scheduled
+    queued      — assigned to a sprint, awaiting processing
+    processing  — actively being compressed/transferred
+    done        — successfully transferred and verified
+    blocked     — blocked by a compliance hold or a dependency
+    failed      — terminal failure; requires human review
+-->
+<dependency-graph
+    xmlns:xi="http://www.w3.org/2001/XInclude"
+    xmlns:xs="http://www.w3.org/2001/XMLSchema"
+    xmlns:sg="https://singine.local/photos/1.0"
+    version="1.0"
+    created="2026-03-02"
+    deadline="2028-03-20">
+
+
+  <!-- ══════════════════════════════════════════════════
+       §1  ENTITIES
+       The two nodes in the request/response dialog.
+       ══════════════════════════════════════════════════ -->
+
+  <entities>
+
+    <entity id="google"
+            label="Google Photos"
+            protocol="https"
+            api-base="https://photoslibrary.googleapis.com/v1"
+            auth="oauth2"
+            role="source">
+      <capabilities>
+        <cap name="export-originals"   supported="true"/>
+        <cap name="export-compressed"  supported="true"/>
+        <cap name="import"             supported="true"/>
+        <cap name="metadata-sidecar"   supported="true"/><!-- JSON sidecar -->
+      </capabilities>
+    </entity>
+
+    <entity id="apple"
+            label="Apple Photos"
+            protocol="osxphotos"
+            api-base="local://Photos.app"
+            auth="system-keychain"
+            role="target">
+      <capabilities>
+        <cap name="import-heic"        supported="true"/>
+        <cap name="import-jpeg"        supported="true"/>
+        <cap name="import-raw"         supported="true"/>
+        <cap name="metadata-xmp"       supported="true"/>
+        <cap name="live-photo"         supported="true"/>
+        <cap name="album-create"       supported="true"/>
+      </capabilities>
+    </entity>
+
+  </entities>
+
+
+  <!-- ══════════════════════════════════════════════════
+       §2  COMPLIANCE REFERENCE
+       ══════════════════════════════════════════════════ -->
+
+  <!--
+    Compliance data is maintained in a separate document to allow
+    independent update cycles (sanctions lists change frequently).
+    XPL inclusion merges it into this graph at pipeline run time.
+  -->
+  <xi:include href="compliance.xml"
+              xpointer="xmlns(sg=https://singine.local/photos/1.0)
+                        xpointer(//sg:compliance)"/>
+
+
+  <!-- ══════════════════════════════════════════════════
+       §3  SPRINT SCHEDULE
+       One sprint = one season (approx. 13 weeks).
+       Deadline: 2028-03-20 (spring equinox, Northern Hemisphere).
+       ══════════════════════════════════════════════════ -->
+
+  <sprints deadline="2028-03-20T00:00:00Z">
+
+    <!-- Sprint 1: 2026-Q2 -->
+    <sprint id="s01" season="spring-2026"
+            start="2026-03-21" end="2026-06-20"
+            focus="inventory-and-schema"/>
+
+    <!-- Sprint 2: 2026-Q3 -->
+    <sprint id="s02" season="summer-2026"
+            start="2026-06-21" end="2026-09-21"
+            focus="google-export-pipeline"/>
+
+    <!-- Sprint 3: 2026-Q4 -->
+    <sprint id="s03" season="autumn-2026"
+            start="2026-09-22" end="2026-12-20"
+            focus="compression-pipeline"/>
+
+    <!-- Sprint 4: 2027-Q1 -->
+    <sprint id="s04" season="winter-2026"
+            start="2026-12-21" end="2027-03-19"
+            focus="compliance-screening"/>
+
+    <!-- Sprint 5: 2027-Q2 -->
+    <sprint id="s05" season="spring-2027"
+            start="2027-03-20" end="2027-06-20"
+            focus="apple-import-pipeline"/>
+
+    <!-- Sprint 6: 2027-Q3 -->
+    <sprint id="s06" season="summer-2027"
+            start="2027-06-21" end="2027-09-21"
+            focus="validation-and-dedup"/>
+
+    <!-- Sprint 7: 2027-Q4 -->
+    <sprint id="s07" season="autumn-2027"
+            start="2027-09-22" end="2027-12-20"
+            focus="batch-reconciliation"/>
+
+    <!-- Sprint 8: 2028-Q1 — final sprint before deadline -->
+    <sprint id="s08" season="winter-2027"
+            start="2027-12-21" end="2028-03-20"
+            focus="final-verification-and-cutover"/>
+
+  </sprints>
+
+
+  <!-- ══════════════════════════════════════════════════
+       §4  PHOTO BATCHES
+       Each batch is a unit of work for one sprint.
+       Dependencies between batches are declared here
+       and resolved by the XPL pipeline.
+       ══════════════════════════════════════════════════ -->
+
+  <batches>
+
+    <!--
+      batch/@id          unique identifier
+      batch/@sprint      which sprint processes this batch
+      batch/@status      lifecycle state (see header)
+      batch/@depends-on  space-separated list of batch IDs that must
+                         complete before this batch can start
+      batch/@source      entity id of the originating store
+      batch/@target      entity id of the destination store
+
+      XPath to find all pending batches for a given sprint:
+        //batch[@sprint='s01'][@status='pending']
+
+      XPath to find batches blocked by compliance:
+        //batch[compliance-hold]
+    -->
+
+    <!-- Batch 1: inventory Google Photos library -->
+    <batch id="b01" sprint="s01" status="pending"
+           source="google" target="apple"
+           compression="none"
+           label="Google Photos inventory">
+      <description>
+        Export the full library manifest from Google Photos (no binaries).
+        Produces a JSON/XML sidecar index used by downstream batches.
+      </description>
+      <outputs>
+        <output type="manifest" path="batches/b01-manifest.xml"/>
+      </outputs>
+    </batch>
+
+    <!-- Batch 2: originals (uncompressed), small volume -->
+    <batch id="b02" sprint="s02" status="pending"
+           depends-on="b01"
+           source="google" target="apple"
+           compression="lossless-heic"
+           label="Original RAW and HEIC photos">
+      <description>
+        Export original RAW and HEIC files.  Lossless HEIC re-encoding
+        where the source is not already HEIC.
+      </description>
+      <compliance-check ref="cc01"/>
+    </batch>
+
+    <!-- Batch 3: JPEG library — maximum compression sprint -->
+    <batch id="b03" sprint="s03" status="pending"
+           depends-on="b02"
+           source="google" target="apple"
+           compression="lossy-avif-q60"
+           label="JPEG archive — AVIF re-encoded at q=60">
+      <description>
+        Highest-volume batch.  All JPEG originals are re-encoded as
+        AVIF at quality=60, reducing size by ~70% vs JPEG baseline.
+        Originals retained in cold storage; AVIF copies transferred.
+      </description>
+      <compliance-check ref="cc01"/>
+      <compression-params>
+        <param name="encoder"         value="libavif"/>
+        <param name="quality"         value="60"/>
+        <param name="speed"           value="6"/>
+        <param name="chroma-subsampling" value="4:2:0"/>
+      </compression-params>
+    </batch>
+
+    <!-- Batch 4: compliance screening before import -->
+    <batch id="b04" sprint="s04" status="pending"
+           depends-on="b03"
+           source="local" target="local"
+           compression="none"
+           label="Compliance screening — sanctions + country restrictions">
+      <description>
+        Screen all photos for GPS metadata against sanctioned territories
+        and country-of-origin restrictions.  Photos with high-risk
+        provenance are quarantined pending insurance review.
+      </description>
+      <outputs>
+        <output type="clearance-report" path="batches/b04-clearance.xml"/>
+        <output type="quarantine-list"  path="batches/b04-quarantine.xml"/>
+      </outputs>
+    </batch>
+
+    <!-- Batch 5: Apple Photos import of cleared photos -->
+    <batch id="b05" sprint="s05" status="pending"
+           depends-on="b04"
+           source="local" target="apple"
+           compression="none"
+           label="Apple Photos import (cleared photos only)">
+      <description>
+        Import all compliance-cleared AVIF/HEIC batches into Apple Photos.
+        Albums mirror the original Google Photos album structure.
+      </description>
+      <compliance-check ref="cc02"/>
+    </batch>
+
+    <!-- Batch 6: validation + deduplication -->
+    <batch id="b06" sprint="s06" status="pending"
+           depends-on="b05"
+           source="apple" target="local"
+           compression="none"
+           label="Validation — hash verification and deduplication">
+      <description>
+        Verify SHA-256 hash of every imported photo against the source
+        manifest.  Remove duplicates introduced by album overlap.
+      </description>
+      <outputs>
+        <output type="validation-report" path="batches/b06-validation.xml"/>
+      </outputs>
+    </batch>
+
+    <!-- Batch 7: reconciliation against Google Photos -->
+    <batch id="b07" sprint="s07" status="pending"
+           depends-on="b06"
+           source="google" target="apple"
+           compression="none"
+           label="Reconciliation — diff against Google source">
+      <description>
+        Compare the Apple Photos library against the Google Photos
+        manifest.  Schedule re-transfer of any missing items.
+      </description>
+    </batch>
+
+    <!-- Batch 8: final cutover -->
+    <batch id="b08" sprint="s08" status="pending"
+           depends-on="b07"
+           source="google" target="apple"
+           compression="lossless-heic"
+           label="Final cutover — Live Photos and stragglers">
+      <description>
+        Transfer Live Photos and any items not processed in earlier batches.
+        Hard deadline: 2028-03-20T00:00:00Z.
+      </description>
+      <deadline>2028-03-20T00:00:00Z</deadline>
+    </batch>
+
+  </batches>
+
+
+</dependency-graph>
