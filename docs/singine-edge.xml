@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  singine-edge.xml — DocBook source for the singine-edge man page
+  ===============================================================
+  Focuses on the operational workflows for the Collibra Edge stack,
+  including repeatable file staging from the local workstation into
+  the live Kubernetes runtime.
+-->
+<!DOCTYPE refentry PUBLIC
+  "-//OASIS//DTD DocBook XML V4.5//EN"
+  "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd">
+
+<refentry xmlns="http://docbook.org/ns/docbook"
+          xmlns:xl="http://www.w3.org/1999/xlink"
+          xmlns:dc="http://purl.org/dc/elements/1.1/"
+          xml:lang="en"
+          version="5.0">
+
+  <info>
+    <dc:title>singine-edge</dc:title>
+    <dc:creator>Sina K. Heshmati</dc:creator>
+    <dc:date>2026-03-25</dc:date>
+    <dc:format>application/docbook+xml</dc:format>
+    <dc:identifier>urn:singine:doc:edge:man:1</dc:identifier>
+    <dc:subject>Collibra Edge lifecycle and Kubernetes file staging</dc:subject>
+    <dc:description>singine edge — manage Collibra Edge and stage local files into the live Kubernetes runtime</dc:description>
+    <dc:language>en</dc:language>
+    <dc:rights>Copyright 2026 Sina K. Heshmati. All rights reserved.</dc:rights>
+  </info>
+
+  <refmeta>
+    <refentrytitle>singine-edge</refentrytitle>
+    <manvolnum>1</manvolnum>
+    <refmiscinfo class="source">Singine Platform</refmiscinfo>
+    <refmiscinfo class="version">1.0.0</refmiscinfo>
+    <refmiscinfo class="manual">Singine User Commands</refmiscinfo>
+  </refmeta>
+
+  <refnamediv>
+    <refname>singine-edge</refname>
+    <refpurpose>build, deploy, verify, and operate the Collibra Edge stack</refpurpose>
+  </refnamediv>
+
+  <refsynopsisdiv>
+    <title>Synopsis</title>
+
+    <cmdsynopsis>
+      <command>singine collibra edge site init</command>
+      <arg choice="req"><replaceable>NAME</replaceable></arg>
+      <arg><option>--namespace</option> <replaceable>NAMESPACE</replaceable></arg>
+    </cmdsynopsis>
+
+    <cmdsynopsis>
+      <command>singine collibra edge files sync</command>
+      <arg choice="req"><replaceable>SOURCE</replaceable></arg>
+      <arg><option>--component</option> <replaceable>COMPONENT</replaceable></arg>
+      <arg><option>--namespace</option> <replaceable>NAMESPACE</replaceable></arg>
+      <arg><option>--dest</option> <replaceable>REMOTE_PATH</replaceable></arg>
+      <arg><option>--dry-run</option></arg>
+    </cmdsynopsis>
+
+    <cmdsynopsis>
+      <command>singine collibra edge files ls</command>
+      <arg><replaceable>PATH</replaceable></arg>
+      <arg><option>--component</option> <replaceable>COMPONENT</replaceable></arg>
+      <arg><option>--namespace</option> <replaceable>NAMESPACE</replaceable></arg>
+    </cmdsynopsis>
+  </refsynopsisdiv>
+
+  <refsect1>
+    <title>Description</title>
+    <para>
+      <command>singine edge</command> is the operator command surface for the
+      Collibra Edge stack. In the current Kubernetes deployment, the most
+      useful repeatable workflow is staging local files from the workstation
+      into the running Edge runtime so later ingestion jobs can consume them.
+    </para>
+    <para>
+      The default staging target is the
+      <literal>collibra-edge-objects-server</literal> pod in namespace
+      <literal>collibra-edge</literal>. The default remote path is
+      <filename>/tmp/singine</filename>.
+    </para>
+  </refsect1>
+
+  <refsect1>
+    <title>Repeatable directory staging workflow</title>
+    <orderedlist>
+      <listitem>
+        <para>
+          Prepare a local staging directory, for example
+          <filename>/tmp/singine</filename>.
+        </para>
+      </listitem>
+      <listitem>
+        <para>
+          Sync the directory into the live Edge pod:
+        </para>
+        <programlisting language="bash">python3 -m singine.command collibra edge files sync /tmp/singine --dest /tmp/singine</programlisting>
+      </listitem>
+      <listitem>
+        <para>
+          Verify the staged files in the pod:
+        </para>
+        <programlisting language="bash">python3 -m singine.command collibra edge files ls /tmp/singine</programlisting>
+      </listitem>
+      <listitem>
+        <para>
+          For a different local directory, repeat the same pattern and choose a
+          matching remote destination:
+        </para>
+        <programlisting language="bash">python3 -m singine.command collibra edge files sync /tmp/my-dataset --dest /tmp/my-dataset</programlisting>
+      </listitem>
+    </orderedlist>
+  </refsect1>
+
+  <refsect1>
+    <title>Operational semantics</title>
+    <variablelist>
+      <varlistentry>
+        <term><option>--component</option></term>
+        <listitem>
+          <para>
+            Target Edge component. Default:
+            <literal>collibra-edge-objects-server</literal>.
+          </para>
+        </listitem>
+      </varlistentry>
+      <varlistentry>
+        <term><option>--namespace</option></term>
+        <listitem>
+          <para>
+            Kubernetes namespace. Default:
+            <literal>collibra-edge</literal>.
+          </para>
+        </listitem>
+      </varlistentry>
+      <varlistentry>
+        <term><option>--dest</option></term>
+        <listitem>
+          <para>
+            Remote destination path inside the pod. The command preserves the
+            relative file layout beneath the source directory.
+          </para>
+        </listitem>
+      </varlistentry>
+      <varlistentry>
+        <term><option>--dry-run</option></term>
+        <listitem>
+          <para>
+            Print the sync plan without writing to the pod.
+          </para>
+        </listitem>
+      </varlistentry>
+    </variablelist>
+    <para>
+      This workflow stages files into pod-local writable storage, not a
+      persistent host mount. If the target pod is recreated, run the sync again.
+    </para>
+  </refsect1>
+
+  <refsect1>
+    <title>Examples</title>
+    <programlisting language="bash"># Stage the default sqlite payload
+python3 -m singine.command collibra edge files sync /tmp/singine --dest /tmp/singine
+
+# Stage a single file under an explicit path
+python3 -m singine.command collibra edge files sync /tmp/singine/sqlite.db --dest /tmp/singine/sqlite.db
+
+# Preview what would be copied without mutating the pod
+python3 -m singine.command collibra edge files sync /tmp/singine --dest /tmp/singine --dry-run
+
+# Inspect the remote directory afterwards
+python3 -m singine.command collibra edge files ls /tmp/singine</programlisting>
+  </refsect1>
+
+  <refsect1>
+    <title>See also</title>
+    <para>
+      <citerefentry><refentrytitle>singine</refentrytitle><manvolnum>1</manvolnum></citerefentry>
+      and
+      <citerefentry><refentrytitle>singine-edge</refentrytitle><manvolnum>1</manvolnum></citerefentry>.
+    </para>
+  </refsect1>
+</refentry>
