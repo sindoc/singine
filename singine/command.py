@@ -5631,70 +5631,6 @@ def build_parser() -> argparse.ArgumentParser:
     mv_parser.add_argument("--json", action="store_true", help="Emit JSON")
     mv_parser.set_defaults(func=cmd_transfer_move)
 
-    find_parser = sub.add_parser(
-        "find",
-        help="Find filesystem paths related to a topic",
-    )
-    find_parser.add_argument(
-        "activity",
-        choices=["filesAboutTopic"],
-        help="Activity to invoke. Use filesAboutTopic to search path names by topic.",
-    )
-    find_parser.add_argument("topic", help="Topic fragment to match in file or directory names")
-    find_parser.add_argument(
-        "--root-dir",
-        default=".",
-        help="Directory to search from (default: current directory)",
-    )
-    find_parser.add_argument(
-        "--max-depth",
-        type=int,
-        default=3,
-        help="Maximum directory depth to traverse below the root (default: 3)",
-    )
-    find_parser.add_argument(
-        "--type",
-        dest="path_type",
-        choices=["any", "file", "dir"],
-        default="any",
-        help="Restrict matches to files, directories, or either (default: any)",
-    )
-    find_parser.add_argument(
-        "-0", "--null",
-        action="store_true",
-        help="Emit NUL-delimited paths instead of newline-delimited paths",
-    )
-    find_parser.add_argument("--json", action="store_true", help="Emit JSON")
-    find_parser.set_defaults(func=cmd_transfer_find)
-
-    mv_parser = sub.add_parser(
-        "mv",
-        help="Move filesystem paths from stdin into a destination directory",
-    )
-    mv_parser.add_argument(
-        "activity",
-        choices=["fileListTo"],
-        help="Activity to invoke. Use fileListTo to move stdin-listed files into a directory.",
-    )
-    mv_parser.add_argument("dest_dir", help="Destination directory")
-    mv_parser.add_argument(
-        "-0", "--null",
-        action="store_true",
-        help="Read NUL-delimited paths from stdin instead of newline-delimited paths",
-    )
-    mv_parser.add_argument(
-        "--mkdir",
-        action="store_true",
-        help="Create the destination directory if it does not exist",
-    )
-    mv_parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Report planned moves without changing the filesystem",
-    )
-    mv_parser.add_argument("--json", action="store_true", help="Emit JSON")
-    mv_parser.set_defaults(func=cmd_transfer_move)
-
     transfer_parser = sub.add_parser(
         "transfer",
         help="File transfer, queues, stacks, and XML request/response processing",
@@ -5997,6 +5933,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     # singine collibra edge — full edge stack (reuses singine.edge handlers)
     add_edge_parser(collibra_sub)
+
+    # singine collibra io — governed Collibra I/O workflows
+    from .collibra_io import add_collibra_io_parser
+    add_collibra_io_parser(collibra_sub)
 
     # singine collibra id / contract / server — loaded from collibra repo
     from .collibra_idgen import add_collibra_subcommands
