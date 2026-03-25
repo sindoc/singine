@@ -41,6 +41,21 @@
       <arg><option>--password</option> <replaceable>PASSWORD</replaceable></arg>
       <arg><option>--replace</option></arg>
     </cmdsynopsis>
+    <cmdsynopsis>
+      <command>singine pg list databases</command>
+      <arg><option>--json</option></arg>
+    </cmdsynopsis>
+    <cmdsynopsis>
+      <command>singine pg list schemas</command>
+      <arg><option>--db-name</option> <replaceable>NAME</replaceable></arg>
+      <arg><option>--json</option></arg>
+    </cmdsynopsis>
+    <cmdsynopsis>
+      <command>singine pg list tables</command>
+      <arg><option>--db-name</option> <replaceable>NAME</replaceable></arg>
+      <arg><option>--schema</option> <replaceable>NAME</replaceable></arg>
+      <arg><option>--json</option></arg>
+    </cmdsynopsis>
   </refsynopsisdiv>
 
   <refsect1>
@@ -90,6 +105,17 @@
         <programlisting language="bash">python3 -m singine.command pg create database fromSQLite /tmp/singine/sqlite.db --db-name singine_bridge --replace</programlisting>
       </listitem>
     </orderedlist>
+  </refsect1>
+
+  <refsect1>
+    <title>Inspection</title>
+    <para>
+      After importing a database, use the list commands to inspect which
+      databases, schemas, and tables are available.
+    </para>
+    <programlisting language="bash">python3 -m singine.command pg list databases</programlisting>
+    <programlisting language="bash">python3 -m singine.command pg list schemas --db-name singine_bridge</programlisting>
+    <programlisting language="bash">python3 -m singine.command pg list tables --db-name singine_bridge --schema public</programlisting>
   </refsect1>
 
   <refsect1>
