@@ -11,6 +11,7 @@ import argparse
 import json
 import os
 import secrets
+import shlex
 import shutil
 import stat
 import subprocess
@@ -303,6 +304,51 @@ def install_xmldoclet_tool(json_output: bool = False) -> int:
     return 0 if payload["ok"] else 1
 
 
+def install_git_filter_repo_tool(json_output: bool = False) -> int:
+    existing = shutil.which("git-filter-repo")
+    if existing:
+        payload = {"ok": True, "tool": "git-filter-repo", "installed": False, "path": existing}
+        if json_output:
+            print_json(payload)
+        else:
+            print(f"git-filter-repo already installed: {existing}")
+        return 0
+
+    brew = shutil.which("brew")
+    if not brew:
+        payload = {
+            "ok": False,
+            "tool": "git-filter-repo",
+            "installed": False,
+            "error": "Homebrew is not available on PATH; cannot install git-filter-repo automatically.",
+        }
+        if json_output:
+            print_json(payload)
+        else:
+            print(payload["error"], file=sys.stderr)
+        return 1
+
+    proc = subprocess.run([brew, "install", "git-filter-repo"], capture_output=True, text=True, timeout=1800)
+    payload = {
+        "ok": proc.returncode == 0,
+        "tool": "git-filter-repo",
+        "installed": proc.returncode == 0,
+        "stdout": proc.stdout,
+        "stderr": proc.stderr,
+        "path": shutil.which("git-filter-repo"),
+    }
+    if json_output:
+        print_json(payload)
+    else:
+        if proc.stdout:
+            print(proc.stdout, end="")
+        if proc.stderr:
+            print(proc.stderr, end="", file=sys.stderr)
+        if payload["ok"] and payload["path"]:
+            print(f"git-filter-repo installed: {payload['path']}")
+    return 0 if payload["ok"] else 1
+
+
 def print_json(value: Any) -> None:
     print(json.dumps(value, indent=2))
 
@@ -323,6 +369,272 @@ def run_capture(cmd: List[str]) -> Dict[str, Any]:
             "stdout": "",
             "stderr": str(exc),
         }
+
+
+def _git_capture(args: Sequence[str], *, cwd: Path, check: bool = True, timeout: int = 60) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        ["git", *args],
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        check=check,
+        timeout=timeout,
+    )
+
+
+def _normalize_public_dir(raw_path: str) -> str:
+    value = raw_path.strip().replace("\\", "/").strip("/")
+    if not value:
+        raise ValueError("public directory path must not be empty")
+    if raw_path.startswith("/"):
+        raise ValueError("public directory path must be relative, not absolute")
+    parts = [part for part in value.split("/") if part]
+    if any(part in {".", ".."} for part in parts):
+        raise ValueError("public directory path must not contain '.' or '..'")
+    return "/".join(parts)
+
+
+def _remote_aliases(remote_url: str, repo_root: Path) -> List[str]:
+    aliases: List[str] = []
+    cleaned = (remote_url or "").strip()
+    if cleaned.endswith(".git"):
+        cleaned = cleaned[:-4]
+    if "github.com:" in cleaned:
+        cleaned = cleaned.split("github.com:", 1)[1]
+    elif "github.com/" in cleaned:
+        cleaned = cleaned.split("github.com/", 1)[1]
+    cleaned = cleaned.strip("/")
+    if cleaned:
+        aliases.extend([
+            f"github/{cleaned}",
+            cleaned,
+            cleaned.split("/")[-1],
+        ])
+    repo_name = repo_root.name
+    if repo_name not in aliases:
+        aliases.append(repo_name)
+    short_alias = f"github/{repo_name}"
+    if short_alias not in aliases:
+        aliases.append(short_alias)
+    seen: List[str] = []
+    for alias in aliases:
+        if alias not in seen:
+            seen.append(alias)
+    return seen
+
+
+def _render_shell_lines(commands: List[List[str]]) -> List[str]:
+    return [shlex.join(cmd) for cmd in commands]
+
+
+def _list_local_branches(repo_root: Path) -> List[str]:
+    result = _git_capture(["for-each-ref", "--format=%(refname:short)", "refs/heads"], cwd=repo_root, check=False)
+    if result.returncode != 0:
+        return []
+    return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+
+
+def _branch_contains_path(repo_root: Path, branch: str, pathspec: str) -> bool:
+    result = _git_capture(["rev-list", "-n", "1", branch, "--", pathspec], cwd=repo_root, check=False)
+    return result.returncode == 0 and bool(result.stdout.strip())
+
+
+def _plan_git_rm_public_dir(args: argparse.Namespace) -> Dict[str, Any]:
+    repo_dir = Path(args.repo_dir).expanduser().resolve()
+    git_bin = shutil.which("git")
+    filter_repo_bin = shutil.which("git-filter-repo")
+    normalized_dir = _normalize_public_dir(args.public_dir)
+    dir_with_slash = f"{normalized_dir}/"
+    requested_branches = list(dict.fromkeys(args.branch or []))
+
+    payload: Dict[str, Any] = {
+        "ok": True,
+        "repo": args.repo,
+        "repo_dir": str(repo_dir),
+        "remote": args.remote,
+        "public_dir": normalized_dir,
+        "public_dir_filter": dir_with_slash,
+        "branches": [],
+        "refs": [],
+        "all_branches": bool(getattr(args, "all_branches", False)),
+        "git_available": bool(git_bin),
+        "filter_repo_available": bool(filter_repo_bin),
+        "warnings": [],
+    }
+
+    if not git_bin:
+        payload["ok"] = False
+        payload["warnings"].append("git is not on PATH")
+        return payload
+
+    top = _git_capture(["rev-parse", "--show-toplevel"], cwd=repo_dir, check=False)
+    if top.returncode != 0:
+        payload["ok"] = False
+        payload["warnings"].append("repo-dir is not inside a git worktree")
+        payload["git_stderr"] = top.stderr.strip()
+        return payload
+
+    repo_root = Path(top.stdout.strip())
+    payload["repo_root"] = str(repo_root)
+
+    remote_result = _git_capture(["remote", "get-url", args.remote], cwd=repo_root, check=False)
+    remote_url = remote_result.stdout.strip() if remote_result.returncode == 0 else ""
+    payload["remote_url"] = remote_url
+    aliases = _remote_aliases(remote_url, repo_root)
+    payload["repo_aliases"] = aliases
+    payload["repo_matches_current_repo"] = args.repo in aliases
+    if not payload["repo_matches_current_repo"]:
+        payload["warnings"].append(
+            f"requested repo '{args.repo}' does not match detected aliases {aliases}"
+        )
+
+    auto_branches: List[str] = []
+    if getattr(args, "all_branches", False):
+        local_branches = _list_local_branches(repo_root)
+        auto_branches = [branch for branch in local_branches if _branch_contains_path(repo_root, branch, dir_with_slash)]
+        payload["all_branch_scan"] = {
+            "scope": "local-heads",
+            "scanned": local_branches,
+            "matched": auto_branches,
+        }
+        payload["warnings"].append(
+            "all-branch discovery only scans local heads; fetch any missing branches before rewriting"
+        )
+
+    branches = list(dict.fromkeys(requested_branches + auto_branches))
+    if not branches:
+        if getattr(args, "all_branches", False):
+            raise ValueError(f"no local branches contain '{dir_with_slash}'")
+        raise ValueError("at least one --branch is required unless you pass -all")
+    payload["branches"] = branches
+    payload["refs"] = [f"refs/heads/{branch}" for branch in branches]
+
+    branch_status: List[Dict[str, Any]] = []
+    for branch in branches:
+        ref = f"refs/heads/{branch}"
+        show_ref = _git_capture(["show-ref", "--verify", ref], cwd=repo_root, check=False)
+        branch_status.append({
+            "branch": branch,
+            "ref": ref,
+            "exists_locally": show_ref.returncode == 0,
+        })
+        if show_ref.returncode != 0:
+            payload["warnings"].append(f"branch '{branch}' is not present locally under {ref}")
+    payload["branch_status"] = branch_status
+
+    rewrite_commands = [
+        shlex.join(["git", "filter-repo", "--path", dir_with_slash, "--invert-paths", "--refs", *payload["refs"]]),
+        "git for-each-ref --format='delete %(refname)' refs/original | git update-ref --stdin",
+        shlex.join(["git", "reflog", "expire", "--expire=now", "--all"]),
+        shlex.join(["git", "gc", "--prune=now"]),
+    ]
+    push_commands = [
+        ["git", "push", "--force-with-lease", args.remote, f"refs/heads/{branch}:refs/heads/{branch}"]
+        for branch in branches
+    ]
+    verify_commands = [
+        ["git", "fetch", args.remote, "--prune"],
+        ["git", "log", "--", dir_with_slash],
+    ]
+    payload["commands"] = {
+        "rewrite": rewrite_commands,
+        "push": _render_shell_lines(push_commands),
+        "verify": _render_shell_lines(verify_commands),
+    }
+    payload["recommended_workflow"] = [
+        "Work in a dedicated rewrite clone, not in your normal development checkout.",
+        "Rewrite every affected branch with git-filter-repo so the directory disappears from history, not just from HEAD.",
+        "Force-push each rewritten branch after temporarily handling any branch protection rules.",
+        "Ask collaborators to reclone or hard-reset after the rewrite so the deleted history does not get reintroduced.",
+    ]
+    if not filter_repo_bin:
+        payload["warnings"].append("git-filter-repo is not on PATH; install it before running the rewrite step")
+    return payload
+
+
+def _print_git_rm_public_dir_plan(payload: Dict[str, Any]) -> None:
+    print(f"repo: {payload['repo']} ({payload.get('remote_url') or 'remote URL unavailable'})")
+    print(f"repo dir: {payload['repo_dir']}")
+    print(f"public dir: {payload['public_dir_filter']}")
+    print(f"branches: {', '.join(payload['branches'])}")
+    print("")
+    print("Why this is not plain git rm:")
+    print("Removing the directory from the current branch tip is not enough.")
+    print("You need a history rewrite so the directory disappears from every targeted branch history.")
+    print("")
+    print("Recommended workflow:")
+    for step in payload["recommended_workflow"]:
+        print(f"- {step}")
+    print("")
+    print("Rewrite commands:")
+    for line in payload["commands"]["rewrite"]:
+        print(f"  {line}")
+    print("")
+    print("Push commands:")
+    for line in payload["commands"]["push"]:
+        print(f"  {line}")
+    print("")
+    print("Verification commands:")
+    for line in payload["commands"]["verify"]:
+        print(f"  {line}")
+    if payload.get("warnings"):
+        print("")
+        print("Warnings:")
+        for warning in payload["warnings"]:
+            print(f"- {warning}")
+
+
+def cmd_git_rm_public_dir(args: argparse.Namespace) -> int:
+    try:
+        payload = _plan_git_rm_public_dir(args)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+
+    if args.execute:
+        if not payload.get("ok"):
+            if args.json:
+                print_json(payload)
+            else:
+                _print_git_rm_public_dir_plan(payload)
+            return 1
+        if not payload.get("filter_repo_available"):
+            print("git-filter-repo is required for --execute", file=sys.stderr)
+            return 1
+        repo_root = Path(payload["repo_root"])
+        rewrite = subprocess.run(
+            [
+                "git-filter-repo",
+                "--path", payload["public_dir_filter"],
+                "--invert-paths",
+                "--refs", *payload["refs"],
+            ],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+        )
+        payload["execute"] = {
+            "ran": True,
+            "returncode": rewrite.returncode,
+            "stdout": rewrite.stdout,
+            "stderr": rewrite.stderr,
+        }
+        if args.json:
+            print_json(payload)
+        else:
+            _print_git_rm_public_dir_plan(payload)
+            print("")
+            if rewrite.stdout.strip():
+                print(rewrite.stdout.rstrip())
+            if rewrite.stderr.strip():
+                print(rewrite.stderr.rstrip(), file=sys.stderr)
+        return 0 if rewrite.returncode == 0 else 1
+
+    if args.json:
+        print_json(payload)
+    else:
+        _print_git_rm_public_dir_plan(payload)
+    return 0 if payload.get("ok") else 1
 
 
 def runtime_capabilities() -> Dict[str, Any]:
@@ -744,17 +1056,25 @@ def cmd_install(args: argparse.Namespace) -> int:
         return install_ant_tool(json_output=getattr(args, "json", False))
     if getattr(args, "subject", "singine") == "xmldoclet":
         return install_xmldoclet_tool(json_output=getattr(args, "json", False))
+    if getattr(args, "subject", "singine") == "git-filter-repo":
+        return install_git_filter_repo_tool(json_output=getattr(args, "json", False))
 
     prefix = Path(args.prefix).expanduser()
     launcher = install_launcher(prefix)
     install_manpages(prefix)
     shell_updates = ensure_shell_paths(prefix, args.shell)
+    installed_tools: List[Dict[str, Any]] = []
+    if getattr(args, "mode", "base") == "workstation":
+        tool_result = {"tool": "git-filter-repo", "ok": install_git_filter_repo_tool(json_output=False) == 0}
+        installed_tools.append(tool_result)
     payload = {
         "prefix": str(prefix),
         "launcher": str(launcher),
         "manpath": str(installed_man_path(prefix)),
         "shell_init": shell_updates,
         "shell": args.shell,
+        "mode": getattr(args, "mode", "base"),
+        "tools": installed_tools,
     }
     if args.json:
         print_json(payload)
@@ -762,9 +1082,15 @@ def cmd_install(args: argparse.Namespace) -> int:
         print(f"installed launcher: {launcher}")
         print(f"installed manpages: {installed_man_path(prefix)}")
         print(f"updated shell init: {shell_updates}")
+        if installed_tools:
+            print(f"install mode: {payload['mode']}")
+            for item in installed_tools:
+                print(f"tool {item['tool']}: {'ok' if item['ok'] else 'failed'}")
         print("open a new shell or run:")
         for _, rc in shell_updates.items():
             print(f". {rc}")
+    if any(not item["ok"] for item in installed_tools):
+        return 1
     return 0
 
 
@@ -3032,11 +3358,30 @@ def build_parser() -> argparse.ArgumentParser:
     man_parser.set_defaults(func=cmd_man)
 
     install_parser = sub.add_parser("install", help="Install singine or selected local tool dependencies")
-    install_parser.add_argument("subject", nargs="?", choices=["singine", "ant", "xmldoclet"], default="singine")
+    install_parser.add_argument("subject", nargs="?", choices=["singine", "ant", "xmldoclet", "git-filter-repo"], default="singine")
     install_parser.add_argument("--prefix", default=str(DEFAULT_PREFIX))
     install_parser.add_argument("--shell", choices=["bash", "sh", "all"], default="all")
+    install_parser.add_argument("--mode", choices=["base", "workstation"], default="base")
     install_parser.add_argument("--json", action="store_true")
     install_parser.set_defaults(func=cmd_install)
+
+    git_parser = sub.add_parser("git", help="Git rewrite and repository hygiene helpers")
+    git_sub = git_parser.add_subparsers(dest="git_subcommand")
+    git_parser.set_defaults(func=lambda a: (git_parser.print_help(), 1)[1])
+
+    git_rm_public_dir = git_sub.add_parser(
+        "rm-public-dir",
+        help="Plan or run a git-filter-repo rewrite that removes one public directory from selected branch histories",
+    )
+    git_rm_public_dir.add_argument("repo", help="Repo identifier, for example github/singine or github/sindoc/singine")
+    git_rm_public_dir.add_argument("public_dir", help="Relative directory path to remove from history, for example prod/Q3")
+    git_rm_public_dir.add_argument("--branch", action="append", help="Branch to rewrite; repeatable")
+    git_rm_public_dir.add_argument("-all", "--all", dest="all_branches", action="store_true", help="Discover every local branch whose history contains the target directory")
+    git_rm_public_dir.add_argument("--remote", default="origin", help="Git remote to inspect and push later")
+    git_rm_public_dir.add_argument("--repo-dir", default=".", help="Local clone to inspect or rewrite")
+    git_rm_public_dir.add_argument("--execute", action="store_true", help="Run git-filter-repo locally after planning")
+    git_rm_public_dir.add_argument("--json", action="store_true", help="Emit the plan as JSON")
+    git_rm_public_dir.set_defaults(func=cmd_git_rm_public_dir)
 
     template_parser = sub.add_parser("template", help="Generate Singine-aware project templates")
     template_sub = template_parser.add_subparsers(dest="template_command")

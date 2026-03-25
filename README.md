@@ -38,6 +38,8 @@ Install a stable local `singine` command with POSIX shell support:
 
 ```bash
 make install
+# or install the workstation profile, including git-filter-repo
+make install-workstation
 # or
 make install-bash
 # or
@@ -56,12 +58,18 @@ That installs:
 
 The launcher is `sh`-compatible, so it works from both `bash` and POSIX `sh`.
 `make install` updates both `~/.bashrc` and `~/.profile`.
+For development machines, prefer `make install-workstation` or
+`singine install --mode workstation`; that profile also ensures
+`git-filter-repo` is available so history rewrites such as
+`singine git rm-public-dir ...` are ready when needed.
 Use `singine context` to distinguish the live `terminal context` from the inherited
 `sourced environment`, following the glossary under
 `/Users/skh/ws/today/00-WORK/morning_glossary_package`.
 If `ant` is missing, run `singine install ant` so the Ant-based Singine and SilkPage
 targets can execute. If `xmldoclet` is missing, run `singine install xmldoclet`
 before `ant javadoc-xml`.
+If you only need the history-rewrite tool directly, run
+`singine install git-filter-repo`.
 
 Examples:
 
@@ -85,6 +93,23 @@ singine server test-case /tmp/singine-server-case
 singine logseq inspect --json
 singine snapshot save --json
 ```
+
+## Removing an accidental public directory
+
+If a directory should never have landed in the public repo, do not use plain
+`git rm` by itself. That only removes the directory from the current tip; it does
+not remove it from branch history.
+
+Use the Singine planner to generate the exact rewrite and push commands:
+
+```bash
+singine git rm-public-dir github/singine prod/Q3 \
+  -all
+```
+
+That command prints the `git filter-repo` rewrite step and the explicit
+`git push --force-with-lease` commands for each affected branch. The reusable
+playbook lives in [`docs/git-rm-public-dir.md`](docs/git-rm-public-dir.md).
 
 ## Local server, edge, docker, and snapshots
 

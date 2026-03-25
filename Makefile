@@ -13,7 +13,7 @@ FA_PROOF_FONT          ?= Amiri
 FA_PROOF_HB_FONT       ?= Noto Naskh Arabic
 FA_PROOF_FONTS         ?= Amiri Geeza\ Pro Al\ Bayan Damascus Baghdad Tahoma
 
-.PHONY: help status test test-core serve-core repl-core javac-core python-smoke py-test-xml py-test-transfer-flow py-test-multilingual-emotion py-test-photo py-test-surface py-test-domain backlog-status install install-bash install-sh manpath bridge-build bridge-sources xml-matrix knowyourai-list knowyourai-query auth-demo auth-uri auth-code model-catalog brew-clojure transfer-queue-demo transfer-stack-demo logseq-kernel-build logseq-kernel-sources logseq-kernel-search logseq-kernel-commit logseq-kernel-sync domain-schema domain-seed domain-event-log domain-tx-list domain-refdata-list domain-docs docs net-status net-ports presence-status panel-serve feeds-generate fa-proof-specimen fa-proof-showcase fa-proof-hb fa-proof-suite
+.PHONY: help status test test-core serve-core repl-core javac-core python-smoke py-test-xml py-test-transfer-flow py-test-multilingual-emotion py-test-photo py-test-surface py-test-domain py-test-install backlog-status install install-bash install-sh install-workstation manpath bridge-build bridge-sources xml-matrix knowyourai-list knowyourai-query auth-demo auth-uri auth-code model-catalog brew-clojure transfer-queue-demo transfer-stack-demo logseq-kernel-build logseq-kernel-sources logseq-kernel-search logseq-kernel-commit logseq-kernel-sync domain-schema domain-seed domain-event-log domain-tx-list domain-refdata-list domain-docs docs net-status net-ports presence-status panel-serve feeds-generate fa-proof-specimen fa-proof-showcase fa-proof-hb fa-proof-suite
 
 help:
 	@printf "Singine commands:\n"
@@ -31,6 +31,7 @@ help:
 	@printf "  make install       Install singine into ~/.local for sh\n"
 	@printf "  make install-bash  Install singine into ~/.local for bash\n"
 	@printf "  make install-sh    Install singine into ~/.local for sh\n"
+	@printf "  make install-workstation  Install singine plus workstation git tooling\n"
 	@printf "  make manpath       Show local manpage path\n"
 	@printf "  make backlog-status Show backlog repo status\n"
 	@printf "  make bridge-build  Build the local SQLite bridge database\n"
@@ -63,11 +64,12 @@ help:
 	@printf "  make domain-docs           Build DocBook + Javadoc HTML for Humble IDP\n"
 	@printf "  make docs                  Build all Singine + Humble IDP documentation\n"
 	@printf "  make py-test-domain        Run domain command Python tests\n"
+	@printf "  make py-test-install       Run install command Python tests\n"
 
 status:
 	git status -sb
 
-test: test-core python-smoke py-test-transfer-flow py-test-multilingual-emotion py-test-photo py-test-surface py-test-domain py-test-query
+test: test-core python-smoke py-test-transfer-flow py-test-multilingual-emotion py-test-photo py-test-surface py-test-domain py-test-query py-test-install
 
 test-core:
 	$(MAKE) -C core test
@@ -106,8 +108,14 @@ py-test-domain:
 py-test-query:
 	python3 -m unittest py.tests.test_query_dispatch -v
 
+py-test-install:
+	python3 -m unittest py.tests.test_install_commands -v
+
 install:
 	python3 -m singine.command install --prefix "$$HOME/.local" --shell all
+
+install-workstation:
+	python3 -m singine.command install --prefix "$$HOME/.local" --shell all --mode workstation
 
 install-bash:
 	python3 -m singine.command install --prefix "$$HOME/.local" --shell bash
