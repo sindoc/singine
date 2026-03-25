@@ -55,7 +55,7 @@ help:
 status:
 	git status -sb
 
-test: test-core python-smoke py-test-transfer-flow py-test-multilingual-emotion py-test-photo py-test-surface py-test-domain
+test: test-core python-smoke py-test-transfer-flow py-test-multilingual-emotion py-test-photo py-test-surface py-test-domain py-test-query
 
 test-core:
 	$(MAKE) -C core test
@@ -90,6 +90,9 @@ py-test-surface:
 
 py-test-domain:
 	python3 -m unittest py.tests.test_domain_commands -v
+
+py-test-query:
+	python3 -m unittest py.tests.test_query_dispatch -v
 
 install:
 	python3 -m singine.command install --prefix "$$HOME/.local" --shell all

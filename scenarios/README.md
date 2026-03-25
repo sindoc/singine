@@ -14,3 +14,4 @@ Scenarios should stay small and legible so they can evolve into runnable assets 
 Current scenario pack:
 
 - `knowyourai/` for named SPARQL examples that query the KnowYourAI RDF corpus through the local bridge
+- `multilingual/` for a multilingual emotional-message bundle used by Python integration tests
