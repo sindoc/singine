@@ -115,6 +115,33 @@ def _get(path: str, params: Optional[Dict[str, Any]] = None) -> Any:
         ) from exc
 
 
+def _post(path: str, payload: Dict[str, Any]) -> Any:
+    """Execute a POST against the Collibra REST v2 API and return parsed JSON."""
+    base = _base_url()
+    auth = _auth_header()
+    url = f"{base}/rest/2.0{path}"
+    body = json.dumps(payload).encode()
+    req = urllib.request.Request(
+        url,
+        data=body,
+        method="POST",
+        headers={
+            "Authorization": auth,
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "User-Agent": "singine-collibra/0.1",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return json.loads(resp.read().decode())
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode(errors="replace")
+        raise RuntimeError(
+            f"Collibra API error {exc.code} {exc.reason} for {url}: {body[:300]}"
+        ) from exc
+
+
 def _results(raw: Any) -> List[Any]:
     """Extract results list from a Collibra paged response or plain list."""
     if isinstance(raw, dict):
@@ -146,6 +173,24 @@ def fetch_communities(
     if name:
         params["name"] = name
     return _envelope(_results(_get("/communities", params)))
+
+
+def create_community(
+    name: str,
+    description: Optional[str] = None,
+    parent_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Create a Collibra community.
+
+    When ``parent_id`` is omitted, a root community is created.
+    """
+    payload: Dict[str, Any] = {"name": name}
+    if description:
+        payload["description"] = description
+    if parent_id:
+        payload["parentId"] = parent_id
+    created = _post("/communities", payload)
+    return {"ok": True, "data": created, "env": _env_summary()}
 
 
 def fetch_domains(

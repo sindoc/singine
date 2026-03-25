@@ -12,6 +12,24 @@ singine-pg \- provision PostgreSQL and import SQLite databases
 [\fB--password\fR \fIPASSWORD\fR]
 [\fB--replace\fR]
 [\fB--json\fR]
+.br
+.B singine pg list databases
+[\fB--json\fR]
+.br
+.B singine pg list schemas
+[\fB--db-name\fR \fINAME\fR]
+[\fB--json\fR]
+.br
+.B singine pg list tables
+[\fB--db-name\fR \fINAME\fR]
+[\fB--schema\fR \fINAME\fR]
+[\fB--json\fR]
+.br
+.B singine pg list columns
+[\fB--db-name\fR \fINAME\fR]
+[\fB--schema\fR \fINAME\fR]
+\fB--table\fR \fINAME\fR
+[\fB--json\fR]
 .SH DESCRIPTION
 .B singine pg
 provides pragmatic PostgreSQL workflows for Singine.
@@ -60,6 +78,43 @@ for example:
 .PP
 When the caller is inside Docker Desktop Kubernetes, prefer:
 .BR "jdbc:postgresql://host.docker.internal:55432/singine_bridge" .
+.SS list databases
+.TP
+.B singine pg list databases
+List non-template databases available in the local PostgreSQL container.
+.PP
+Example:
+.BR "python3 -m singine.command pg list databases"
+.SS list schemas
+.TP
+.B singine pg list schemas
+List non-system schemas in a PostgreSQL database.
+.PP
+Example:
+.BR "python3 -m singine.command pg list schemas --db-name singine_bridge"
+.SS list tables
+.TP
+.B singine pg list tables
+List base tables in a PostgreSQL schema. The default schema is
+.BR public .
+.PP
+Examples:
+.RS
+.IP 1. 4
+List public tables:
+.BR "python3 -m singine.command pg list tables --db-name singine_bridge"
+.IP 2. 4
+List tables in another schema:
+.BR "python3 -m singine.command pg list tables --db-name singine_bridge --schema my_schema"
+.RE
+.SS list columns
+.TP
+.B singine pg list columns
+List columns for a specific table, including ordinal position, data type,
+nullability, and default value.
+.PP
+Example:
+.BR "python3 -m singine.command pg list columns --db-name singine_bridge --schema public --table entities"
 .SH NOTES
 .IP \(bu 2
 This workflow depends on Docker rather than a native \fBpsql\fR installation.
