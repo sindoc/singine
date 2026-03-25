@@ -12,6 +12,33 @@ This document captures the full architectural vision for Singine as a multi-laye
 
 **Singine** is a multi-layer platform built around a core engine that processes admin documents (paperwork), indexes their content, and exposes it through a knowledge graph queryable via both SPARQL and natural language.
 
+## Repository Boundary Policy
+
+Singine is the secure execution engine and orchestration layer. It is not the
+system of record for vendor-specific implementation logic when a sibling repo
+exists for that vendor.
+
+Rules for assistants:
+
+1. Keep Collibra-specific implementation code in the sibling `collibra/`
+   repository, preferably under `collibra/singine_collibra/`,
+   `collibra/collibra-integrations/`, or `collibra/edge/`.
+2. Keep Singine responsible for authentication, authorisation, identity
+   providers, privilege routing, JVM orchestration, command runtime, and
+   documentation publication.
+3. Use Singine as the thin CLI and execution shell for `singine collibra ...`
+   commands, but load the actual Collibra behavior from `COLLIBRA_DIR` where
+   possible.
+4. Prefer the sibling `silkpage/` repository for transformation-heavy work
+   involving XML, XSLT, XPath, RDF, TTL, SPARQL, SQL, GraphQL, and related
+   payload or document conversions.
+
+Short test:
+
+- Vendor-specific semantics: sibling vendor repo
+- Secure execution/runtime semantics: Singine
+- Transformation semantics: SilkPage
+
 The platform originated as a Unix-idiomatic CLI tool for Logseq todo management and is evolving into a full document processing and data governance engine with Collibra metamodel compatibility.
 
 ### Current State (v0.2.0)
