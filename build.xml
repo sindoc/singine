@@ -9,4 +9,1045 @@
   </target>
 
   <target name="test" depends="photo-test"/>
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  build.xml — Logseq graph → static SPA publisher
+  ─────────────────────────────────────────────────
+  Mirrors the sindoc/website GitHub Actions workflow:
+    1. logseq-publish-spa  →  builds the SPA into ${build.dir}
+    2. .nojekyll           →  disables Jekyll on GitHub Pages
+    3. deploy              →  pushes ${build.dir} to the target branch
+
+  Portability guarantees
+  ──────────────────────
+  • No shell=true; every <exec> receives discrete <arg> elements.
+  • Paths use Ant's built-in ${file.separator} where a literal
+    slash would be wrong; forward slashes work on all platforms
+    inside Ant tasks (<copy>, <mkdir>, etc.).
+  • No GNU-isms: no sed -i, no find -exec +, no bash-only syntax.
+  • BSD-compatible: touch(1), cp(1), rm(1) flags kept to POSIX subset;
+    all heavy lifting is done by Ant built-ins or npx.
+
+  Override any property on the command line:
+    ant publish -Dgraph.dir=/path/to/my/logseq-graph
+    ant deploy  -Ddeploy.remote=upstream -Ddeploy.branch=gh-pages
+-->
+<project name="logseq-publish" default="deploy-all" basedir=".">
+
+
+  <!-- ══════════════════════════════════════════════════
+       §1  ENVIRONMENT BRIDGE
+       Expose every shell env-var as ${env.NAME}.
+       ══════════════════════════════════════════════════ -->
+  <property environment="env"/>
+
+
+  <!-- ══════════════════════════════════════════════════
+       §2  PATH PROPERTIES
+       All paths are either absolute (env-driven) or
+       relative to ${basedir}, which Ant resolves before
+       any target runs.
+       ══════════════════════════════════════════════════ -->
+
+  <!--
+    GRAPH_DIR  — root of the Logseq graph to publish.
+    Defaults to the repository root (this file's directory).
+    Override: ant publish -Dgraph.dir=${env.HOME}/notes/my-graph
+  -->
+  <property name="graph.dir"   value="${basedir}"/>
+
+  <!--
+    BUILD_DIR  — destination for the compiled SPA.
+    Must not overlap with ${graph.dir} to avoid self-referential builds.
+    Override: ant publish -Dbuild.dir=/tmp/logseq-out
+  -->
+  <property name="build.dir"   value="${basedir}/www"/>
+
+  <!--
+    LOGSEQ_CONFIG  — canonical config files that travel into the SPA.
+    These paths are informational (used in the -verify-config- target).
+  -->
+  <property name="logseq.config.edn"    value="${graph.dir}/logseq/config.edn"/>
+  <property name="logseq.custom.css"    value="${graph.dir}/logseq/custom.css"/>
+  <property name="logseq.custom.js"     value="${graph.dir}/logseq/custom.js"/>
+
+
+  <!-- ══════════════════════════════════════════════════
+       §3  EXECUTABLE PROPERTIES
+       Resolved via PATH; override to pin exact binaries.
+       E.g.: ant publish -Dnpx.exec=/usr/local/bin/npx
+       ══════════════════════════════════════════════════ -->
+  <property name="node.exec"   value="node"/>
+  <property name="npm.exec"    value="npm"/>
+  <property name="npx.exec"    value="npx"/>
+  <property name="git.exec"    value="git"/>
+
+
+  <!-- ══════════════════════════════════════════════════
+       §4  PUBLISH-SPA PROPERTIES
+       ══════════════════════════════════════════════════ -->
+
+  <!--
+    PUBLISH_SPA_VERSION  — pinned to the same tag used in
+    sindoc/website's publish.yml (v0.3.0 → npm 0.3.0).
+    Override: ant publish -Dpublish.spa.version=0.4.0
+  -->
+  <property name="publish.spa.package"  value="@logseq/logseq-publish-spa"/>
+  <property name="publish.spa.version"  value="0.3.0"/>
+
+  <!--  Fully-qualified package reference used by npx. -->
+  <property name="publish.spa.ref"
+            value="${publish.spa.package}@${publish.spa.version}"/>
+
+
+  <!-- ══════════════════════════════════════════════════
+       §5  DEPLOY PROPERTIES
+       ══════════════════════════════════════════════════ -->
+  <property name="deploy.remote"  value="origin"/>
+  <property name="deploy.branch"  value="gh-pages"/>
+
+  <!--
+    DEPLOY_MSG  — commit message for the gh-pages push.
+    Defaults to a timestamp-free string so builds are reproducible.
+    Override: ant deploy -Ddeploy.msg="publish: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  -->
+  <property name="deploy.msg"  value="chore: publish logseq graph"/>
+
+
+  <!-- ══════════════════════════════════════════════════
+       §6  TARGETS
+       ══════════════════════════════════════════════════ -->
+
+  <!-- ─── clean ─────────────────────────────────────── -->
+  <target name="clean"
+          description="Remove the SPA build directory.">
+    <delete dir="${build.dir}" failonerror="false"/>
+    <echo message="Removed: ${build.dir}"/>
+  </target>
+
+
+  <!-- ─── init ──────────────────────────────────────── -->
+  <target name="init"
+          description="Create the SPA build directory.">
+    <mkdir dir="${build.dir}"/>
+  </target>
+
+
+  <!-- ─── verify-config ─────────────────────────────── -->
+  <!--
+    Checks which Logseq configuration artefacts are present.
+    Emits a WARNING (not a failure) for optional files so the
+    build never aborts on a bare graph.
+
+    Files checked and their publish behaviour:
+    ┌─────────────────────────┬──────────────────────────────────────┐
+    │ File                    │ Publish behaviour                    │
+    ├─────────────────────────┼──────────────────────────────────────┤
+    │ logseq/config.edn       │ REQUIRED — build fails without it    │
+    │ logseq/custom.css       │ BUNDLED  — all rules travel into SPA │
+    │ logseq/custom.js        │ BUNDLED  — injected if present       │
+    │ logseq/version-files/   │ INTERNAL — not user-facing           │
+    │ pages/*.md              │ BUNDLED  — all public pages          │
+    │ journals/*.md           │ BUNDLED  — all journal entries       │
+    │ assets/                 │ BUNDLED  — images, PDFs, attachments │
+    │ Plugin config (browser) │ NOT BUNDLED — lives in IndexedDB     │
+    │ Marketplace theme CSS   │ NOT BUNDLED — copy vars to custom.css│
+    └─────────────────────────┴──────────────────────────────────────┘
+  -->
+  <target name="verify-config"
+          description="Report which Logseq config files are present.">
+
+    <available file="${logseq.config.edn}" property="config.edn.present"/>
+    <available file="${logseq.custom.css}" property="custom.css.present"/>
+    <available file="${logseq.custom.js}"  property="custom.js.present"/>
+
+    <fail unless="config.edn.present"
+          message="MISSING: ${logseq.config.edn} — logseq-publish-spa requires this file."/>
+
+    <echo message="[OK]      config.edn   : ${logseq.config.edn}"/>
+
+    <condition property="css.label" value="[OK]     " else="[WARN]   ">
+      <isset property="custom.css.present"/>
+    </condition>
+    <echo message="${css.label} custom.css   : ${logseq.custom.css}"/>
+    <echo message="           (all CSS rules bundled into SPA when present)"/>
+
+    <condition property="js.label" value="[OK]     " else="[WARN]   ">
+      <isset property="custom.js.present"/>
+    </condition>
+    <echo message="${js.label} custom.js    : ${logseq.custom.js}"/>
+    <echo message="           (injected into SPA when present)"/>
+
+  </target>
+
+
+  <!-- ─── publish ───────────────────────────────────── -->
+  <!--
+    Runs logseq-publish-spa via npx (no global install required).
+    npx will download the package on first run and cache it.
+
+    Equivalent GitHub Actions step:
+      - uses: logseq/publish-spa@v0.3.0
+        with:
+          graph-directory: .
+          output-directory: www
+  -->
+  <target name="publish"
+          depends="init, verify-config"
+          description="Compile the Logseq graph into a static SPA.">
+
+    <echo message="Publishing graph  : ${graph.dir}"/>
+    <echo message="Output directory  : ${build.dir}"/>
+    <echo message="logseq-publish-spa: ${publish.spa.ref}"/>
+
+    <exec executable="${npx.exec}"
+          dir="${graph.dir}"
+          failonerror="true">
+      <arg value="--yes"/>
+      <arg value="${publish.spa.ref}"/>
+      <arg value="${graph.dir}"/>
+      <arg value="${build.dir}"/>
+    </exec>
+
+    <!--
+      .nojekyll — tells GitHub Pages to serve assets as-is.
+      Without this, directories starting with _ are stripped by Jekyll,
+      breaking the SPA's asset paths.
+      Equivalent step: echo "" > www/.nojekyll
+    -->
+    <touch file="${build.dir}/.nojekyll"/>
+    <echo message="Created: ${build.dir}/.nojekyll"/>
+
+  </target>
+
+
+  <!-- ─── deploy ────────────────────────────────────── -->
+  <!--
+    Pushes the compiled SPA to the deploy branch using git subtree push.
+    This is a pure-git approach: no extra tools (ghp-import, peaceiris/actions-gh-pages)
+    required, and it works identically on BSD and GNU/Linux.
+
+    Equivalent GitHub Actions step:
+      - uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir:  ./www
+
+    NOTE: You must have push access to ${deploy.remote}.
+    On CI, set GIT_TOKEN in the environment and configure the remote URL:
+      git remote set-url origin https://x-access-token:${GIT_TOKEN}@github.com/org/repo.git
+  -->
+  <target name="deploy"
+          depends="publish"
+          description="Push the SPA to the ${deploy.branch} branch.">
+
+    <echo message="Deploying ${build.dir} → ${deploy.remote}/${deploy.branch}"/>
+
+    <!--
+      git subtree push splits the www/ subtree out and force-pushes it
+      to the target branch.  No orphan-branch gymnastics required.
+    -->
+    <exec executable="${git.exec}"
+          dir="${basedir}"
+          failonerror="true">
+      <arg value="add"/>
+      <arg value="--force"/>
+      <arg value="${build.dir}"/>
+    </exec>
+
+    <exec executable="${git.exec}"
+          dir="${basedir}"
+          failonerror="true">
+      <arg value="commit"/>
+      <arg value="-m"/>
+      <arg value="${deploy.msg}"/>
+    </exec>
+
+    <exec executable="${git.exec}"
+          dir="${basedir}"
+          failonerror="true">
+      <arg value="subtree"/>
+      <arg value="push"/>
+      <arg value="--prefix"/>
+      <arg value="www"/>
+      <arg value="${deploy.remote}"/>
+      <arg value="${deploy.branch}"/>
+    </exec>
+
+  </target>
+
+
+  <!-- ─── help ──────────────────────────────────────── -->
+  <target name="help"
+          description="Print usage summary.">
+    <echo><![CDATA[
+Logseq Graph Publisher — build.xml
+═══════════════════════════════════
+
+Targets (single-node)
+─────────────────────
+  clean              Remove ${build.dir}
+  init               Create ${build.dir}
+  verify-config      Check which logseq/ config files are present
+  publish            Build the static SPA
+  deploy             Build + push to ${deploy.branch}
+  help               This message
+
+Targets (dual-node — mothership / vessel)
+─────────────────────────────────────────
+  deploy-all                   Load template, detect role, route deploy  [DEFAULT]
+  publish-mothership           Full graph → www/ → gh-pages
+  publish-vessel               Public-only graph → www-vessel/ → gh-pages-vessel
+  filter-vessel-pages          Copy public:: true pages to staging dir
+  resolve-conflicts            Auto-resolve merge conflicts via template strategy
+  register-merge-driver        Register git merge driver (run once per clone)
+  clean-vessel                 Remove www-vessel/ and www-vessel-src/
+  clean-all                    Remove all build artefacts
+
+Key properties (single-node)
+────────────────────────────
+  graph.dir            Source graph root        [${basedir}]
+  build.dir            SPA output directory     [${basedir}/www]
+  publish.spa.version  logseq-publish-spa ver   [0.3.0]
+  deploy.remote        Git remote               [origin]
+  deploy.branch        Target branch            [gh-pages]
+  deploy.msg           Commit message           [chore: publish logseq graph]
+  npx.exec             npx binary               [npx]
+  git.exec             git binary               [git]
+
+Key properties (dual-node)
+──────────────────────────
+  deploy.template      Master template path     [logseq/deploy.xml]
+  vessel.build.dir     Vessel SPA output        [www-vessel]
+  vessel.graph.dir     Vessel staging dir       [www-vessel-src]
+  active.node.role     Detected role            [from SINGINE_NODE_ROLE or template default]
+
+Environment variables
+─────────────────────
+  SINGINE_NODE_ROLE    "mothership" or "vessel"  — selects active node
+
+Examples
+────────
+  ant publish
+  ant publish -Dgraph.dir=/path/to/my-notes
+  ant deploy  -Ddeploy.branch=gh-pages -Ddeploy.msg="publish: march update"
+  ant clean publish
+
+  ant deploy-all                                (mothership by default)
+  SINGINE_NODE_ROLE=vessel ant deploy-all       (vessel: public pages only)
+  ant deploy-all -Dactive.node.role=vessel      (CLI override)
+  ant resolve-conflicts                         (after a git merge conflict)
+  ant register-merge-driver                     (one-time setup per clone)
+    ]]></echo>
+  </target>
+
+
+  <!-- ══════════════════════════════════════════════════
+       §6  DUAL-NODE DEPLOY PROPERTIES
+       Loaded from logseq/deploy.xml via <xmlproperty>.
+       Values here are fallbacks only; the template file
+       provides canonical values for all live runs.
+       ══════════════════════════════════════════════════ -->
+
+  <!--
+    DEPLOY_TEMPLATE — path to the master deployment template.
+    Override: ant deploy-all -Ddeploy.template=/path/to/other.xml
+  -->
+  <property name="deploy.template"   value="${basedir}/logseq/deploy.xml"/>
+
+  <!--
+    VESSEL_BUILD_DIR — output directory for the vessel SPA.
+    Kept separate from ${build.dir} (mothership) to prevent cross-contamination.
+  -->
+  <property name="vessel.build.dir"  value="${basedir}/www-vessel"/>
+
+  <!--
+    VESSEL_GRAPH_DIR — staging directory for the vessel-filtered page set.
+    logseq-publish-spa is pointed at this directory, not ${graph.dir}.
+  -->
+  <property name="vessel.graph.dir"  value="${basedir}/www-vessel-src"/>
+
+
+  <!-- ══════════════════════════════════════════════════
+       §7  DUAL-NODE TARGETS
+       ══════════════════════════════════════════════════ -->
+
+  <!-- ─── load-template ─────────────────────────────── -->
+  <!--
+    Reads logseq/deploy.xml into Ant properties via <xmlproperty>.
+    Attribute-driven XML: <mothership deploy-branch="gh-pages"/>
+    flattens to deploy.mothership.deploy-branch = gh-pages.
+
+    collapseAttributes="false" (the Ant default) preserves the
+    separation between element text and attributes.
+    keepRoot="true" keeps the root element name as the prefix.
+
+    After this target all deploy.* properties are available.
+  -->
+  <target name="load-template"
+          description="Load logseq/deploy.xml into Ant properties.">
+
+    <available file="${deploy.template}" property="deploy.template.present"/>
+    <fail unless="deploy.template.present"
+          message="MISSING: ${deploy.template} — create logseq/deploy.xml before running deploy-all."/>
+
+    <xmlproperty file="${deploy.template}"
+                 collapseAttributes="false"
+                 keepRoot="true"/>
+
+    <echo message="[template] loaded   : ${deploy.template}"/>
+    <echo message="[template] strategy : ${deploy.privacy.conflict-strategy}"/>
+
+  </target>
+
+
+  <!-- ─── detect-role ───────────────────────────────── -->
+  <!--
+    Reads SINGINE_NODE_ROLE from the environment and sets
+    active.node.role to "mothership" or "vessel".
+
+    Resolution order:
+      1. ${env.SINGINE_NODE_ROLE}          (shell export)
+      2. ${deploy.node.default-role}        (from template, usually "mothership")
+
+    Ant properties are immutable once set, so step 1 wins if valid.
+    The <condition> only fires when the env var is exactly one of
+    the two valid strings; any other value (or the literal unexpanded
+    property expression) is silently ignored and the fallback applies.
+
+    Downstream targets gate on:
+      if="node.is.mothership"
+      if="node.is.vessel"
+  -->
+  <target name="detect-role"
+          depends="load-template"
+          description="Detect active node role from SINGINE_NODE_ROLE env var.">
+
+    <condition property="active.node.role"
+               value="${env.SINGINE_NODE_ROLE}">
+      <or>
+        <equals arg1="${env.SINGINE_NODE_ROLE}" arg2="mothership"/>
+        <equals arg1="${env.SINGINE_NODE_ROLE}" arg2="vessel"/>
+      </or>
+    </condition>
+
+    <!-- Fallback: use template default when env var absent or unrecognised -->
+    <property name="active.node.role"
+              value="${deploy.node.default-role}"/>
+
+    <echo message="[role] SINGINE_NODE_ROLE = ${env.SINGINE_NODE_ROLE}"/>
+    <echo message="[role] active.node.role  = ${active.node.role}"/>
+
+    <condition property="node.is.mothership">
+      <equals arg1="${active.node.role}" arg2="mothership"/>
+    </condition>
+    <condition property="node.is.vessel">
+      <equals arg1="${active.node.role}" arg2="vessel"/>
+    </condition>
+
+  </target>
+
+
+  <!-- ─── deploy-all  [DEFAULT TARGET] ─────────────── -->
+  <!--
+    Top-level entry point.  Loads the template, detects the
+    node role, then routes to publish-mothership or publish-vessel.
+
+    This is the new default target (replaces "publish").
+  -->
+  <target name="deploy-all"
+          depends="detect-role"
+          description="Load template, detect role, route to correct publish target.">
+    <antcall target="publish-mothership-if-active"/>
+    <antcall target="publish-vessel-if-active"/>
+  </target>
+
+
+  <!-- ─── publish-mothership-if-active ─────────────── -->
+  <target name="publish-mothership-if-active"
+          if="node.is.mothership"
+          description="Run mothership pipeline (guarded: only when role=mothership).">
+    <antcall target="publish-mothership"/>
+  </target>
+
+
+  <!-- ─── publish-vessel-if-active ─────────────────── -->
+  <target name="publish-vessel-if-active"
+          if="node.is.vessel"
+          description="Run vessel pipeline (guarded: only when role=vessel).">
+    <antcall target="publish-vessel"/>
+  </target>
+
+
+  <!-- ─── publish-mothership ────────────────────────── -->
+  <!--
+    Full-graph SPA for the mothership node.
+    Copies ALL pages, journals, assets without filtering.
+    Deploys to ${deploy.mothership.deploy-branch}.
+  -->
+  <target name="publish-mothership"
+          depends="load-template, init, verify-config"
+          description="Build full SPA and deploy to mothership deploy-branch.">
+
+    <echo message="[mothership] graph.dir  : ${graph.dir}"/>
+    <echo message="[mothership] build.dir  : ${build.dir}"/>
+    <echo message="[mothership] branch     : ${deploy.mothership.deploy-branch}"/>
+
+    <exec executable="${npx.exec}"
+          dir="${graph.dir}"
+          failonerror="true">
+      <arg value="--yes"/>
+      <arg value="${publish.spa.ref}"/>
+      <arg value="${graph.dir}"/>
+      <arg value="${build.dir}"/>
+    </exec>
+
+    <touch file="${build.dir}/.nojekyll"/>
+
+    <exec executable="${git.exec}" dir="${basedir}" failonerror="true">
+      <arg value="add"/>
+      <arg value="--force"/>
+      <arg value="${build.dir}"/>
+    </exec>
+
+    <exec executable="${git.exec}" dir="${basedir}" failonerror="true">
+      <arg value="commit"/>
+      <arg value="-m"/>
+      <arg value="chore(mothership): publish full logseq graph"/>
+    </exec>
+
+    <exec executable="${git.exec}" dir="${basedir}" failonerror="true">
+      <arg value="subtree"/>
+      <arg value="push"/>
+      <arg value="--prefix"/>
+      <arg value="www"/>
+      <arg value="${deploy.remote}"/>
+      <arg value="${deploy.mothership.deploy-branch}"/>
+    </exec>
+
+    <echo message="[mothership] deployed → ${deploy.remote}/${deploy.mothership.deploy-branch}"/>
+
+  </target>
+
+
+  <!-- ─── filter-vessel-pages ──────────────────────── -->
+  <!--
+    Copies only public:: true pages to ${vessel.graph.dir}.
+    Also copies logseq/ config, assets/, and optionally journals
+    and whiteboards that carry the public:: true property.
+
+    Ant's <contains> selector scans the raw file bytes for the
+    literal string "public:: true".  This matches Logseq's exact
+    property format (lowercase, double-colon, single space).
+
+    Namespace exclusion via static <exclude> patterns using
+    Logseq's triple-underscore directory encoding:
+      "private/page-name"  →  "private___page-name.md"
+    The excluded-namespaces list in deploy.xml documents intent;
+    the <exclude> patterns below are the canonical enforcement.
+    Update both when the namespace list changes.
+  -->
+  <target name="filter-vessel-pages"
+          depends="load-template"
+          description="Copy public:: true pages to vessel staging directory.">
+
+    <mkdir dir="${vessel.graph.dir}/pages"/>
+    <mkdir dir="${vessel.graph.dir}/journals"/>
+    <mkdir dir="${vessel.graph.dir}/assets"/>
+    <mkdir dir="${vessel.graph.dir}/logseq"/>
+    <mkdir dir="${vessel.graph.dir}/whiteboards"/>
+
+    <!-- Mandatory config files always travel with the vessel graph -->
+    <copy todir="${vessel.graph.dir}/logseq" failonerror="false">
+      <fileset dir="${graph.dir}/logseq">
+        <include name="config.edn"/>
+        <include name="custom.css"/>
+        <include name="custom.js"/>
+      </fileset>
+    </copy>
+
+    <!-- Pages: must contain public:: true AND not be in an excluded namespace -->
+    <copy todir="${vessel.graph.dir}/pages" failonerror="false">
+      <fileset dir="${graph.dir}/pages">
+        <include  name="**/*.md"/>
+        <contains text="${deploy.privacy.public-property}:: ${deploy.privacy.public-value}"
+                  casesensitive="true"/>
+        <!-- Excluded namespaces (Logseq triple-lowbar encoding) -->
+        <exclude  name="private___*.md"/>
+        <exclude  name="private___**/*.md"/>
+        <exclude  name="journal___*.md"/>
+        <exclude  name="inbox___*.md"/>
+        <exclude  name="draft___*.md"/>
+      </fileset>
+    </copy>
+
+    <!--
+      Journals: only explicitly public ones travel.
+      To exclude ALL journals unconditionally, replace <contains> with:
+        <filename name="NEVER_MATCH.md"/>
+    -->
+    <copy todir="${vessel.graph.dir}/journals" failonerror="false">
+      <fileset dir="${graph.dir}/journals">
+        <include  name="**/*.md"/>
+        <contains text="${deploy.privacy.public-property}:: ${deploy.privacy.public-value}"
+                  casesensitive="true"/>
+      </fileset>
+    </copy>
+
+    <!-- Assets: copied wholesale (images are referenced by public pages) -->
+    <copy todir="${vessel.graph.dir}/assets" failonerror="false">
+      <fileset dir="${graph.dir}/assets">
+        <include name="**/*"/>
+      </fileset>
+    </copy>
+
+    <!-- Whiteboards: public:: true filter applied -->
+    <copy todir="${vessel.graph.dir}/whiteboards" failonerror="false">
+      <fileset dir="${graph.dir}/whiteboards">
+        <include  name="**/*.edn"/>
+        <contains text="${deploy.privacy.public-property}:: ${deploy.privacy.public-value}"
+                  casesensitive="true"/>
+      </fileset>
+    </copy>
+
+    <echo message="[vessel] staged public pages → ${vessel.graph.dir}"/>
+
+  </target>
+
+
+  <!-- ─── publish-vessel ────────────────────────────── -->
+  <!--
+    Filtered-graph SPA for the vessel node.
+    Runs filter-vessel-pages first, then builds the SPA
+    against the staging directory, then deploys to
+    ${deploy.vessel.deploy-branch}.
+    Staging directory is cleaned after a successful deploy.
+  -->
+  <target name="publish-vessel"
+          depends="load-template, filter-vessel-pages"
+          description="Build filtered SPA (public pages only) and deploy to vessel branch.">
+
+    <mkdir dir="${vessel.build.dir}"/>
+
+    <echo message="[vessel] source     : ${vessel.graph.dir}"/>
+    <echo message="[vessel] build.dir  : ${vessel.build.dir}"/>
+    <echo message="[vessel] branch     : ${deploy.vessel.deploy-branch}"/>
+
+    <exec executable="${npx.exec}"
+          dir="${vessel.graph.dir}"
+          failonerror="true">
+      <arg value="--yes"/>
+      <arg value="${publish.spa.ref}"/>
+      <arg value="${vessel.graph.dir}"/>
+      <arg value="${vessel.build.dir}"/>
+    </exec>
+
+    <touch file="${vessel.build.dir}/.nojekyll"/>
+
+    <exec executable="${git.exec}" dir="${basedir}" failonerror="true">
+      <arg value="add"/>
+      <arg value="--force"/>
+      <arg value="${vessel.build.dir}"/>
+    </exec>
+
+    <exec executable="${git.exec}" dir="${basedir}" failonerror="true">
+      <arg value="commit"/>
+      <arg value="-m"/>
+      <arg value="chore(vessel): publish public logseq graph"/>
+    </exec>
+
+    <exec executable="${git.exec}" dir="${basedir}" failonerror="true">
+      <arg value="subtree"/>
+      <arg value="push"/>
+      <arg value="--prefix"/>
+      <arg value="www-vessel"/>
+      <arg value="${deploy.remote}"/>
+      <arg value="${deploy.vessel.deploy-branch}"/>
+    </exec>
+
+    <echo message="[vessel] deployed → ${deploy.remote}/${deploy.vessel.deploy-branch}"/>
+
+    <!-- Remove staging directory after successful deploy -->
+    <delete dir="${vessel.graph.dir}" failonerror="false"/>
+
+  </target>
+
+
+  <!-- ─── resolve-conflicts ─────────────────────────── -->
+  <!--
+    Detects unmerged files and applies the conflict-strategy
+    declared in logseq/deploy.xml.
+
+    Invoked automatically by the logseq-merge git merge driver
+    (registered via register-merge-driver), or manually after
+    a conflicting git merge.
+
+    Strategy values:
+      mothership-wins  — git checkout --ours FILE  + git add + commit
+      vessel-wins      — git checkout --theirs FILE + git add + commit
+      manual           — fail loudly; do not touch unmerged files
+
+    POSIX guarantee:
+      git checkout --ours / --theirs is git core; works on BSD + GNU/Linux.
+      No shell=true; no GNU-specific flags.
+
+    NOTE: designed for git merge workflows only.
+    Does NOT work during an active rebase.
+  -->
+  <target name="resolve-conflicts"
+          depends="load-template"
+          description="Auto-resolve git merge conflicts using the template strategy.">
+
+    <exec executable="${git.exec}"
+          dir="${basedir}"
+          outputproperty="conflict.list.raw"
+          resultproperty="git.diff.result"
+          failonerror="false">
+      <arg value="diff"/>
+      <arg value="--name-only"/>
+      <arg value="--diff-filter=U"/>
+    </exec>
+
+    <length string="${conflict.list.raw}" property="conflict.list.length"/>
+
+    <condition property="no.conflicts">
+      <equals arg1="${conflict.list.length}" arg2="0"/>
+    </condition>
+
+    <antcall target="-conflict-report-none"/>
+    <antcall target="-conflict-dispatch"/>
+
+  </target>
+
+  <target name="-conflict-report-none"
+          if="no.conflicts">
+    <echo message="[conflicts] No unmerged files found. Nothing to resolve."/>
+  </target>
+
+  <target name="-conflict-dispatch"
+          unless="no.conflicts">
+    <echo message="[conflicts] Unmerged files:"/>
+    <echo message="${conflict.list.raw}"/>
+    <echo message="[conflicts] Applying strategy: ${deploy.privacy.conflict-strategy}"/>
+    <antcall target="-conflict-mothership-wins-gate"/>
+    <antcall target="-conflict-vessel-wins-gate"/>
+    <antcall target="-conflict-manual-gate"/>
+  </target>
+
+  <!-- mothership-wins gate -->
+  <target name="-conflict-mothership-wins-gate">
+    <condition property="strategy.is.mothership.wins">
+      <equals arg1="${deploy.privacy.conflict-strategy}" arg2="mothership-wins"/>
+    </condition>
+    <antcall target="-do-mothership-wins"/>
+  </target>
+
+  <target name="-do-mothership-wins"
+          if="strategy.is.mothership.wins">
+
+    <echo message="[conflicts] git checkout --ours (mothership-wins)"/>
+
+    <!-- Normalise newline-separated path list to space-separated for <arg line> -->
+    <echo file="${basedir}/.ant-conflict-list.tmp"
+          message="${conflict.list.raw}"/>
+    <loadfile property="conflict.paths.normalized"
+              srcfile="${basedir}/.ant-conflict-list.tmp">
+      <filterchain>
+        <tokenfilter>
+          <replaceregex pattern="[\r\n]+" replace=" " flags="g"/>
+        </tokenfilter>
+        <striplinebreaks/>
+      </filterchain>
+    </loadfile>
+
+    <exec executable="${git.exec}" dir="${basedir}" failonerror="true">
+      <arg value="checkout"/>
+      <arg value="--ours"/>
+      <arg line="${conflict.paths.normalized}"/>
+    </exec>
+    <exec executable="${git.exec}" dir="${basedir}" failonerror="true">
+      <arg value="add"/>
+      <arg line="${conflict.paths.normalized}"/>
+    </exec>
+    <exec executable="${git.exec}" dir="${basedir}" failonerror="true">
+      <arg value="commit"/>
+      <arg value="-m"/>
+      <arg value="chore(conflicts): resolve via mothership-wins strategy"/>
+    </exec>
+
+    <delete file="${basedir}/.ant-conflict-list.tmp" failonerror="false"/>
+    <echo message="[conflicts] Committed resolution (mothership-wins)."/>
+
+  </target>
+
+  <!-- vessel-wins gate -->
+  <target name="-conflict-vessel-wins-gate">
+    <condition property="strategy.is.vessel.wins">
+      <equals arg1="${deploy.privacy.conflict-strategy}" arg2="vessel-wins"/>
+    </condition>
+    <antcall target="-do-vessel-wins"/>
+  </target>
+
+  <target name="-do-vessel-wins"
+          if="strategy.is.vessel.wins">
+
+    <echo message="[conflicts] git checkout --theirs (vessel-wins)"/>
+
+    <echo file="${basedir}/.ant-conflict-list.tmp"
+          message="${conflict.list.raw}"/>
+    <loadfile property="conflict.paths.normalized"
+              srcfile="${basedir}/.ant-conflict-list.tmp">
+      <filterchain>
+        <tokenfilter>
+          <replaceregex pattern="[\r\n]+" replace=" " flags="g"/>
+        </tokenfilter>
+        <striplinebreaks/>
+      </filterchain>
+    </loadfile>
+
+    <exec executable="${git.exec}" dir="${basedir}" failonerror="true">
+      <arg value="checkout"/>
+      <arg value="--theirs"/>
+      <arg line="${conflict.paths.normalized}"/>
+    </exec>
+    <exec executable="${git.exec}" dir="${basedir}" failonerror="true">
+      <arg value="add"/>
+      <arg line="${conflict.paths.normalized}"/>
+    </exec>
+    <exec executable="${git.exec}" dir="${basedir}" failonerror="true">
+      <arg value="commit"/>
+      <arg value="-m"/>
+      <arg value="chore(conflicts): resolve via vessel-wins strategy"/>
+    </exec>
+
+    <delete file="${basedir}/.ant-conflict-list.tmp" failonerror="false"/>
+    <echo message="[conflicts] Committed resolution (vessel-wins)."/>
+
+  </target>
+
+  <!-- manual gate -->
+  <target name="-conflict-manual-gate">
+    <condition property="strategy.is.manual">
+      <equals arg1="${deploy.privacy.conflict-strategy}" arg2="manual"/>
+    </condition>
+    <antcall target="-do-manual-fail"/>
+  </target>
+
+  <target name="-do-manual-fail"
+          if="strategy.is.manual">
+    <echo level="error" message="[conflicts] Strategy is MANUAL."/>
+    <echo level="error" message="[conflicts] Unresolved files:"/>
+    <echo level="error" message="${conflict.list.raw}"/>
+    <fail message="MANUAL conflict resolution required. Resolve conflicts in your editor, then re-run."/>
+  </target>
+
+
+  <!-- ─── register-merge-driver ─────────────────────── -->
+  <!--
+    Registers the logseq-merge git merge driver in .git/config.
+    Run once per clone.  Idempotent (git config overwrites on re-run).
+
+    The driver is referenced in .gitattributes:
+      pages/**/*.md    merge=logseq-merge
+      journals/**/*.md merge=logseq-merge
+
+    When git encounters a merge conflict in a matched file, it calls:
+      ant -f build.xml resolve-conflicts
+  -->
+  <target name="register-merge-driver"
+          description="Register logseq-merge git merge driver (run once per clone).">
+
+    <exec executable="${git.exec}" dir="${basedir}" failonerror="true">
+      <arg value="config"/>
+      <arg value="merge.logseq-merge.name"/>
+      <arg value="Logseq Singine merge"/>
+    </exec>
+    <exec executable="${git.exec}" dir="${basedir}" failonerror="true">
+      <arg value="config"/>
+      <arg value="merge.logseq-merge.driver"/>
+      <arg value="ant -f build.xml resolve-conflicts"/>
+    </exec>
+    <exec executable="${git.exec}" dir="${basedir}" failonerror="true">
+      <arg value="config"/>
+      <arg value="merge.logseq-merge.recursive"/>
+      <arg value="binary"/>
+    </exec>
+
+    <echo message="[merge-driver] Registered logseq-merge in .git/config"/>
+    <echo message="[merge-driver] Driver: ant -f build.xml resolve-conflicts"/>
+
+  </target>
+
+
+  <!-- ─── clean-vessel ──────────────────────────────── -->
+  <target name="clean-vessel"
+          description="Remove vessel SPA build and staging directories.">
+    <delete dir="${vessel.build.dir}"  failonerror="false"/>
+    <delete dir="${vessel.graph.dir}"  failonerror="false"/>
+    <echo message="Removed: ${vessel.build.dir}"/>
+    <echo message="Removed: ${vessel.graph.dir}"/>
+  </target>
+
+
+  <!-- ─── clean-all ─────────────────────────────────── -->
+  <target name="clean-all"
+          depends="clean, clean-vessel"
+          description="Remove all SPA build and staging directories."/>
+
+
+  <!-- ══════════════════════════════════════════════════
+       §8  PHOTOS PIPELINE TARGETS
+       Google Photos ↔ Apple Photos bridge.
+       Driven by photos/pipeline.xpl (XProc 3.0).
+       Dependency graph: photos/dependency-graph.xml
+       Compliance data:  photos/compliance.xml
+       Dialog envelope:  photos/dialog.xml
+       XPath queries:    photos/queries.xml
+       ══════════════════════════════════════════════════ -->
+
+  <!--
+    PHOTOS_SPRINT — sprint to process (e.g. s01, s03, ALL).
+    Override: ant photos-run -Dphotos.sprint=s03
+  -->
+  <property name="photos.sprint"        value="s01"/>
+
+  <!--
+    PHOTOS_DRY_RUN — when true, log actions but do not call APIs.
+    Override: ant photos-run -Dphotos.dry-run=true
+  -->
+  <property name="photos.dry-run"       value="true"/>
+
+  <!--
+    PHOTOS_PARALLELISM — max concurrent transfers within a batch.
+    Override: ant photos-run -Dphotos.parallelism=8
+  -->
+  <property name="photos.parallelism"   value="4"/>
+
+  <!--
+    PHOTOS_PIPELINE — path to the XProc 3.0 pipeline entry point.
+    Requires an XProc 3.0 processor on PATH (e.g. Calabash, MorganaXProc).
+    Override: ant photos-run -Dphotos.pipeline=photos/pipeline.xpl
+  -->
+  <property name="photos.pipeline"      value="${basedir}/photos/pipeline.xpl"/>
+  <property name="photos.graph"         value="${basedir}/photos/dependency-graph.xml"/>
+  <property name="photos.report-dir"    value="${basedir}/photos/batches"/>
+  <property name="photos.xproc.exec"    value="xproc"/>
+
+  <!--
+    PHOTOS_SAXON_EXEC — Saxon-HE/EE command for XPath queries.
+    Required only for the photos-query target.
+    Override: ant photos-query -Dphotos.saxon.exec=/path/to/saxonq
+  -->
+  <property name="photos.saxon.exec"    value="saxonq"/>
+
+
+  <!-- ─── photos-validate ───────────────────────────── -->
+  <!--
+    Validates dependency-graph.xml (with xi:include resolved)
+    and compliance.xml against the XML Schema.
+    Does not call any external API.
+  -->
+  <target name="photos-validate"
+          description="Validate the photo pipeline dependency graph and compliance data.">
+
+    <available file="${photos.graph}" property="photos.graph.present"/>
+    <fail unless="photos.graph.present"
+          message="MISSING: ${photos.graph}"/>
+
+    <echo message="[photos] Validating: ${photos.graph}"/>
+
+    <!-- Use xmllint (BSD + GNU/Linux standard) for well-formedness check -->
+    <exec executable="xmllint"
+          failonerror="true">
+      <arg value="--noout"/>
+      <arg value="--xinclude"/>
+      <arg value="${photos.graph}"/>
+    </exec>
+
+    <echo message="[photos] Dependency graph is well-formed."/>
+
+    <exec executable="xmllint"
+          failonerror="true">
+      <arg value="--noout"/>
+      <arg value="${basedir}/photos/compliance.xml"/>
+    </exec>
+
+    <echo message="[photos] Compliance document is well-formed."/>
+
+  </target>
+
+
+  <!-- ─── photos-query ──────────────────────────────── -->
+  <!--
+    Runs a named XPath query from photos/queries.xml against
+    the dependency graph.
+
+    Requires Saxon-HE on PATH (saxonq).
+    Usage: ant photos-query -Dphotos.query.id=q09
+    Default query: q01 (all pending batches).
+  -->
+  <property name="photos.query.id" value="q01"/>
+
+  <target name="photos-query"
+          depends="photos-validate"
+          description="Run a named XPath query from photos/queries.xml. Set photos.query.id.">
+
+    <echo message="[photos] Running query ${photos.query.id} from photos/queries.xml"/>
+    <echo message="[photos] Source: ${photos.graph}"/>
+
+    <!--
+      Extract the XPath expression for the requested query ID.
+      Then execute it against the merged dependency graph.
+    -->
+    <exec executable="${photos.saxon.exec}"
+          failonerror="true">
+      <arg value="-s:${photos.graph}"/>
+      <arg value="-qs://queries/query[@id='${photos.query.id}']/xpath"/>
+    </exec>
+
+  </target>
+
+
+  <!-- ─── photos-run ────────────────────────────────── -->
+  <!--
+    Executes the XProc 3.0 pipeline for a given sprint.
+    By default runs in dry-run mode (no API calls).
+
+    Requires an XProc 3.0 processor (e.g. XML Calabash 3.x) on PATH.
+    Install: https://xmlcalabash.com/
+
+    Usage:
+      ant photos-run -Dphotos.sprint=s01 -Dphotos.dry-run=true
+      ant photos-run -Dphotos.sprint=ALL -Dphotos.dry-run=false
+  -->
+  <target name="photos-run"
+          depends="photos-validate"
+          description="Execute the XProc photo pipeline for the given sprint.">
+
+    <echo message="[photos] Sprint     : ${photos.sprint}"/>
+    <echo message="[photos] Dry-run    : ${photos.dry-run}"/>
+    <echo message="[photos] Parallelism: ${photos.parallelism}"/>
+    <echo message="[photos] Pipeline   : ${photos.pipeline}"/>
+
+    <exec executable="${photos.xproc.exec}"
+          dir="${basedir}/photos"
+          failonerror="true">
+      <arg value="${photos.pipeline}"/>
+      <arg value="--input"/>
+      <arg value="dependency-graph=${photos.graph}"/>
+      <arg value="--option"/>
+      <arg value="sprint-id=${photos.sprint}"/>
+      <arg value="--option"/>
+      <arg value="dry-run=${photos.dry-run}"/>
+      <arg value="--option"/>
+      <arg value="parallelism=${photos.parallelism}"/>
+      <arg value="--option"/>
+      <arg value="report-dir=${photos.report-dir}"/>
+    </exec>
+
+    <echo message="[photos] Pipeline complete. Reports in: ${photos.report-dir}"/>
+
+  </target>
+
+
 </project>

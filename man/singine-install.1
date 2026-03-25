@@ -6,6 +6,8 @@ singine-install \- install the singine launcher, manpages, or selected local too
 [\fIsingine\fR|\fIant\fR|\fIxmldoclet\fR|\fIgit-filter-repo\fR]
 [\fB--prefix\fR \fIPATH\fR] [\fB--shell\fR \fBbash\fR|\fBsh\fR|\fBall\fR]
 [\fB--mode\fR \fBbase\fR|\fBworkstation\fR] [\fB--json\fR]
+[\fIsingine\fR|\fIant\fR|\fIxmldoclet\fR]
+[\fB--prefix\fR \fIPATH\fR] [\fB--shell\fR \fBbash\fR|\fBsh\fR|\fBall\fR] [\fB--json\fR]
 .SH DESCRIPTION
 Without an explicit subject, installs the
 .B singine
@@ -87,6 +89,9 @@ singine install singine --prefix ~/.local --shell bash
 singine install ant
 singine install xmldoclet
 singine install git-filter-repo
+singine install singine --prefix ~/.local --shell bash
+singine install ant
+singine install xmldoclet
 singine install --prefix ~/.local --shell bash
 singine install --json
 .fi
