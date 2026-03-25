@@ -24,6 +24,9 @@ Command families
 ``singine edge deploy``
     install + up — bring the full stack to a running state.
 
+``singine edge site init``
+    Bootstrap a real Collibra Edge site from the installer bundle and verify it.
+
 ``singine edge k8s``
     Deploy the **real Collibra Edge** onto a Kubernetes cluster using the
     site-specific installer bundle (installer/).  Sub-commands:
@@ -55,8 +58,10 @@ from typing import Any, Dict, List, Optional, Sequence
 _DEFAULT_EDGE_DIR = Path.home() / "ws/git/github/sindoc/collibra/edge"
 
 
-def _edge_dir() -> Path:
+def _edge_dir(args: Optional[argparse.Namespace] = None) -> Path:
     """Return the edge stack root, overridable via COLLIBRA_EDGE_DIR."""
+    if args is not None and getattr(args, "edge_dir", None):
+        return Path(args.edge_dir).expanduser()
     return Path(os.environ.get("COLLIBRA_EDGE_DIR", str(_DEFAULT_EDGE_DIR)))
 
 
@@ -437,8 +442,22 @@ _K8S_NAMESPACE = "collibra-edge"
 _K8S_PREREQS = ("helm", "kubectl", "jq", "yq")
 
 
-def _installer_dir() -> Path:
-    return _edge_dir() / "installer"
+def _installer_dir(args: Optional[argparse.Namespace] = None) -> Path:
+    if args is not None and getattr(args, "installer_dir", None):
+        return Path(args.installer_dir).expanduser()
+    return _edge_dir(args) / "installer"
+
+
+def _compose_down_if_present(edge: Path, compose_name: str) -> int:
+    compose_file = edge / compose_name
+    if not compose_file.exists():
+        return 0
+    result = subprocess.run(
+        ["docker", "compose", "-f", str(compose_file), "down"],
+        cwd=str(edge),
+        text=True,
+    )
+    return result.returncode
 
 
 def cmd_edge_k8s_prereqs(args: argparse.Namespace) -> int:
@@ -466,7 +485,7 @@ def cmd_edge_k8s_prereqs(args: argparse.Namespace) -> int:
                      "not reachable — enable Docker Desktop Kubernetes: Settings → Kubernetes → Enable Kubernetes"})
 
     # 3. Installer bundle present
-    installer = _installer_dir()
+    installer = _installer_dir(args)
     bundle_ok = (installer / "site-values.yaml").exists() and \
                 (installer / "collibra-edge-helm-chart").exists()
     if not bundle_ok:
@@ -489,7 +508,7 @@ def cmd_edge_k8s_prereqs(args: argparse.Namespace) -> int:
 
 def cmd_edge_k8s_install(args: argparse.Namespace) -> int:
     """Deploy the real Collibra Edge onto Kubernetes via Helm."""
-    edge = _edge_dir()
+    edge = _edge_dir(args)
     script = edge / "scripts" / "install-edge-k8s.sh"
     use_json = args.json
 
@@ -517,7 +536,7 @@ def cmd_edge_k8s_install(args: argparse.Namespace) -> int:
 
 def cmd_edge_k8s_uninstall(args: argparse.Namespace) -> int:
     """Helm uninstall + delete namespace."""
-    edge = _edge_dir()
+    edge = _edge_dir(args)
     script = edge / "scripts" / "install-edge-k8s.sh"
     use_json = args.json
 
@@ -868,6 +887,97 @@ def cmd_edge_cloud(args: argparse.Namespace) -> int:
     return result.returncode
 
 
+def cmd_edge_site_init(args: argparse.Namespace) -> int:
+    """Bootstrap a real Collibra Edge site from the installer bundle."""
+    edge = _edge_dir(args)
+    installer = _installer_dir(args)
+    use_json = getattr(args, "json", False)
+    name = getattr(args, "name", "edge-site")
+    namespace = getattr(args, "namespace", _K8S_NAMESPACE)
+    dry_run = getattr(args, "dry_run", False)
+    keep_dev = getattr(args, "keep_dev_stack", False)
+    steps: List[Dict[str, Any]] = []
+
+    def _step(step_name: str, func, ns: argparse.Namespace) -> bool:
+        rc = func(ns)
+        ok = rc == 0
+        steps.append({"step": step_name, "ok": ok, "exit_code": rc})
+        return ok
+
+    if not edge.exists():
+        msg = f"Edge directory not found: {edge}"
+        if use_json:
+            print(json.dumps(_envelope(False, "edge site init", error=msg)))
+        else:
+            print(f"[edge site init] ERROR: {msg}", file=sys.stderr)
+        return 1
+
+    if not installer.exists():
+        msg = f"Installer directory not found: {installer}"
+        if use_json:
+            print(json.dumps(_envelope(False, "edge site init", error=msg)))
+        else:
+            print(f"[edge site init] ERROR: {msg}", file=sys.stderr)
+        return 1
+
+    if not use_json:
+        print(f"[edge site init] site={name}  edge_dir={edge}")
+        print(f"[edge site init] installer={installer}  namespace={namespace}  dry_run={dry_run}")
+
+    if not keep_dev:
+        for compose_name in ("docker-compose.dev.yml", "docker-compose.cloud.yml", "docker-compose.yml"):
+            rc = _compose_down_if_present(edge, compose_name)
+            steps.append({
+                "step": f"docker down {compose_name}",
+                "ok": rc == 0,
+                "exit_code": rc,
+                "optional": True,
+            })
+            if rc != 0 and not use_json:
+                print(f"[edge site init] WARN: unable to stop {compose_name} cleanly (exit {rc})", file=sys.stderr)
+
+    prereq_args = argparse.Namespace(
+        json=use_json,
+        edge_dir=str(edge),
+        installer_dir=str(installer),
+    )
+    if not _step("k8s prereqs", cmd_edge_k8s_prereqs, prereq_args):
+        if use_json:
+            print(json.dumps(_envelope(False, "edge site init", name=name, steps=steps)))
+        return 1
+
+    install_args = argparse.Namespace(
+        dry_run=dry_run,
+        json=use_json,
+        edge_dir=str(edge),
+        installer_dir=str(installer),
+    )
+    if not _step("k8s install", cmd_edge_k8s_install, install_args):
+        if use_json:
+            print(json.dumps(_envelope(False, "edge site init", name=name, steps=steps)))
+        return 1
+
+    if not dry_run:
+        status_args = argparse.Namespace(namespace=namespace, json=use_json)
+        if not _step("k8s status", cmd_edge_k8s_status, status_args):
+            if use_json:
+                print(json.dumps(_envelope(False, "edge site init", name=name, steps=steps)))
+            return 1
+
+        test_args = argparse.Namespace(namespace=namespace, json=use_json)
+        if not _step("k8s test", cmd_edge_k8s_test, test_args):
+            if use_json:
+                print(json.dumps(_envelope(False, "edge site init", name=name, steps=steps)))
+            return 1
+
+    ok = all(step["ok"] for step in steps if not step.get("optional"))
+    if use_json:
+        print(json.dumps(_envelope(ok, "edge site init", name=name, namespace=namespace, steps=steps)))
+    else:
+        print(f"[edge site init] {'complete' if ok else 'failed'} — namespace={namespace}")
+    return 0 if ok else 1
+
+
 # ── Test suite ────────────────────────────────────────────────────────────────
 
 def cmd_edge_test(args: argparse.Namespace) -> int:
@@ -1133,12 +1243,24 @@ def cmd_edge_test(args: argparse.Namespace) -> int:
 
 # ── Parser registration ───────────────────────────────────────────────────────
 
-def add_edge_parser(sub: argparse._SubParsersAction) -> None:
-    """Register ``singine edge`` and all its subcommand families."""
+def add_edge_parser(sub: argparse._SubParsersAction, *, name: str = "edge", help: str = None) -> None:
+    """Register ``singine edge`` and all its subcommand families.
+
+    Parameters
+    ----------
+    sub:
+        The _SubParsersAction to attach the edge parser to.
+    name:
+        Parser name (default: ``"edge"``).  Pass ``"edge"`` when registering
+        the top-level ``singine edge`` command; pass any other name when
+        reusing the parser under a different parent (e.g. ``singine collibra edge``).
+    help:
+        Help text override.  Defaults to the standard edge lifecycle description.
+    """
 
     edge_parser = sub.add_parser(
-        "edge",
-        help="Collibra edge server lifecycle — build, deploy, and manage the CDN + DGC edge stack",
+        name,
+        help=help or "Collibra edge server lifecycle — build, deploy, and manage the CDN + DGC edge stack",
     )
     edge_parser.set_defaults(func=lambda a: (edge_parser.print_help(), 1)[1])
 
@@ -1238,6 +1360,30 @@ def add_edge_parser(sub: argparse._SubParsersAction) -> None:
     )
     p.add_argument("--json", action="store_true")
     p.set_defaults(func=cmd_edge_cloud)
+
+    # ── site init ─────────────────────────────────────────────────────────────
+    site_parser = edge_sub.add_parser(
+        "site",
+        help="Installer-backed Edge site bootstrap and verification",
+    )
+    site_parser.set_defaults(func=lambda a: (site_parser.print_help(), 1)[1])
+    site_sub = site_parser.add_subparsers(dest="edge_site_command")
+
+    p = site_sub.add_parser(
+        "init",
+        help="Deploy the official Collibra Edge site from installer/ and verify it",
+    )
+    p.add_argument("name", help="Local site label for this bootstrap run")
+    p.add_argument("--edge-dir", default=str(_DEFAULT_EDGE_DIR),
+                   help=f"Edge project root (default: {_DEFAULT_EDGE_DIR})")
+    p.add_argument("--installer-dir", help="Installer bundle directory (default: <edge-dir>/installer)")
+    p.add_argument("--namespace", default=_K8S_NAMESPACE,
+                   help=f"Kubernetes namespace (default: {_K8S_NAMESPACE})")
+    p.add_argument("--keep-dev-stack", action="store_true",
+                   help="Do not stop existing docker-compose edge stacks before bootstrap")
+    p.add_argument("--dry-run", action="store_true", help="Render/install without mutating the cluster")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_edge_site_init)
 
     # ── test ──────────────────────────────────────────────────────────────────
     p = edge_sub.add_parser(

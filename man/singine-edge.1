@@ -116,6 +116,11 @@ image builds, stack start, health wait.  Runs
 Full compose install: build all images, prepare the agent Python virtualenv,
 register a governance decision.  Idempotent.
 .TP
+.B site
+Bootstrap a real Collibra Edge site from the installer bundle and verify it.
+Primary entry point:
+.BR "singine collibra edge site init NAME" .
+.TP
 .B deploy
 .B install
 followed by
@@ -221,6 +226,35 @@ Equivalent to
 .B install
 followed by
 .BR "up --detach" .
+.SS site
+.TP
+.B singine collibra edge site init \fINAME\fR [\fB--edge-dir\fR \fIDIR\fR] [\fB--installer-dir\fR \fIDIR\fR] [\fB--namespace\fR \fINS\fR] [\fB--keep-dev-stack\fR] [\fB--dry-run\fR] [\fB--json\fR]
+Bootstrap the official Collibra Edge runtime from the installer bundle under
+.IR installer/ .
+This command:
+.RS
+.IP 1. 4
+Stops any local docker-compose edge stacks unless
+.B --keep-dev-stack
+is set.
+.IP 2. 4
+Runs
+.BR "singine edge k8s prereqs" .
+.IP 3. 4
+Runs
+.BR "singine edge k8s install" .
+.IP 4. 4
+Runs
+.BR "singine edge k8s status"
+and
+.BR "singine edge k8s test"
+to verify the site is online in Kubernetes.
+.RE
+The
+.I NAME
+argument is a local bootstrap label for Singine output; the actual site identity
+comes from
+.IR installer/site-values.yaml .
 .SS javadoc
 .TP
 .B singine edge javadoc [\fB--json\fR]
