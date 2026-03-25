@@ -470,6 +470,38 @@ def _find_singine_core():
     return None
 
 
+def cmd_web(args):
+    """Serve a static HTML directory over HTTP."""
+    import functools
+    import http.server
+
+    directory = Path(args.directory).resolve()
+    if not directory.exists():
+        print(f"Error: directory not found: {directory}", file=sys.stderr)
+        return 1
+
+    port = args.port
+    handler = functools.partial(
+        http.server.SimpleHTTPRequestHandler,
+        directory=str(directory),
+    )
+
+    ips = _get_local_ips()
+    print(f"Serving {directory}")
+    print(f"  http://localhost:{port}/")
+    for ip in ips:
+        print(f"  http://{ip}:{port}/")
+    print("Ctrl-C to stop.")
+    print()
+
+    with http.server.HTTPServer(("", port), handler) as httpd:
+        try:
+            httpd.serve_forever()
+        except KeyboardInterrupt:
+            print("\nServer stopped.")
+    return 0
+
+
 def cmd_serve(args):
     """Start singine local network server."""
     port = args.port
@@ -1236,6 +1268,23 @@ def main():
     stats_parser.add_argument('--rdf', type=str, help='Load RDF concepts')
     stats_parser.add_argument('--logseq', action='store_true', help='Load Logseq todos')
     stats_parser.set_defaults(func=cmd_kg_stats)
+
+    # web command — serve a static HTML directory
+    web_parser = subparsers.add_parser(
+        'web',
+        help='Serve a static HTML directory over HTTP (e.g. markupware.com/html/)'
+    )
+    web_parser.add_argument(
+        'directory',
+        help='Directory to serve (e.g. /path/to/markupware.com/html)'
+    )
+    web_parser.add_argument(
+        '--port', '-p',
+        type=int,
+        default=8080,
+        help='HTTP port (default: 8080)'
+    )
+    web_parser.set_defaults(func=cmd_web)
 
     # serve command — start local network server for iOS/Android devices
     serve_parser = subparsers.add_parser(

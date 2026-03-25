@@ -1,0 +1,102 @@
+.TH SINGINE-DEMO 1 "2026-03-19" "singine 0.2.0" "User Commands"
+.SH NAME
+singine-demo \- notebook-friendly demo bundles for messaging, multilingual zip-code data, and publication artefacts
+.SH SYNOPSIS
+.B singine demo
+.I COMMAND
+[\fIOPTIONS\fR]
+.SH DESCRIPTION
+.B singine demo
+writes concrete demo bundles that align Singine's messaging and publication
+surfaces. The current stable command is
+.BR zip-neighborhood ,
+which produces:
+.IP \(bu 2
+RabbitMQ raw messages
+.IP \(bu 2
+RabbitMQ staging messages
+.IP \(bu 2
+Kafka stream payloads
+.IP \(bu 2
+Markdown, XML, JSON, and MediaWiki publication fragments
+.IP \(bu 2
+optional SQLite domain-event logging
+.PP
+The demo is designed to be importable from notebooks and to match the local
+messaging stack under
+.IR docker/docker-compose.messaging.yml .
+.SH COMMANDS
+.TP
+.B zip-neighborhood
+Write the full zip-code neighborhood messaging bundle.
+.TP
+.B bundle
+Alias for
+.BR zip-neighborhood .
+.SH OPTIONS
+.TP
+.B --title
+Override the demo title.
+.TP
+.B --output-dir
+Directory where the demo bundle is written.
+Defaults to
+.IR /tmp/singine-zip-neighborhood-demo .
+.TP
+.B --db
+Optional SQLite database path used for domain-event logging.
+.TP
+.B --actor-id
+Actor identifier used in the optional event log.
+Defaults to
+.IR singine .
+.TP
+.B --json
+Print the manifest as JSON instead of printing the main Markdown path.
+.SH OUTPUT
+The bundle contains:
+.IP \(bu 2
+.I rabbitmq/raw/*.json
+.IP \(bu 2
+.I rabbitmq/staging/*.json
+.IP \(bu 2
+.I kafka/topic.json
+.IP \(bu 2
+.I publication/demo.md
+.IP \(bu 2
+.I publication/demo.xml
+.IP \(bu 2
+.I publication/demo.json
+.IP \(bu 2
+.I publication/demo.mediawiki
+.IP \(bu 2
+.I manifest.json
+.SH EXAMPLES
+.nf
+# Write the bundle and print the Markdown path.
+singine demo zip-neighborhood
+
+# Write the bundle and log domain events.
+singine demo zip-neighborhood \\
+  --output-dir /tmp/singine-zip-neighborhood-demo \\
+  --db /tmp/singine-demo.db \\
+  --json
+
+# Compatibility alias.
+singine demo bundle --json
+.fi
+.SH NOTEBOOK USE
+The same data model can be imported directly in Python:
+.PP
+.nf
+import singine
+from singine.zip_neighborhood_demo import build_zip_neighborhood_demo
+
+demo = build_zip_neighborhood_demo()
+demo["messages"]["kafka"][0]
+.fi
+.SH SEE ALSO
+.BR singine (1),
+.BR singine-platform (1),
+.BR singine-transfer (1),
+.BR singine-domain (1)

@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en" xml:lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="generator"    content="SinDoc / singine 0.3.0"/>
+  <meta name="author"       content="Sina Heshmati"/>
+  <meta name="date"         content="2026-03-21"/>
+  <meta name="subject"      content="singine web surface — www · vww · wingine · wsec"/>
+  <meta name="collibra-ref" content="WWW-DEPLOY-001 VWW-AUDIT-001 WING-BUILD-001 WSEC-IDP-001"/>
+  <meta name="pos-form"     content="today/2020s/2026/03/21/pos-form.xml"/>
+  <meta name="pos-locp"     content="today/2020s/2026/03/21/pos-locp.xml"/>
+  <title>singine web — 2026-03-21 — sindoc</title>
+  <style>
+    :root {
+      --bg:       #f9f8f5;
+      --fg:       #1a1a1a;
+      --accent:   #2c5f8a;
+      --muted:    #666;
+      --border:   #d8d4cb;
+      --code-bg:  #f0ede6;
+      --ok:       #2e7d32;
+      --warn:     #b45309;
+      --err:      #b91c1c;
+      --tag-bg:   #e8f0f8;
+      --tag-fg:   #1e4976;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Georgia", "Times New Roman", serif;
+      background: var(--bg);
+      color: var(--fg);
+      line-height: 1.7;
+      padding: 2rem 1rem;
+    }
+    .page { max-width: 860px; margin: 0 auto; }
+
+    /* ── Header ─────────────────────────────────────────────────────── */
+    header {
+      border-bottom: 2px solid var(--border);
+      padding-bottom: 1.2rem;
+      margin-bottom: 2rem;
+    }
+    header .site { font-size: 0.8rem; color: var(--muted); font-family: monospace; }
+    header h1    { font-size: 1.6rem; color: var(--accent); margin: 0.3rem 0 0.2rem; }
+    header .meta { font-size: 0.82rem; color: var(--muted); }
+    header .meta span { margin-right: 1.2rem; }
+    .cal-note {
+      font-size: 0.78rem; color: var(--muted);
+      margin-top: 0.3rem; font-style: italic;
+    }
+
+    /* ── Sections ───────────────────────────────────────────────────── */
+    section { margin-bottom: 2.4rem; }
+    h2 {
+      font-size: 1.1rem;
+      color: var(--accent);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.3rem;
+      margin-bottom: 1rem;
+    }
+    h3 { font-size: 0.97rem; margin: 1rem 0 0.4rem; color: var(--fg); }
+    p  { margin-bottom: 0.7rem; }
+
+    /* ── Command table ──────────────────────────────────────────────── */
+    table { width: 100%; border-collapse: collapse; font-size: 0.88rem; margin-bottom: 1rem; }
+    th, td { text-align: left; padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border); }
+    th { background: var(--code-bg); font-family: monospace; font-weight: normal; color: var(--accent); }
+    td:first-child { font-family: monospace; white-space: nowrap; }
+
+    /* ── Code ───────────────────────────────────────────────────────── */
+    code, .mono { font-family: "Menlo", "Monaco", "Consolas", monospace; font-size: 0.84rem; }
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 0.8rem 1rem;
+      overflow-x: auto;
+      font-size: 0.82rem;
+      line-height: 1.5;
+      margin-bottom: 1rem;
+    }
+
+    /* ── Status badges ──────────────────────────────────────────────── */
+    .ok   { color: var(--ok);   font-weight: bold; }
+    .warn { color: var(--warn); font-weight: bold; }
+    .err  { color: var(--err);  font-weight: bold; }
+
+    /* ── Tags / codes ───────────────────────────────────────────────── */
+    .tag {
+      display: inline-block;
+      background: var(--tag-bg);
+      color: var(--tag-fg);
+      font-family: monospace;
+      font-size: 0.75rem;
+      padding: 0.1rem 0.4rem;
+      border-radius: 2px;
+      margin-right: 0.3rem;
+    }
+
+    /* ── Pipeline diagram ───────────────────────────────────────────── */
+    .pipeline {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 1rem 1.2rem;
+      font-family: monospace;
+      font-size: 0.8rem;
+      line-height: 1.8;
+    }
+
+    /* ── Decision list ──────────────────────────────────────────────── */
+    .decision {
+      border-left: 3px solid var(--accent);
+      padding: 0.5rem 0 0.5rem 0.9rem;
+      margin-bottom: 0.8rem;
+    }
+    .decision .term   { font-weight: bold; font-family: monospace; }
+    .decision .finding { font-size: 0.88rem; color: #333; margin-top: 0.2rem; }
+    .decision .fix    { font-size: 0.82rem; font-family: monospace; color: var(--accent); margin-top: 0.2rem; }
+
+    /* ── Artefact list ──────────────────────────────────────────────── */
+    .artefacts { list-style: none; }
+    .artefacts li {
+      padding: 0.3rem 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.86rem;
+      display: flex;
+      align-items: baseline;
+      gap: 0.6rem;
+    }
+    .artefacts .path { font-family: monospace; color: var(--accent); }
+
+    /* ── Footer ─────────────────────────────────────────────────────── */
+    footer {
+      margin-top: 3rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border);
+      font-size: 0.78rem;
+      color: var(--muted);
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+    }
+    footer a { color: var(--muted); }
+    footer .sources { font-family: monospace; }
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <header>
+    <div class="site">sindoc.local / 2026-03-21</div>
+    <h1>singine web surface</h1>
+    <div class="meta">
+      <span>Sina Heshmati · SinDoc</span>
+      <span>2026-03-21</span>
+      <span class="tag">WWW-DEPLOY-001</span>
+      <span class="tag">VWW-AUDIT-001</span>
+      <span class="tag">WING-BUILD-001</span>
+      <span class="tag">WSEC-IDP-001</span>
+    </div>
+    <div class="cal-note">
+      21 March 2026 · 1 Farvardin 1405 (Nowruz — Persian New Year) · bǐng-wǔ (Horse)
+    </div>
+  </header>
+
+  <!-- ── Summary ──────────────────────────────────────────────────────────── -->
+  <section id="summary">
+    <h2>Summary</h2>
+    <p>
+      Four command families were implemented and documented for managing the full
+      lifecycle of a web property inside <code>singine</code>: deployment, validation,
+      build, and security. All commands are registered in
+      <code>singine/command.py</code> and available in the installed CLI.
+    </p>
+    <table>
+      <thead>
+        <tr><th>Command</th><th>Purpose</th><th>Collibra</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>singine www</td>
+          <td>Deploy pipeline: git → build → Dropbox → rsync/scp</td>
+          <td><span class="tag">WWW-DEPLOY-001</span></td>
+        </tr>
+        <tr>
+          <td>singine vww</td>
+          <td>Read-only validation: TLS, HTTP headers, asset audit</td>
+          <td><span class="tag">VWW-AUDIT-001</span></td>
+        </tr>
+        <tr>
+          <td>singine wingine</td>
+          <td>Build engine: cortex/python · maven-war</td>
+          <td><span class="tag">WING-BUILD-001</span></td>
+        </tr>
+        <tr>
+          <td>singine wsec</td>
+          <td>TLS certs · ed25519 SSH keys · IDP JWT tokens</td>
+          <td><span class="tag">WSEC-IDP-001</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ── Pipeline ─────────────────────────────────────────────────────────── -->
+  <section id="pipeline">
+    <h2>Deploy pipeline</h2>
+    <div class="pipeline">
+Source (git)
+    │
+    │  singine www pull
+    ▼
+Local working copy
+    │
+    │  singine wingine build
+    ▼
+Built output (html/ or target/webapp)
+    │
+    ├─── singine www sync --method dropbox
+    │         → ~/Dropbox/www/&lt;site&gt;/
+    │
+    └─── singine www sync --method rsync
+              → deploy@&lt;host&gt;:/var/www/...  (via singine IDP SSH key)
+
+Security surface
+    ├─── singine wsec keys   — ed25519, registered as urn:singine:deploy:&lt;site&gt;
+    ├─── singine wsec cert   — TLS check / certbot renewal
+    ├─── singine wsec token  — JWT HS256, iss: urn:singine:idp, TTL 3600s
+    └─── singine vww audit   — full read-only security report
+    </div>
+  </section>
+
+  <!-- ── Registered sites ─────────────────────────────────────────────────── -->
+  <section id="sites">
+    <h2>Registered sites</h2>
+
+    <h3>markupware.com</h3>
+    <table>
+      <tr><td>Build</td><td>python-cortex — <code>cortex/build.py</code> (XML → HTML via xsltproc + DocBook XSL)</td></tr>
+      <tr><td>Source</td><td><code>~/ws/git/markupware.com/</code></td></tr>
+      <tr><td>Output</td><td><code>html/</code></td></tr>
+      <tr><td>TLS status</td>
+          <td><span class="err">✗ CERT MISMATCH</span> — server returns cert for
+          <code>yesplay-online.com</code> (wrong vhost default).
+          Cert expires 2026-05-21 (62 days).
+          Missing SANs: <code>markupware.com</code>, <code>www.markupware.com</code>,
+          <code>silkpage.markupware.com</code>, <code>docbookit.markupware.com</code>.</td></tr>
+      <tr><td>Fix</td><td><code>singine wsec cert --site markupware.com --fix-san --method certbot</code></td></tr>
+    </table>
+
+    <h3>lutino.io</h3>
+    <table>
+      <tr><td>Build</td><td>maven-war — <code>mvn package -DskipTests</code></td></tr>
+      <tr><td>Source</td><td><code>~/ws/git/lutino.io/lutino/</code></td></tr>
+      <tr><td>Output</td><td><code>target/lutino_webapp/</code></td></tr>
+      <tr><td>TLS status</td><td><span class="ok">✓ OK</span> — <a href="https://lutino.io">lutino.io</a> live</td></tr>
+    </table>
+  </section>
+
+  <!-- ── Decisions ────────────────────────────────────────────────────────── -->
+  <section id="decisions">
+    <h2>Decisions &amp; findings</h2>
+
+    <div class="decision">
+      <div class="term">markupware.com TLS certificate <span class="tag">WSEC-CERT-001</span></div>
+      <div class="finding">
+        <code>singine vww cert --site markupware.com</code> reveals
+        <code>ERR_TLS_CERT_ALTNAME_INVALID</code>: the server returns a Let's Encrypt
+        certificate issued for <code>yesplay-online.com</code>. This is a virtual host
+        misconfiguration — the wrong default vhost is selected before SNI resolves.
+        Required SANs are entirely absent.
+      </div>
+      <div class="fix">Fix: singine wsec cert --site markupware.com --fix-san --method certbot</div>
+    </div>
+
+    <div class="decision">
+      <div class="term">IDP trust chain <span class="tag">WSEC-IDP-001</span></div>
+      <div class="finding">
+        SSH deploy keys are ed25519, stored in <code>~/.singine/keys/</code>,
+        registered as <code>urn:singine:deploy:&lt;site&gt;</code> in
+        <code>singine.jks</code> via <code>singine.sec.trust</code>.
+        Deploy tokens are HS256 JWTs signed by <code>singine.auth.token</code>
+        (iss: <code>urn:singine:idp</code>, TTL 3600 s).
+      </div>
+    </div>
+
+    <div class="decision">
+      <div class="term">Build backends <span class="tag">WING-BUILD-001</span></div>
+      <div class="finding">
+        <code>markupware.com</code> uses the <code>python-cortex</code> backend
+        (XML source → HTML via xsltproc + DocBook XSL, catalogued via
+        <code>cortex/catalog.xml</code> rewriting dead remote URLs to local archives).
+        <code>lutino.io</code> uses the <code>maven-war</code> backend.
+        Both serve locally via Python's built-in HTTP server.
+      </div>
+    </div>
+
+    <div class="decision">
+      <div class="term">vww HTTP security scan <span class="tag">VWW-AUDIT-001</span></div>
+      <div class="finding">
+        Checks: HTTPS redirect · HSTS · CSP · X-Content-Type-Options ·
+        X-Frame-Options · Referrer-Policy · Permissions-Policy · server header exposure.
+        All read-only. Complements <code>wsec cert</code> with application-layer posture.
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Commands reference ───────────────────────────────────────────────── -->
+  <section id="commands">
+    <h2>Command reference</h2>
+
+    <h3>singine www</h3>
+    <pre>singine www deploy  --site markupware.com [--method rsync|scp|dropbox|all] [--dry-run]
+singine www sync    --site lutino.io      --method rsync
+singine www status  --site markupware.com [--json]
+singine www diff    --site markupware.com
+singine www pull    --site markupware.com</pre>
+
+    <h3>singine vww</h3>
+    <pre>singine vww cert    --site markupware.com [--json]
+singine vww scan    --site lutino.io      [--json]
+singine vww assets  --site markupware.com [--json]
+singine vww check   --site markupware.com [--all] [--json]
+singine vww audit   --site markupware.com [--json]</pre>
+
+    <h3>singine wingine</h3>
+    <pre>singine wingine build  --site markupware.com [--clean] [--dry-run]
+singine wingine serve  --site markupware.com [--port 8080]
+singine wingine status --site markupware.com [--json]</pre>
+
+    <h3>singine wsec</h3>
+    <pre>singine wsec cert   --site markupware.com [--fix-san] [--method certbot|acme.sh|manual]
+singine wsec keys   --site markupware.com [--add|--rotate] [--dry-run]
+singine wsec token  --site markupware.com [--ttl 3600] [--dry-run]
+singine wsec status --site markupware.com [--json]</pre>
+  </section>
+
+  <!-- ── Artefacts ────────────────────────────────────────────────────────── -->
+  <section id="artefacts">
+    <h2>Artefacts</h2>
+    <ul class="artefacts">
+      <li><span class="tag">module</span>   <span class="path">singine/www.py</span>       <span class="tag">WWW-MOD-001</span></li>
+      <li><span class="tag">module</span>   <span class="path">singine/vww.py</span>       <span class="tag">VWW-MOD-001</span></li>
+      <li><span class="tag">module</span>   <span class="path">singine/wingine.py</span>   <span class="tag">WING-MOD-001</span></li>
+      <li><span class="tag">module</span>   <span class="path">singine/wsec.py</span>      <span class="tag">WSEC-MOD-001</span></li>
+      <li><span class="tag">cli-patch</span><span class="path">singine/command.py</span>  <span class="tag">CLI-WEB-001</span>  — 4 command families registered in <code>build_parser()</code></li>
+      <li><span class="tag">doc</span>      <span class="path">docs/singine-web.md</span>  <span class="tag">DOC-WEB-001</span></li>
+      <li><span class="tag">man</span>      <span class="path">man/singine-web.1</span>    <span class="tag">MAN-WEB-001</span>  — <code>man singine-web(1)</code></li>
+      <li><span class="tag">pos-form</span> <span class="path">today/2020s/2026/03/21/pos-form.xml</span></li>
+      <li><span class="tag">pos-locp</span> <span class="path">today/2020s/2026/03/21/pos-locp.xml</span></li>
+    </ul>
+  </section>
+
+  <!-- ── Topics ───────────────────────────────────────────────────────────── -->
+  <section id="topics">
+    <h2>Terms and topics of reference</h2>
+    <p>
+      <span class="tag">urn:singine:topic:web-deployment</span>
+      <span class="tag">urn:singine:topic:tls-security</span>
+      <span class="tag">urn:singine:topic:ssh-key-management</span>
+      <span class="tag">urn:singine:topic:idp-jwt</span>
+      <span class="tag">urn:singine:topic:build-pipeline</span>
+      <span class="tag">urn:singine:topic:site-markupware.com</span>
+      <span class="tag">urn:singine:topic:site-lutino.io</span>
+    </p>
+    <table>
+      <thead><tr><th>Term</th><th>Reference</th></tr></thead>
+      <tbody>
+        <tr><td>singine IDP</td>       <td><code>singine.auth.token</code> · <code>singine.sec.trust</code> · <code>singine.jks</code></td></tr>
+        <tr><td>JWT (HS256)</td>       <td>RFC 7515 (JWS) · RFC 7519 (JWT) · iss: <code>urn:singine:idp</code></td></tr>
+        <tr><td>ed25519 SSH key</td>   <td>OpenSSH · stored <code>~/.singine/keys/</code> · URN: <code>urn:singine:deploy:&lt;site&gt;</code></td></tr>
+        <tr><td>TLS SAN</td>           <td>RFC 5280 Subject Alternative Name · ERR_TLS_CERT_ALTNAME_INVALID</td></tr>
+        <tr><td>Let's Encrypt</td>     <td>ACME protocol · certbot · acme.sh</td></tr>
+        <tr><td>DocBook XSL</td>       <td>Norman Walsh · xsltproc · <code>cortex/catalog.xml</code></td></tr>
+        <tr><td>SilkPage</td>          <td>XML-based web publishing · <code>silkpage.markupware.com</code></td></tr>
+        <tr><td>Maven WAR</td>         <td>Apache Maven · <code>mvn package -DskipTests</code> · lutino.io</td></tr>
+        <tr><td>Dropbox sync</td>      <td>rsync local → <code>~/Dropbox/www/&lt;site&gt;/</code> staging backup</td></tr>
+        <tr><td>Collibra</td>          <td>WWW-DEPLOY-001 · VWW-AUDIT-001 · WING-BUILD-001 · WSEC-IDP-001</td></tr>
+        <tr><td>pos-form</td>          <td><code>urn:singine:pos:form</code> · opcode FORM · governed lambda</td></tr>
+        <tr><td>pos-locp</td>          <td><code>urn:singine:pos:locp</code> · opcode LOCP · location probe BRU</td></tr>
+        <tr><td>Nowruz</td>            <td>1 Farvardin 1405 · Persian New Year · 2026-03-21</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ── See also ─────────────────────────────────────────────────────────── -->
+  <section id="see-also">
+    <h2>See also</h2>
+    <ul style="font-size:0.88rem; padding-left:1.2rem;">
+      <li><a href="../docs/singine-web.md"><code>docs/singine-web.md</code></a> — full reference guide</li>
+      <li><code>man singine-web(1)</code> — condensed man page</li>
+      <li><code>singine-transfer(1)</code> — lower-level rsync, scp, SSH, SFTP</li>
+      <li><code>singine-auth(1)</code> — TOTP and JWT signing</li>
+      <li><code>singine-idp(1)</code> — identity provider lifecycle</li>
+      <li><code>singine-domain(1)</code> — event log (deploy events recorded here)</li>
+      <li><code>singine-edge(1)</code> — Collibra edge stack (separate from public web)</li>
+    </ul>
+  </section>
+
+  <footer>
+    <span>© 2026 Sina Heshmati · SinDoc · sindoc.local</span>
+    <span class="sources">
+      Sources:
+      <a href="../today/2020s/2026/03/21/pos-form.xml">pos-form.xml</a> ·
+      <a href="../today/2020s/2026/03/21/pos-locp.xml">pos-locp.xml</a> ·
+      <a href="../docs/singine-web.md">singine-web.md</a>
+    </span>
+    <span>Generated by singine 0.3.0 · <code>urn:singine:idp</code></span>
+  </footer>
+
+</div>
+</body>
+</html>

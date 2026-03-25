@@ -820,6 +820,243 @@ def cmd_template_create(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_template_list(args: argparse.Namespace) -> int:
+    from .template import list_template_library
+
+    payload = {
+        "ok": True,
+        "items": list_template_library(family=getattr(args, "family", None)),
+    }
+    if args.json:
+        print_json(payload)
+    else:
+        for item in payload["items"]:
+            print(f"{item['name']} [{item['family']}]")
+            print(f"  {item['description']}")
+            print(f"  {item['reference_command']}")
+    return 0
+
+
+def cmd_template_materialize(args: argparse.Namespace) -> int:
+    from .template import materialize_library_entry
+
+    try:
+        payload = materialize_library_entry(
+            name=args.name,
+            output_dir=Path(args.output_dir).expanduser(),
+            title=getattr(args, "title", None),
+        )
+    except KeyError:
+        error = {"ok": False, "error": f"unknown template library entry: {args.name}"}
+        if args.json:
+            print_json(error)
+        else:
+            print(error["error"], file=sys.stderr)
+        return 1
+
+    if args.json:
+        print_json(payload)
+    else:
+        print(payload["artifacts"].get("markdown") or payload["artifacts"].get("json"))
+    return 0
+
+
+def cmd_dotfiles_inspect(args: argparse.Namespace) -> int:
+    from .dotfiles import build_payload
+
+    payload = build_payload(
+        home_dir=Path(args.home_dir).expanduser(),
+        dotfiles_repo=Path(args.dotfiles_repo).expanduser(),
+    )
+    print_json(payload)
+    return 0
+
+
+def cmd_dotfiles_dashboard(args: argparse.Namespace) -> int:
+    from .dotfiles import write_dashboard
+
+    payload = write_dashboard(
+        output_dir=Path(args.output_dir).expanduser(),
+        home_dir=Path(args.home_dir).expanduser(),
+        dotfiles_repo=Path(args.dotfiles_repo).expanduser(),
+    )
+    if args.json:
+        print_json(payload)
+    else:
+        print(payload["artifacts"]["html"])
+    return 0
+
+
+def cmd_dotfiles_capture(args: argparse.Namespace) -> int:
+    from .dotfiles import capture_target
+
+    try:
+        payload = capture_target(
+            name=args.name,
+            home_dir=Path(args.home_dir).expanduser(),
+            dotfiles_repo=Path(args.dotfiles_repo).expanduser(),
+        )
+    except KeyError:
+        print_json({"ok": False, "error": f"unknown dotfile target: {args.name}"})
+        return 1
+    except FileNotFoundError as exc:
+        print_json({"ok": False, "error": f"missing source path: {exc}"})
+        return 1
+    if args.json:
+        print_json(payload)
+    else:
+        print(payload["target"])
+    return 0
+
+
+def cmd_intranet_control_center(args: argparse.Namespace) -> int:
+    from .control_center import write_control_center
+
+    payload = write_control_center(
+        output_dir=Path(args.output_dir).expanduser(),
+        home_dir=Path(args.home_dir).expanduser(),
+        dotfiles_repo=Path(args.dotfiles_repo).expanduser(),
+        ai_root_dir=Path(args.ai_root_dir).expanduser(),
+        repo_ai_dir=Path(args.repo_ai_dir).expanduser(),
+        repo_root=REPO_ROOT,
+    )
+    if args.json:
+        print_json(payload)
+    else:
+        print(payload["artifacts"]["html"])
+    return 0
+
+
+def cmd_intranet_publish(args: argparse.Namespace) -> int:
+    from .intranet_deploy import write_publish_bundle
+
+    payload = write_publish_bundle(
+        site_root=Path(args.site_root).expanduser(),
+        deploy_root=Path(args.deploy_root).expanduser(),
+        silkpage_root=Path(args.silkpage_root).expanduser(),
+        ssl_dir=Path(args.ssl_dir).expanduser(),
+        domain=args.domain,
+        sync=not args.no_sync,
+    )
+    if args.json:
+        print_json(payload)
+    else:
+        print(payload["artifacts"]["html"])
+    return 0
+
+
+def cmd_intranet_cert_bootstrap(args: argparse.Namespace) -> int:
+    from .intranet_deploy import bootstrap_local_tls
+
+    payload = bootstrap_local_tls(
+        ssl_dir=Path(args.ssl_dir).expanduser(),
+        domain=args.domain,
+        force=args.force,
+    )
+    if args.json:
+        print_json(payload)
+    else:
+        print(payload["server_cert"])
+    return 0
+
+
+def cmd_gen_command_capture(args: argparse.Namespace) -> int:
+    from .cmdlib import record_command
+
+    payload = record_command(
+        raw_command=args.raw,
+        shell=args.shell,
+        pwd=args.pwd,
+        exit_code=args.exit_code,
+        history_id=args.history_id,
+        pid=args.pid,
+        session=args.session,
+        root_dir=Path(args.root_dir).expanduser() if args.root_dir else None,
+    )
+    if args.json:
+        print_json(payload)
+    else:
+        print(payload["history_path"])
+    return 0
+
+
+def cmd_gen_command_list(args: argparse.Namespace) -> int:
+    from .cmdlib import write_command_list
+
+    payload = write_command_list(
+        root_dir=Path(args.root_dir).expanduser() if args.root_dir else None,
+        output_dir=Path(args.output_dir).expanduser() if args.output_dir else None,
+        since_days=args.since_days,
+        limit=args.limit,
+    )
+    if args.json:
+        print_json(payload)
+    else:
+        print(payload["artifacts"]["html"])
+    return 0
+
+
+def cmd_proof_specimen(args: argparse.Namespace) -> int:
+    from .font_proof import build_specimen
+
+    payload = build_specimen(
+        output_dir=Path(args.output_dir).expanduser(),
+        fonts=args.fonts,
+        title=args.title,
+    )
+    if args.json:
+        print_json(payload)
+    else:
+        print(payload["artifacts"]["pdf"])
+    return 0
+
+
+def cmd_proof_showcase(args: argparse.Namespace) -> int:
+    from .font_proof import build_showcase
+
+    payload = build_showcase(
+        output_dir=Path(args.output_dir).expanduser(),
+        font=args.font,
+        title=args.title,
+    )
+    if args.json:
+        print_json(payload)
+    else:
+        print(payload["artifacts"]["pdf"])
+    return 0
+
+
+def cmd_proof_harfbuzz(args: argparse.Namespace) -> int:
+    from .font_proof import build_harfbuzz_preview
+
+    payload = build_harfbuzz_preview(
+        font=args.font,
+        text=args.text,
+        output_dir=Path(args.output_dir).expanduser(),
+    )
+    if args.json:
+        print_json(payload)
+    else:
+        print(payload["artifacts"]["pdf"])
+    return 0
+
+
+def cmd_proof_suite(args: argparse.Namespace) -> int:
+    from .font_proof import build_suite
+
+    payload = build_suite(
+        output_dir=Path(args.output_dir).expanduser(),
+        specimen_fonts=args.fonts,
+        showcase_font=args.showcase_font,
+        hb_font=args.hb_font,
+    )
+    if args.json:
+        print_json(payload)
+    else:
+        print(payload["showcase"]["artifacts"]["pdf"])
+    return 0
+
+
 def cmd_runtime_inspect(args: argparse.Namespace) -> int:
     payload = {
         "terminal_context": terminal_context(None),
@@ -928,6 +1165,523 @@ def cmd_runtime_exec_external(args: argparse.Namespace) -> int:
         }
     print_json(payload)
     return 0 if result["ok"] else 1
+
+
+# ── Java runtime governance (singine runtime java) ───────────────────────────
+
+def _java_registry_path() -> Path:
+    """Locate the Singine Java runtime registry.
+
+    Resolution order:
+      1. SINGINE_REGISTRY env var (explicit path to registry.json)
+      2. SINGINE_ROOT env var + /runtime/java/registry.json
+      3. Hardcoded canonical location
+    """
+    if r := os.environ.get("SINGINE_REGISTRY"):
+        return Path(r)
+    if root := os.environ.get("SINGINE_ROOT"):
+        return Path(root) / "runtime" / "java" / "registry.json"
+    return Path("/private/tmp/singine-personal-os/runtime/java/registry.json")
+
+
+def _java_load_registry() -> Dict[str, Any]:
+    path = _java_registry_path()
+    if not path.exists():
+        raise FileNotFoundError(
+            f"Java registry not found at {path}. "
+            "Set SINGINE_ROOT or SINGINE_REGISTRY to point to the registry."
+        )
+    import json as _json
+    return _json.loads(path.read_text(encoding="utf-8"))
+
+
+def _java_resolve_alias(registry: Dict[str, Any], alias: str) -> Dict[str, Any]:
+    for v in registry.get("versions", []):
+        if v["alias"] == alias:
+            return v
+    known = [v["alias"] for v in registry.get("versions", [])]
+    raise ValueError(f"Unknown Java alias '{alias}'. Known aliases: {', '.join(known)}")
+
+
+def _java_read_reqs_singine(directory: Path) -> Optional[str]:
+    """Extract :java alias from reqs.singine in the given directory."""
+    cfg = directory / "reqs.singine"
+    if not cfg.exists():
+        return None
+    import re
+    text = cfg.read_text(encoding="utf-8")
+    m = re.search(r':java\s+"([^"]+)"', text)
+    return m.group(1) if m else None
+
+
+def _java_resolve_for_dir(registry: Dict[str, Any], directory: Path) -> tuple[str, str]:
+    """Return (alias, source) via the three-step resolution chain."""
+    # Step 1: reqs.singine
+    alias = _java_read_reqs_singine(directory)
+    if alias:
+        return alias, "reqs.singine"
+    # Step 2: application-map (keyed by directory base name)
+    appmap = registry.get("application_map", {})
+    alias = appmap.get(directory.name)
+    if alias:
+        return alias, "application-map"
+    # Step 3: policy default
+    alias = registry.get("policy", {}).get("default", "lts")
+    return alias, "policy-default"
+
+
+def _java_sdkman_home() -> Path:
+    return Path(os.environ.get("SDKMAN_DIR", str(Path.home() / ".sdkman")))
+
+
+def cmd_runtime_java_list(args: argparse.Namespace) -> int:
+    try:
+        registry = _java_load_registry()
+    except FileNotFoundError as exc:
+        print(f"[singine runtime java] ERROR: {exc}", file=sys.stderr)
+        return 1
+
+    versions = registry.get("versions", [])
+    appmap = registry.get("application_map", {})
+    default = registry.get("policy", {}).get("default", "lts")
+
+    if getattr(args, "json", False):
+        print_json({"versions": versions, "application_map": appmap, "default": default})
+        return 0
+
+    print()
+    print(f"{'ALIAS':<12}  {'SDKMAN ID':<28}  {'MAJOR':<8}  {'STATUS':<10}  NOTES")
+    print("─" * 80)
+    for v in versions:
+        marker = " ◀ default" if v["alias"] == default else ""
+        print(f"{v['alias']:<12}  {v['sdkman_id']:<28}  {str(v['major']):<8}  {v['status']:<10}  {v.get('notes','')}{marker}")
+    print()
+    if appmap:
+        print(f"{'APPLICATION':<30}  ALIAS")
+        print("─" * 45)
+        for app, alias in appmap.items():
+            print(f"{app:<30}  {alias}")
+        print()
+    return 0
+
+
+def cmd_runtime_java_inspect(args: argparse.Namespace) -> int:
+    try:
+        registry = _java_load_registry()
+    except FileNotFoundError as exc:
+        print(f"[singine runtime java] ERROR: {exc}", file=sys.stderr)
+        return 1
+
+    directory = Path(args.dir).resolve() if getattr(args, "dir", None) else Path.cwd()
+    alias, source = _java_resolve_for_dir(registry, directory)
+    try:
+        version_entry = _java_resolve_alias(registry, alias)
+    except ValueError as exc:
+        print(f"[singine runtime java] ERROR: {exc}", file=sys.stderr)
+        return 1
+
+    sdkman_home = _java_sdkman_home()
+    candidate = sdkman_home / "candidates" / "java" / version_entry["sdkman_id"]
+
+    payload = {
+        "directory": str(directory),
+        "source": source,
+        "alias": alias,
+        "sdkman_id": version_entry["sdkman_id"],
+        "major": version_entry["major"],
+        "distribution": version_entry["distribution"],
+        "status": version_entry["status"],
+        "installed": candidate.exists(),
+        "java_home": str(candidate),
+    }
+
+    if getattr(args, "json", False):
+        print_json(payload)
+        return 0
+
+    print(f"directory   : {payload['directory']}")
+    print(f"source      : {payload['source']}")
+    print(f"alias       : {payload['alias']}")
+    print(f"sdkman_id   : {payload['sdkman_id']}")
+    print(f"major       : {payload['major']}  ({payload['distribution']})")
+    print(f"status      : {payload['status']}")
+    print(f"installed   : {'yes' if payload['installed'] else 'no — run: singine runtime java install ' + alias}")
+    print(f"java_home   : {payload['java_home']}")
+    return 0
+
+
+def cmd_runtime_java_env(args: argparse.Namespace) -> int:
+    """Print export statements so callers can eval: eval $(singine runtime java env)"""
+    try:
+        registry = _java_load_registry()
+    except FileNotFoundError as exc:
+        print(f"[singine runtime java] ERROR: {exc}", file=sys.stderr)
+        return 1
+
+    if getattr(args, "alias", None):
+        alias = args.alias
+        source = "explicit"
+    else:
+        alias, source = _java_resolve_for_dir(registry, Path.cwd())
+
+    try:
+        version_entry = _java_resolve_alias(registry, alias)
+    except ValueError as exc:
+        print(f"[singine runtime java] ERROR: {exc}", file=sys.stderr)
+        return 1
+
+    sdkman_home = _java_sdkman_home()
+    java_home = sdkman_home / "candidates" / "java" / version_entry["sdkman_id"]
+
+    if getattr(args, "json", False):
+        print_json({"alias": alias, "source": source, "java_home": str(java_home),
+                    "sdkman_id": version_entry["sdkman_id"]})
+        return 0
+
+    # Shell-eval-safe output
+    print(f'export JAVA_HOME="{java_home}"')
+    print(f'export PATH="{java_home}/bin:$PATH"')
+    return 0
+
+
+def cmd_runtime_java_install(args: argparse.Namespace) -> int:
+    try:
+        registry = _java_load_registry()
+        version_entry = _java_resolve_alias(registry, args.alias)
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"[singine runtime java] ERROR: {exc}", file=sys.stderr)
+        return 1
+
+    sdkman_id = version_entry["sdkman_id"]
+    sdkman_init = _java_sdkman_home() / "bin" / "sdkman-init.sh"
+    if not sdkman_init.exists():
+        print(f"[singine runtime java] ERROR: SDKMAN not found at {sdkman_init}", file=sys.stderr)
+        return 1
+
+    print(f"[singine runtime java] Installing {sdkman_id} via SDKMAN...")
+    cmd = ["bash", "-c", f'source "{sdkman_init}" && sdk install java "{sdkman_id}"']
+    result = subprocess.run(cmd)
+    return result.returncode
+
+
+# ── JVM language registry (Groovy, Clojure) ──────────────────────────────────
+
+def _jvm_registry_path() -> Path:
+    if r := os.environ.get("SINGINE_JVM_REGISTRY"):
+        return Path(r)
+    if root := os.environ.get("SINGINE_ROOT"):
+        return Path(root) / "runtime" / "jvm" / "registry.json"
+    return Path("/private/tmp/singine-personal-os/runtime/jvm/registry.json")
+
+
+def _jvm_load_registry() -> Dict[str, Any]:
+    path = _jvm_registry_path()
+    if not path.exists():
+        raise FileNotFoundError(
+            f"JVM registry not found at {path}. "
+            "Set SINGINE_ROOT or SINGINE_JVM_REGISTRY."
+        )
+    import json as _json
+    return _json.loads(path.read_text(encoding="utf-8"))
+
+
+def _jvm_lang_read_reqs(directory: Path, lang: str) -> Optional[str]:
+    """Read :groovy / :clojure key from reqs.singine."""
+    import re
+    cfg = directory / "reqs.singine"
+    if not cfg.exists():
+        return None
+    m = re.search(rf':{lang}\s+"([^"]+)"', cfg.read_text(encoding="utf-8"))
+    return m.group(1) if m else None
+
+
+def _jvm_lang_resolve_for_dir(registry: Dict, lang: str, directory: Path) -> tuple[str, str]:
+    alias = _jvm_lang_read_reqs(directory, lang)
+    if alias:
+        return alias, "reqs.singine"
+    appmap = registry.get(lang, {}).get("application_map", {})
+    alias = appmap.get(directory.name)
+    if alias:
+        return alias, "application-map"
+    alias = registry.get(lang, {}).get("policy", {}).get("default", "lts")
+    return alias, "policy-default"
+
+
+def _jvm_lang_resolve_entry(registry: Dict, lang: str, alias: str) -> Dict[str, Any]:
+    for v in registry.get(lang, {}).get("versions", []):
+        if v["alias"] == alias:
+            return v
+    known = [v["alias"] for v in registry.get(lang, {}).get("versions", [])]
+    raise ValueError(f"Unknown {lang} alias '{alias}'. Known: {', '.join(known)}")
+
+
+def _make_runtime_lang_commands(lang: str) -> tuple:
+    """Factory returning (list_fn, inspect_fn, env_fn, install_fn) for a JVM language."""
+
+    def cmd_list(args: argparse.Namespace) -> int:
+        try:
+            registry = _jvm_load_registry()
+        except FileNotFoundError as exc:
+            print(f"[singine runtime {lang}] ERROR: {exc}", file=sys.stderr)
+            return 1
+        versions = registry.get(lang, {}).get("versions", [])
+        default = registry.get(lang, {}).get("policy", {}).get("default", "")
+        manager = registry.get(lang, {}).get("manager", "sdkman")
+        if getattr(args, "json", False):
+            print_json({"lang": lang, "manager": manager, "versions": versions, "default": default})
+            return 0
+        print(f"\n{lang.upper()} versions  (manager: {manager})\n")
+        print(f"{'ALIAS':<12}  {'VERSION/ID':<28}  {'STATUS':<10}  NOTES")
+        print("─" * 72)
+        for v in versions:
+            vid = v.get("sdkman_id") or v.get("cli_version") or v.get("lib_version", "?")
+            marker = " ◀ default" if v["alias"] == default else ""
+            print(f"{v['alias']:<12}  {vid:<28}  {v['status']:<10}  {v.get('notes','')}{marker}")
+        print()
+        return 0
+
+    def cmd_inspect(args: argparse.Namespace) -> int:
+        try:
+            registry = _jvm_load_registry()
+        except FileNotFoundError as exc:
+            print(f"[singine runtime {lang}] ERROR: {exc}", file=sys.stderr)
+            return 1
+        directory = Path(args.dir).resolve() if getattr(args, "dir", None) else Path.cwd()
+        alias, source = _jvm_lang_resolve_for_dir(registry, lang, directory)
+        try:
+            entry = _jvm_lang_resolve_entry(registry, lang, alias)
+        except ValueError as exc:
+            print(f"[singine runtime {lang}] ERROR: {exc}", file=sys.stderr)
+            return 1
+        manager = registry.get(lang, {}).get("manager", "sdkman")
+        payload = {"lang": lang, "manager": manager, "directory": str(directory),
+                   "source": source, "alias": alias, **entry}
+        if manager == "sdkman":
+            sdkman_id = entry.get("sdkman_id", alias)
+            candidate = _java_sdkman_home() / "candidates" / lang / sdkman_id
+            payload["installed"] = candidate.exists()
+            payload["home"] = str(candidate)
+        elif manager == "brew":
+            import shutil
+            payload["installed"] = bool(shutil.which(lang) or shutil.which("clj"))
+        if getattr(args, "json", False):
+            print_json(payload)
+            return 0
+        for k, v in payload.items():
+            print(f"{k:<12}: {v}")
+        return 0
+
+    def cmd_env(args: argparse.Namespace) -> int:
+        try:
+            registry = _jvm_load_registry()
+        except FileNotFoundError as exc:
+            print(f"[singine runtime {lang}] ERROR: {exc}", file=sys.stderr)
+            return 1
+        alias = getattr(args, "alias", None) or _jvm_lang_resolve_for_dir(registry, lang, Path.cwd())[0]
+        try:
+            entry = _jvm_lang_resolve_entry(registry, lang, alias)
+        except ValueError as exc:
+            print(f"[singine runtime {lang}] ERROR: {exc}", file=sys.stderr)
+            return 1
+        manager = registry.get(lang, {}).get("manager", "sdkman")
+        if manager == "sdkman":
+            sdkman_id = entry.get("sdkman_id", alias)
+            home = _java_sdkman_home() / "candidates" / lang / sdkman_id
+            payload = {"alias": alias, "sdkman_id": sdkman_id, "home": str(home)}
+            if getattr(args, "json", False):
+                print_json(payload)
+                return 0
+            print(f'export {lang.upper()}_HOME="{home}"')
+            print(f'export PATH="{home}/bin:$PATH"')
+        else:
+            payload = {"alias": alias, "manager": "brew", "note": f"Managed by brew; run: brew upgrade {lang}"}
+            if getattr(args, "json", False):
+                print_json(payload)
+                return 0
+            print(f"# {lang} is brew-managed; activate via: brew upgrade {registry.get(lang, {}).get('brew_formula', lang)}")
+        return 0
+
+    def cmd_install(args: argparse.Namespace) -> int:
+        try:
+            registry = _jvm_load_registry()
+            entry = _jvm_lang_resolve_entry(registry, lang, args.alias)
+        except (FileNotFoundError, ValueError) as exc:
+            print(f"[singine runtime {lang}] ERROR: {exc}", file=sys.stderr)
+            return 1
+        manager = registry.get(lang, {}).get("manager", "sdkman")
+        if manager == "sdkman":
+            sdkman_id = entry.get("sdkman_id", args.alias)
+            sdkman_init = _java_sdkman_home() / "bin" / "sdkman-init.sh"
+            if not sdkman_init.exists():
+                print(f"[singine runtime {lang}] ERROR: SDKMAN not found", file=sys.stderr)
+                return 1
+            print(f"[singine runtime {lang}] Installing {sdkman_id} via SDKMAN...")
+            result = subprocess.run(["bash", "-c", f'source "{sdkman_init}" && sdk install {lang} "{sdkman_id}"'])
+            return result.returncode
+        else:
+            formula = registry.get(lang, {}).get("brew_formula", lang)
+            print(f"[singine runtime {lang}] {lang.capitalize()} is brew-managed. Run:")
+            print(f"  brew install {formula}")
+            return 0
+
+    return cmd_list, cmd_inspect, cmd_env, cmd_install
+
+
+_groovy_list, _groovy_inspect, _groovy_env, _groovy_install = _make_runtime_lang_commands("groovy")
+_clojure_list, _clojure_inspect, _clojure_env, _clojure_install = _make_runtime_lang_commands("clojure")
+
+
+# ── JVM dependency aggregation (singine runtime jvm deps) ─────────────────────
+
+def _m2_exists(group: str, artifact: str, version: str) -> bool:
+    """Check if a Maven artifact exists in the local ~/.m2 cache."""
+    m2 = Path.home() / ".m2" / "repository"
+    jar = m2 / group.replace(".", "/") / artifact / version / f"{artifact}-{version}.jar"
+    return jar.exists()
+
+
+def _jvm_parse_lein(path: Path) -> List[Dict[str, Any]]:
+    """Parse :dependencies from a Leiningen project.clj."""
+    import re
+    text = path.read_text(encoding="utf-8")
+    deps: List[Dict[str, Any]] = []
+    in_deps = False
+    for line in text.splitlines():
+        stripped = line.strip()
+        if ":dependencies" in stripped:
+            in_deps = True
+        if not in_deps:
+            continue
+        m = re.search(r'\[([a-zA-Z0-9._\-]+(?:/[a-zA-Z0-9._\-]+)?)\s+"([^"]+)"\]', stripped)
+        if m:
+            coord, version = m.group(1), m.group(2)
+            if "/" in coord:
+                group, artifact = coord.split("/", 1)
+            else:
+                group = artifact = coord
+            deps.append({"group": group, "artifact": artifact, "version": version, "scope": "compile"})
+        # Stop when we exit the :dependencies vector
+        if in_deps and stripped.startswith(":") and ":dependencies" not in stripped and deps:
+            break
+    return deps
+
+
+def _jvm_parse_deps_edn(path: Path) -> List[Dict[str, Any]]:
+    """Parse :deps from a Clojure CLI deps.edn."""
+    import re
+    text = path.read_text(encoding="utf-8")
+    deps: List[Dict[str, Any]] = []
+    for m in re.finditer(r'([a-zA-Z0-9._\-]+/[a-zA-Z0-9._\-]+)\s*\{:mvn/version\s+"([^"]+)"\}', text):
+        coord, version = m.group(1), m.group(2)
+        group, artifact = coord.split("/", 1)
+        deps.append({"group": group, "artifact": artifact, "version": version, "scope": "compile"})
+    return deps
+
+
+def _jvm_parse_gradle(path: Path) -> List[Dict[str, Any]]:
+    """Parse dependencies from a Gradle Groovy DSL build.gradle."""
+    import re
+    text = path.read_text(encoding="utf-8")
+    deps: List[Dict[str, Any]] = []
+    scope_kw = r'(?:compileOnly|implementation|runtimeOnly|api|testImplementation|xmlDoclet|annotationProcessor)'
+    for m in re.finditer(
+        rf'({scope_kw})\s+[\'"]([a-zA-Z0-9._\-]+):([a-zA-Z0-9._\-]+):([0-9][^\s\'"]*)[\'"]',
+        text,
+    ):
+        scope, group, artifact, version = m.group(1), m.group(2), m.group(3), m.group(4)
+        deps.append({"group": group, "artifact": artifact, "version": version, "scope": scope})
+    return deps
+
+
+def _jvm_aggregate_deps() -> Dict[str, Any]:
+    """Aggregate JVM deps from singine, collibra, and silkpage."""
+    configs = [
+        {
+            "name": "singine-core",
+            "path": Path.home() / "ws/git/github/sindoc/singine/core",
+            "parsers": [("project.clj", _jvm_parse_lein), ("deps.edn", _jvm_parse_deps_edn)],
+        },
+        {
+            "name": "collibra-edge",
+            "path": Path.home() / "ws/git/github/sindoc/collibra/edge/java",
+            "parsers": [("build.gradle", _jvm_parse_gradle)],
+        },
+        {
+            "name": "silkpage-core",
+            "path": Path.home() / "ws/git/github/sindoc/silkpage/core",
+            "parsers": [],
+        },
+    ]
+
+    projects: List[Dict[str, Any]] = []
+    all_deps: Dict[str, Dict] = {}  # (group, artifact, version) → dep + which projects use it
+
+    for cfg in configs:
+        seen: set = set()
+        project_deps: List[Dict] = []
+        sources: List[str] = []
+
+        for filename, parser_fn in cfg["parsers"]:
+            build_file = cfg["path"] / filename
+            if not build_file.exists():
+                continue
+            sources.append(filename)
+            for dep in parser_fn(build_file):
+                key = (dep["group"], dep["artifact"], dep["version"])
+                if key in seen:
+                    continue
+                seen.add(key)
+                dep["in_m2"] = _m2_exists(dep["group"], dep["artifact"], dep["version"])
+                project_deps.append(dep)
+                if key not in all_deps:
+                    all_deps[key] = {**dep, "used_by": []}
+                all_deps[key]["used_by"].append(cfg["name"])
+
+        projects.append({
+            "name": cfg["name"],
+            "path": str(cfg["path"]),
+            "sources": sources,
+            "deps": project_deps,
+        })
+
+    shared = [v for v in all_deps.values() if len(v["used_by"]) > 1]
+    return {"projects": projects, "total_unique": len(all_deps), "shared": shared}
+
+
+def cmd_runtime_jvm_deps(args: argparse.Namespace) -> int:
+    project_filter = getattr(args, "project", None)
+    data = _jvm_aggregate_deps()
+
+    if project_filter:
+        data["projects"] = [p for p in data["projects"] if p["name"] == project_filter]
+        if not data["projects"]:
+            known = [p["name"] for p in _jvm_aggregate_deps()["projects"]]
+            print(f"[singine runtime jvm] Unknown project '{project_filter}'. Known: {', '.join(known)}", file=sys.stderr)
+            return 1
+
+    if getattr(args, "json", False):
+        print_json(data)
+        return 0
+
+    for proj in data["projects"]:
+        header = f"── {proj['name']}  ({', '.join(proj['sources']) or 'no build files found'})  {proj['path']}"
+        print(f"\n{header}")
+        print("─" * min(len(header), 100))
+        if not proj["deps"]:
+            print("  (no Maven/Gradle dependencies declared)")
+            continue
+        print(f"  {'SCOPE':<14}  {'GROUP':<30}  {'ARTIFACT':<28}  {'VERSION':<14}  M2")
+        print(f"  {'─'*14}  {'─'*30}  {'─'*28}  {'─'*14}  ──")
+        for dep in proj["deps"]:
+            m2 = "✓" if dep["in_m2"] else "·"
+            print(f"  {dep['scope']:<14}  {dep['group']:<30}  {dep['artifact']:<28}  {dep['version']:<14}  {m2}")
+    print(f"\nTotal unique deps: {data['total_unique']}")
+    if data["shared"]:
+        print(f"Shared across projects ({len(data['shared'])}):")
+        for dep in data["shared"]:
+            print(f"  {dep['group']}:{dep['artifact']}:{dep['version']}  ← {', '.join(dep['used_by'])}")
+    print()
+    return 0
 
 
 def cmd_server_inspect(args: argparse.Namespace) -> int:
@@ -1353,6 +2107,73 @@ def cmd_model_inspect(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_campaign_dataset_plan(args: argparse.Namespace) -> int:
+    from .dataset_campaign import launch_dataset_campaign, write_campaign
+
+    payload = launch_dataset_campaign(
+        title=args.title,
+        brief=args.brief,
+        active_contracts=args.contract,
+        active_contacts=args.contact,
+        trusted_realms=args.trusted_realm,
+        vocabulary_terms=args.vocabulary_term,
+    )
+    if args.output:
+        output_path = write_campaign(Path(args.output).expanduser(), payload)
+        payload["output_path"] = str(output_path)
+    if args.json:
+        print_json(payload)
+    else:
+        print(payload.get("output_path") or json.dumps(payload, indent=2))
+    return 0
+
+
+def cmd_demo_zip_neighborhood(args: argparse.Namespace) -> int:
+    from .zip_neighborhood_demo import write_zip_neighborhood_demo_bundle
+
+    manifest = write_zip_neighborhood_demo_bundle(
+        output_dir=Path(args.output_dir).expanduser(),
+        title=args.title,
+        domain_db=Path(args.db).expanduser() if args.db else None,
+        actor_id=args.actor_id,
+    )
+    if args.json:
+        print_json(manifest)
+    else:
+        print(manifest["artifacts"]["markdown"])
+    return 0
+
+
+def cmd_platform_blueprint(args: argparse.Namespace) -> int:
+    from .platform_blueprint import write_platform_blueprint_bundle
+
+    manifest = write_platform_blueprint_bundle(
+        output_dir=Path(args.output_dir).expanduser(),
+        title=args.title,
+    )
+    if args.json:
+        print_json(manifest)
+    else:
+        print(manifest["artifacts"]["markdown"])
+    return 0
+
+
+def cmd_essay_personal_os(args: argparse.Namespace) -> int:
+    from .personal_os import write_personal_os_bundle
+
+    manifest = write_personal_os_bundle(
+        output_dir=Path(args.output_dir).expanduser(),
+        title=args.title,
+        onepager=Path(args.onepager).expanduser(),
+        metamodel_root=Path(args.metamodel_root).expanduser(),
+    )
+    if args.json:
+        print_json(manifest)
+    else:
+        print(manifest["artifacts"]["markdown"])
+    return 0
+
+
 # ---------------------------------------------------------------------------
 # smtp — test and send via SMTP
 # ---------------------------------------------------------------------------
@@ -1758,6 +2579,24 @@ def cmd_ai_session_export(args: argparse.Namespace) -> int:
     if not getattr(args, "raw", False):
         s = {k: v for k, v in s.items() if not k.endswith("_raw")}
     print(json.dumps(s, indent=2))
+    return 0
+
+
+def cmd_ai_session_dashboard(args: argparse.Namespace) -> int:
+    from .session_dashboard import write_dashboard
+
+    payload = write_dashboard(
+        output_dir=Path(args.output_dir).expanduser(),
+        json_root_dir=Path(args.root_dir).expanduser(),
+        repo_ai_dir=Path(args.repo_ai_dir).expanduser(),
+        providers=args.provider,
+        title=args.title,
+        site_url=args.site_url,
+    )
+    if args.json:
+        print_json(payload)
+    else:
+        print(payload["artifacts"]["html"])
     return 0
 
 
@@ -2188,6 +3027,225 @@ def build_parser() -> argparse.ArgumentParser:
     )
     template_create.set_defaults(func=cmd_template_create)
 
+    template_list = template_sub.add_parser(
+        "list",
+        help="List reusable bundle templates and archetypes registered in Singine",
+    )
+    template_list.add_argument(
+        "--family",
+        choices=["template", "archetype"],
+        help="Filter the library to one family",
+    )
+    template_list.add_argument("--json", action="store_true")
+    template_list.set_defaults(func=cmd_template_list)
+
+    template_materialize = template_sub.add_parser(
+        "materialize",
+        help="Materialize a registered reusable template or archetype into an output directory",
+    )
+    template_materialize.add_argument("name", help="Library entry name, e.g. personal-os-essay")
+    template_materialize.add_argument("--output-dir", "-o", required=True, help="Destination directory")
+    template_materialize.add_argument("--title", help="Optional title override when supported")
+    template_materialize.add_argument("--json", action="store_true")
+    template_materialize.set_defaults(func=cmd_template_materialize)
+
+    gen_parser = sub.add_parser("gen", help="Generate command-library and other publishable Singine assets")
+    gen_sub = gen_parser.add_subparsers(dest="gen_subcommand")
+    gen_parser.set_defaults(func=lambda a: (gen_parser.print_help(), 1)[1])
+
+    gen_command = gen_sub.add_parser("command", help="Capture and publish central command-history assets")
+    gen_command_sub = gen_command.add_subparsers(dest="gen_command_subcommand")
+    gen_command.set_defaults(func=lambda a: (gen_command.print_help(), 1)[1])
+
+    gen_command_capture = gen_command_sub.add_parser("capture", help="Append one raw shell command to the central Singine command history")
+    gen_command_capture.add_argument("--raw", required=True, help="Raw command as typed in the shell history")
+    gen_command_capture.add_argument("--shell", default="bash", help="Shell name that issued the command")
+    gen_command_capture.add_argument("--pwd", default=os.getcwd(), help="Working directory at execution time")
+    gen_command_capture.add_argument("--exit-code", type=int, default=0, help="Command exit status")
+    gen_command_capture.add_argument("--history-id", type=int, help="Shell history index for the command")
+    gen_command_capture.add_argument("--pid", type=int, help="Shell process id")
+    gen_command_capture.add_argument("--session", help="Optional session identifier")
+    gen_command_capture.add_argument("--root-dir", help="Command-library root directory (default: ~/.singine/command-library)")
+    gen_command_capture.add_argument("--json", action="store_true", help="Emit JSON")
+    gen_command_capture.set_defaults(func=cmd_gen_command_capture)
+
+    gen_command_list = gen_command_sub.add_parser("list", help="Generate JSON, Markdown, and HTML command-library assets from captured history")
+    gen_command_list.add_argument("--root-dir", help="Command-library root directory (default: ~/.singine/command-library)")
+    gen_command_list.add_argument("--output-dir", help="Output directory for generated artifacts")
+    gen_command_list.add_argument("--since-days", type=int, help="Only include commands recorded in the last N days")
+    gen_command_list.add_argument("--limit", type=int, help="Maximum number of command assets to emit")
+    gen_command_list.add_argument("--json", action="store_true", help="Emit JSON")
+    gen_command_list.set_defaults(func=cmd_gen_command_list)
+
+    proof_parser = sub.add_parser(
+        "proof",
+        help="Generate Persian font specimens, bilingual showcase PDFs, and HarfBuzz previews",
+    )
+    proof_sub = proof_parser.add_subparsers(dest="proof_subcommand")
+    proof_parser.set_defaults(func=lambda a: (proof_parser.print_help(), 1)[1])
+
+    proof_specimen = proof_sub.add_parser(
+        "specimen",
+        help="Build a multi-font Persian specimen PDF with math, Unicode, and ASCII-art checks",
+    )
+    proof_specimen.add_argument("--output-dir", default=str(REPO_ROOT / "docs" / "target" / "farsi-proof"))
+    proof_specimen.add_argument("--title", default="Singine Persian Font Specimen")
+    proof_specimen.add_argument(
+        "--fonts",
+        nargs="+",
+        default=["Amiri", "Geeza Pro", "Al Bayan", "Damascus", "Baghdad", "Tahoma"],
+        help="Font families to compare",
+    )
+    proof_specimen.add_argument("--json", action="store_true")
+    proof_specimen.set_defaults(func=cmd_proof_specimen)
+
+    proof_showcase = proof_sub.add_parser(
+        "showcase",
+        help="Build a compact bilingual showcase PDF for complex analysis, entropy, and Dirac typography",
+    )
+    proof_showcase.add_argument("--output-dir", default=str(REPO_ROOT / "docs" / "target" / "farsi-proof"))
+    proof_showcase.add_argument("--title", default="Propagation, Bubbles, And Complex Analysis")
+    proof_showcase.add_argument("--font", default="Amiri", help="Primary body font family")
+    proof_showcase.add_argument("--json", action="store_true")
+    proof_showcase.set_defaults(func=cmd_proof_showcase)
+
+    proof_hb = proof_sub.add_parser(
+        "harfbuzz",
+        help="Render a direct HarfBuzz preview PDF for one font family",
+    )
+    proof_hb.add_argument("--output-dir", default=str(REPO_ROOT / "docs" / "target" / "farsi-proof"))
+    proof_hb.add_argument("--font", default="Noto Naskh Arabic")
+    proof_hb.add_argument("--text", default="سلام فارسی · Complex phase z = re^{iθ} · ∮ f(z) dz")
+    proof_hb.add_argument("--json", action="store_true")
+    proof_hb.set_defaults(func=cmd_proof_harfbuzz)
+
+    proof_suite = proof_sub.add_parser(
+        "suite",
+        help="Build specimen, showcase, and HarfBuzz preview artifacts together",
+    )
+    proof_suite.add_argument("--output-dir", default=str(REPO_ROOT / "docs" / "target" / "farsi-proof"))
+    proof_suite.add_argument(
+        "--fonts",
+        nargs="+",
+        default=["Amiri", "Geeza Pro", "Al Bayan", "Damascus", "Baghdad", "Tahoma"],
+        help="Font families for the specimen document",
+    )
+    proof_suite.add_argument("--showcase-font", default="Amiri")
+    proof_suite.add_argument("--hb-font", default="Noto Naskh Arabic")
+    proof_suite.add_argument("--json", action="store_true")
+    proof_suite.set_defaults(func=cmd_proof_suite)
+
+    archetype_parser = sub.add_parser(
+        "archetype",
+        help="List and materialize higher-level reusable Singine archetypes",
+    )
+    archetype_sub = archetype_parser.add_subparsers(dest="archetype_command")
+    archetype_parser.set_defaults(func=lambda a: (archetype_parser.print_help(), 1)[1])
+
+    archetype_list = archetype_sub.add_parser("list", help="List registered archetypes")
+    archetype_list.add_argument("--json", action="store_true")
+    archetype_list.set_defaults(func=cmd_template_list, family="archetype")
+
+    archetype_materialize = archetype_sub.add_parser(
+        "materialize",
+        help="Materialize one registered archetype into an output directory",
+    )
+    archetype_materialize.add_argument("name", help="Archetype name, e.g. personal-os-essay")
+    archetype_materialize.add_argument("--output-dir", "-o", required=True, help="Destination directory")
+    archetype_materialize.add_argument("--title", help="Optional title override when supported")
+    archetype_materialize.add_argument("--json", action="store_true")
+    archetype_materialize.set_defaults(func=cmd_template_materialize)
+
+    dotfiles_parser = sub.add_parser(
+        "dotfiles",
+        help="Inspect, dashboard, and capture home dotfiles into a controlled repo",
+    )
+    dotfiles_sub = dotfiles_parser.add_subparsers(dest="dotfiles_command")
+    dotfiles_parser.set_defaults(func=lambda a: (dotfiles_parser.print_help(), 1)[1])
+
+    dotfiles_common = argparse.ArgumentParser(add_help=False)
+    dotfiles_common.add_argument("--home-dir", default=str(Path.home()))
+    dotfiles_common.add_argument("--dotfiles-repo", default="/Users/skh/ws/git/bitbucket/sindoc/dotfiles")
+
+    dotfiles_inspect = dotfiles_sub.add_parser("inspect", parents=[dotfiles_common], help="Inspect managed and unmanaged dotfile targets")
+    dotfiles_inspect.add_argument("--json", action="store_true")
+    dotfiles_inspect.set_defaults(func=cmd_dotfiles_inspect)
+
+    dotfiles_dashboard = dotfiles_sub.add_parser(
+        "dashboard",
+        parents=[dotfiles_common],
+        help="Write an HTML dashboard for shell, vimrc, Dropbox, Claude, and Logseq control",
+    )
+    dotfiles_dashboard.add_argument("--output-dir", default=str(REPO_ROOT / "target" / "sindoc.local" / "dotfiles"))
+    dotfiles_dashboard.add_argument("--json", action="store_true")
+    dotfiles_dashboard.set_defaults(func=cmd_dotfiles_dashboard)
+
+    dotfiles_capture = dotfiles_sub.add_parser(
+        "capture",
+        parents=[dotfiles_common],
+        help="Copy one file target into the dotfiles repo or capture a directory manifest",
+    )
+    dotfiles_capture.add_argument(
+        "name",
+        choices=[
+            "profile",
+            "bash-profile",
+            "bashrc",
+            "zprofile",
+            "zshrc",
+            "vimrc",
+            "box-shell",
+            "claude-home",
+            "claude-ws",
+            "logseq-home",
+            "dropbox",
+        ],
+    )
+    dotfiles_capture.add_argument("--json", action="store_true")
+    dotfiles_capture.set_defaults(func=cmd_dotfiles_capture)
+
+    intranet_parser = sub.add_parser(
+        "intranet",
+        help="Generate and maintain local sindoc.local intranet control pages",
+    )
+    intranet_sub = intranet_parser.add_subparsers(dest="intranet_command")
+    intranet_parser.set_defaults(func=lambda a: (intranet_parser.print_help(), 1)[1])
+
+    intranet_control = intranet_sub.add_parser(
+        "control-center",
+        help="Write a unified machine and edge runtime control center under sindoc.local",
+    )
+    intranet_control.add_argument("--output-dir", default=str(REPO_ROOT / "target" / "sindoc.local" / "control"))
+    intranet_control.add_argument("--home-dir", default=str(Path.home()))
+    intranet_control.add_argument("--dotfiles-repo", default="/Users/skh/ws/git/bitbucket/sindoc/dotfiles")
+    intranet_control.add_argument("--ai-root-dir", default=str(Path.home() / ".singine" / "ai"))
+    intranet_control.add_argument("--repo-ai-dir", default=str(REPO_ROOT / "ai"))
+    intranet_control.add_argument("--json", action="store_true")
+    intranet_control.set_defaults(func=cmd_intranet_control_center)
+
+    intranet_publish = intranet_sub.add_parser(
+        "publish",
+        help="Publish the local sindoc.local intranet through Silkpage-style deploy roots and TLS metadata",
+    )
+    intranet_publish.add_argument("--site-root", default=str(REPO_ROOT / "target" / "sindoc.local"))
+    intranet_publish.add_argument("--deploy-root", default=str(Path.home() / "var" / "deploy" / "sindoc.local"))
+    intranet_publish.add_argument("--silkpage-root", default=str(REPO_ROOT.parent / "silkpage"))
+    intranet_publish.add_argument("--ssl-dir", default=str(Path.home() / ".config" / "lutino" / "ssl"))
+    intranet_publish.add_argument("--domain", default="sindoc.local")
+    intranet_publish.add_argument("--no-sync", action="store_true")
+    intranet_publish.add_argument("--json", action="store_true")
+    intranet_publish.set_defaults(func=cmd_intranet_publish)
+
+    intranet_cert = intranet_sub.add_parser(
+        "cert-bootstrap",
+        help="Create a local CA and sindoc.local server certificate for Apache / Firefox testing",
+    )
+    intranet_cert.add_argument("--ssl-dir", default=str(Path.home() / ".config" / "lutino" / "ssl"))
+    intranet_cert.add_argument("--domain", default="sindoc.local")
+    intranet_cert.add_argument("--force", action="store_true")
+    intranet_cert.add_argument("--json", action="store_true")
+    intranet_cert.set_defaults(func=cmd_intranet_cert_bootstrap)
+
     runtime_parser = sub.add_parser("runtime", help="Runtime envelope and capability inspection")
     runtime_sub = runtime_parser.add_subparsers(dest="runtime_subcommand")
 
@@ -2207,6 +3265,74 @@ def build_parser() -> argparse.ArgumentParser:
         help="External binary and its arguments, e.g.: collibractl community create --name Foo"
     )
     runtime_exec_ext.set_defaults(func=cmd_runtime_exec_external)
+
+    runtime_java = runtime_sub.add_parser("java", help="Resolve and manage Java runtime versions via the Singine registry")
+    runtime_java_sub = runtime_java.add_subparsers(dest="java_subcommand")
+    runtime_java.set_defaults(func=lambda a: (runtime_java.print_help(), 1)[1])
+
+    rj_list = runtime_java_sub.add_parser("list", help="List registered Java aliases, SDKMAN IDs, and status")
+    rj_list.add_argument("--json", action="store_true", help="Output as JSON")
+    rj_list.set_defaults(func=cmd_runtime_java_list)
+
+    rj_inspect = runtime_java_sub.add_parser("inspect", help="Show which Java version a directory resolves to")
+    rj_inspect.add_argument("dir", nargs="?", default=None, help="Directory to inspect (default: cwd)")
+    rj_inspect.add_argument("--json", action="store_true", help="Output as JSON")
+    rj_inspect.set_defaults(func=cmd_runtime_java_inspect)
+
+    rj_env = runtime_java_sub.add_parser("env", help="Print export statements for JAVA_HOME and PATH (for eval)")
+    rj_env.add_argument("alias", nargs="?", default=None, help="Registry alias (default: resolve from cwd)")
+    rj_env.add_argument("--json", action="store_true", help="Output as JSON")
+    rj_env.set_defaults(func=cmd_runtime_java_env)
+
+    rj_install = runtime_java_sub.add_parser("install", help="Install a Java SDKMAN distribution for a registry alias")
+    rj_install.add_argument("alias", help="Registry alias to install (e.g. lts, lts-prev, graal)")
+    rj_install.set_defaults(func=cmd_runtime_java_install)
+
+    # ── singine runtime groovy ────────────────────────────────────────────────
+    runtime_groovy = runtime_sub.add_parser("groovy", help="Resolve and manage Groovy runtime versions (SDKMAN)")
+    runtime_groovy_sub = runtime_groovy.add_subparsers(dest="groovy_subcommand")
+    runtime_groovy.set_defaults(func=lambda a: (runtime_groovy.print_help(), 1)[1])
+
+    for _name, _fn in [("list", _groovy_list), ("inspect", _groovy_inspect),
+                       ("env", _groovy_env), ("install", _groovy_install)]:
+        _p = runtime_groovy_sub.add_parser(_name)
+        if _name in ("list", "inspect", "env"):
+            _p.add_argument("--json", action="store_true")
+        if _name in ("inspect",):
+            _p.add_argument("dir", nargs="?", default=None)
+        if _name in ("env",):
+            _p.add_argument("alias", nargs="?", default=None)
+        if _name == "install":
+            _p.add_argument("alias")
+        _p.set_defaults(func=_fn)
+
+    # ── singine runtime clojure ───────────────────────────────────────────────
+    runtime_clojure = runtime_sub.add_parser("clojure", help="Inspect Clojure runtime versions (brew-managed)")
+    runtime_clojure_sub = runtime_clojure.add_subparsers(dest="clojure_subcommand")
+    runtime_clojure.set_defaults(func=lambda a: (runtime_clojure.print_help(), 1)[1])
+
+    for _name, _fn in [("list", _clojure_list), ("inspect", _clojure_inspect),
+                       ("env", _clojure_env), ("install", _clojure_install)]:
+        _p = runtime_clojure_sub.add_parser(_name)
+        if _name in ("list", "inspect", "env"):
+            _p.add_argument("--json", action="store_true")
+        if _name in ("inspect",):
+            _p.add_argument("dir", nargs="?", default=None)
+        if _name in ("env",):
+            _p.add_argument("alias", nargs="?", default=None)
+        if _name == "install":
+            _p.add_argument("alias")
+        _p.set_defaults(func=_fn)
+
+    # ── singine runtime jvm ───────────────────────────────────────────────────
+    runtime_jvm = runtime_sub.add_parser("jvm", help="Cross-JVM operations: deps, shared library management")
+    runtime_jvm_sub = runtime_jvm.add_subparsers(dest="jvm_subcommand")
+    runtime_jvm.set_defaults(func=lambda a: (runtime_jvm.print_help(), 1)[1])
+
+    rjvm_deps = runtime_jvm_sub.add_parser("deps", help="List JVM dependencies across singine, silkpage, and collibra")
+    rjvm_deps.add_argument("project", nargs="?", default=None, help="Filter to a single project (singine-core | collibra-edge | silkpage-core)")
+    rjvm_deps.add_argument("--json", action="store_true", help="Output as JSON")
+    rjvm_deps.set_defaults(func=cmd_runtime_jvm_deps)
 
     server_parser = sub.add_parser("server", help="Inspect or query the local Singine HTTP server surface")
     server_sub = server_parser.add_subparsers(dest="server_subcommand")
@@ -2370,6 +3496,58 @@ def build_parser() -> argparse.ArgumentParser:
     model_inspect_parser.add_argument("name")
     model_inspect_parser.set_defaults(func=cmd_model_inspect)
 
+    campaign_parser = sub.add_parser("campaign", help="Generate governed campaign plans from Singine core concepts")
+    campaign_sub = campaign_parser.add_subparsers(dest="campaign_subcommand")
+    campaign_parser.set_defaults(func=lambda a: (campaign_parser.print_help(), 1)[1])
+
+    campaign_dataset = campaign_sub.add_parser(
+        "dataset-plan",
+        help="Create a phased dataset collection plan driven by contracts, contacts, vocabulary, and trusted realms",
+    )
+    campaign_dataset.add_argument("--title", default="Contract-Linked Dataset Campaign")
+    campaign_dataset.add_argument("--brief", required=True, help="Plain-language campaign brief")
+    campaign_dataset.add_argument("--contract", action="append", help="Active contract identifier or label; repeatable")
+    campaign_dataset.add_argument("--contact", action="append", help="Active contact or stakeholder; repeatable")
+    campaign_dataset.add_argument("--trusted-realm", action="append", help="Trusted realm or domain; repeatable")
+    campaign_dataset.add_argument("--vocabulary-term", action="append", help="Extra vocabulary term to fold into the campaign glossary")
+    campaign_dataset.add_argument("--output", help="Write the campaign plan to this JSON file")
+    campaign_dataset.add_argument("--json", action="store_true")
+    campaign_dataset.set_defaults(func=cmd_campaign_dataset_plan)
+
+    platform_parser = sub.add_parser("platform", help="Generate platform blueprints and scaffolds")
+    platform_sub = platform_parser.add_subparsers(dest="platform_subcommand")
+    platform_parser.set_defaults(func=lambda a: (platform_parser.print_help(), 1)[1])
+
+    platform_blueprint = platform_sub.add_parser(
+        "blueprint",
+        help="Write a Singine/Collibra/Flowable/OpenShift platform blueprint and starter scaffold",
+    )
+    platform_blueprint.add_argument("--title", default="Singine Multi-Model Platform Blueprint")
+    platform_blueprint.add_argument("--output-dir", default="/tmp/singine-platform-blueprint")
+    platform_blueprint.add_argument("--json", action="store_true")
+    platform_blueprint.set_defaults(func=cmd_platform_blueprint)
+
+    essay_parser = sub.add_parser(
+        "essay",
+        help="Generate essay bundles and reflective publication artefacts",
+    )
+    essay_sub = essay_parser.add_subparsers(dest="essay_subcommand")
+    essay_parser.set_defaults(func=lambda a: (essay_parser.print_help(), 1)[1])
+
+    essay_personal_os = essay_sub.add_parser(
+        "personal-os",
+        help="Write a personal operating system essay bundle across Markdown, HTML, SVG, LaTeX, XML, SinLisp, Ballerina, C, Rust, Pico, and ixml",
+    )
+    essay_personal_os.add_argument("--title", default="Singine Personal Operating System")
+    essay_personal_os.add_argument("--output-dir", default="/tmp/singine-personal-os")
+    essay_personal_os.add_argument("--onepager", default="/Users/skh/ws/today/cleanUp/sindoc42-onepager.pdf")
+    essay_personal_os.add_argument(
+        "--metamodel-root",
+        default="/Users/skh/ws/today/metamodel/reference/current/latest/lutino.collibra.singine.process.C213(1)",
+    )
+    essay_personal_os.add_argument("--json", action="store_true")
+    essay_personal_os.set_defaults(func=cmd_essay_personal_os)
+
     from .policy import add_policy_parser
     add_policy_parser(sub)
 
@@ -2378,6 +3556,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     from .edge import add_edge_parser
     add_edge_parser(sub)
+
+    from .mms import add_mms_parser
+    add_mms_parser(sub)
 
     # ── singe — SINGE Is Not Generally Expansive (template + people) ────────
     singe_parser = sub.add_parser(
@@ -2710,6 +3891,19 @@ def build_parser() -> argparse.ArgumentParser:
     sess_show.add_argument("--root-dir", default=str(Path.home() / ".singine" / "ai"))
     sess_show.set_defaults(func=cmd_ai_session_show_json)
 
+    sess_dashboard = sess_sub.add_parser(
+        "dashboard",
+        help="Build an HTML dashboard that combines governed JSON sessions and repo-backed EDN command sessions",
+    )
+    sess_dashboard.add_argument("--root-dir", default=str(Path.home() / ".singine" / "ai"))
+    sess_dashboard.add_argument("--repo-ai-dir", default=str(REPO_ROOT / "ai"))
+    sess_dashboard.add_argument("--output-dir", default=str(REPO_ROOT / "target" / "sindoc.local" / "sessions"))
+    sess_dashboard.add_argument("--provider", action="append", help="Filter to one provider; repeatable")
+    sess_dashboard.add_argument("--title", default="Singine AI Session Dashboard")
+    sess_dashboard.add_argument("--site-url", default="http://sindoc.local:8080/")
+    sess_dashboard.add_argument("--json", action="store_true")
+    sess_dashboard.set_defaults(func=cmd_ai_session_dashboard)
+
     sess_export = sess_sub.add_parser("export", help="Export session in requested format")
     sess_export.add_argument("id", help="Session ID")
     fmt_grp = sess_export.add_mutually_exclusive_group()
@@ -2767,6 +3961,36 @@ def build_parser() -> argparse.ArgumentParser:
     ai_last_session_data.add_argument("--db", help="SQLite path (default: <root-dir>/sqlite.db)")
     ai_last_session_data.set_defaults(func=cmd_ai_last_session_data_json)
 
+    # ── demo — zip-code community notebook demo ───────────────────────────────
+    demo_parser = sub.add_parser(
+        "demo",
+        help="Zip-code community demo: life phases, multilingual mapping, messaging pipeline",
+    )
+    demo_sub = demo_parser.add_subparsers(dest="demo_subcommand")
+    demo_parser.set_defaults(func=lambda a: (demo_parser.print_help(), 1)[1])
+
+    demo_zip_neighborhood = demo_sub.add_parser(
+        "zip-neighborhood",
+        help="Write the full zip-neighborhood messaging bundle (RabbitMQ raw/staging, Kafka, publication artefacts)",
+    )
+    demo_zip_neighborhood.add_argument("--title", default="Zip Neighborhood Messaging Demo")
+    demo_zip_neighborhood.add_argument("--output-dir", "-o", default="/tmp/singine-zip-neighborhood-demo")
+    demo_zip_neighborhood.add_argument("--db", help="Optional domain SQLite database path for event logging")
+    demo_zip_neighborhood.add_argument("--actor-id", default="singine")
+    demo_zip_neighborhood.add_argument("--json", action="store_true")
+    demo_zip_neighborhood.set_defaults(func=cmd_demo_zip_neighborhood)
+
+    demo_bundle = demo_sub.add_parser(
+        "bundle",
+        help="Alias for demo zip-neighborhood",
+    )
+    demo_bundle.add_argument("--title", default="Zip Neighborhood Messaging Demo")
+    demo_bundle.add_argument("--output-dir", "-o", default="/tmp/singine-zip-neighborhood-demo")
+    demo_bundle.add_argument("--domain-db", dest="db", help="Optional domain SQLite database path for event logging")
+    demo_bundle.add_argument("--actor-id", default="singine")
+    demo_bundle.add_argument("--json", action="store_true")
+    demo_bundle.set_defaults(func=cmd_demo_zip_neighborhood)
+
     # ── collibra — live Collibra REST operations ──────────────────────────────
     collibra_parser = sub.add_parser(
         "collibra",
@@ -2821,7 +4045,465 @@ def build_parser() -> argparse.ArgumentParser:
     collibra_search_p.add_argument("--json", action="store_true", default=True)
     collibra_search_p.set_defaults(func=cmd_collibra_search)
 
+    # ------------------------------------------------------------------ web
+    web_parser = sub.add_parser(
+        "web",
+        help="Serve a static HTML directory over HTTP",
+    )
+    web_parser.add_argument(
+        "directory",
+        help="Directory to serve (e.g. markupware.com/html/)",
+    )
+    web_parser.add_argument(
+        "--port", "-p",
+        type=int,
+        default=8080,
+        help="HTTP port (default: 8080)",
+    )
+    web_parser.set_defaults(func=cmd_web)
+
+    # ── www — web asset lifecycle ─────────────────────────────────────────────
+    www_parser = sub.add_parser("www", help="Web asset lifecycle: deploy, sync, status, diff")
+    www_sub = www_parser.add_subparsers(dest="www_subcommand")
+
+    def _s(p): p.add_argument("--site", required=True, help="markupware.com | lutino.io")
+    def _j(p): p.add_argument("--json", action="store_true")
+    def _d(p): p.add_argument("--dry-run", action="store_true")
+
+    p = www_sub.add_parser("deploy", help="git pull → build → Dropbox → rsync/scp")
+    _s(p); _j(p); _d(p)
+    p.add_argument("--method", default="rsync", choices=["rsync", "scp", "dropbox", "all"])
+    p.add_argument("--skip-git",     action="store_true")
+    p.add_argument("--skip-build",   action="store_true")
+    p.add_argument("--skip-dropbox", action="store_true")
+    p.set_defaults(func=cmd_www_deploy)
+
+    p = www_sub.add_parser("sync", help="Sync via specified method only")
+    _s(p); _d(p)
+    p.add_argument("--method", default="rsync", choices=["rsync", "scp", "dropbox", "git", "all"])
+    p.set_defaults(func=cmd_www_sync)
+
+    p = www_sub.add_parser("status", help="Show deployment status"); _s(p); _j(p)
+    p.set_defaults(func=cmd_www_status)
+
+    p = www_sub.add_parser("diff",   help="Local changes not yet deployed"); _s(p); _j(p)
+    p.set_defaults(func=cmd_www_diff)
+
+    p = www_sub.add_parser("pull",   help="git pull only"); _s(p); _d(p)
+    p.set_defaults(func=cmd_www_pull)
+
+    www_parser.set_defaults(func=lambda args: www_parser.print_help() or 0)
+
+    # ── vww — validate www ────────────────────────────────────────────────────
+    vww_parser = sub.add_parser("vww", help="Validate www: cert, scan, assets, audit")
+    vww_sub = vww_parser.add_subparsers(dest="vww_subcommand")
+
+    p = vww_sub.add_parser("cert",   help="TLS certificate check"); _s(p); _j(p)
+    p.set_defaults(func=cmd_vww_cert)
+
+    p = vww_sub.add_parser("scan",   help="HTTP security header scan"); _s(p); _j(p)
+    p.set_defaults(func=cmd_vww_scan)
+
+    p = vww_sub.add_parser("assets", help="List tracked web assets"); _s(p); _j(p)
+    p.set_defaults(func=cmd_vww_assets)
+
+    p = vww_sub.add_parser("check",  help="Quick health check"); _s(p); _j(p)
+    p.add_argument("--all", action="store_true", help="Full check (cert + scan + assets)")
+    p.set_defaults(func=cmd_vww_check)
+
+    p = vww_sub.add_parser("audit",  help="Full security audit report"); _s(p); _j(p)
+    p.set_defaults(func=cmd_vww_audit)
+
+    vww_parser.set_defaults(func=lambda args: vww_parser.print_help() or 0)
+
+    # ── wingine — web engine (build pipeline) ─────────────────────────────────
+    wingine_parser = sub.add_parser("wingine", help="Web engine: build and serve sites")
+    wingine_sub = wingine_parser.add_subparsers(dest="wingine_subcommand")
+
+    p = wingine_sub.add_parser("build",  help="Build site (cortex / maven)"); _s(p); _j(p); _d(p)
+    p.add_argument("--clean", action="store_true")
+    p.set_defaults(func=cmd_wingine_build)
+
+    p = wingine_sub.add_parser("serve",  help="Serve built site locally"); _s(p); _d(p)
+    p.add_argument("--port", type=int, default=None)
+    p.set_defaults(func=cmd_wingine_serve)
+
+    p = wingine_sub.add_parser("status", help="Show build status"); _s(p); _j(p)
+    p.set_defaults(func=cmd_wingine_status)
+
+    wingine_parser.set_defaults(func=lambda args: wingine_parser.print_help() or 0)
+
+    # ── wsec — web security (TLS, SSH keys, IDP tokens) ───────────────────────
+    wsec_parser = sub.add_parser("wsec", help="Web security: TLS certs, SSH keys, IDP tokens")
+    wsec_sub = wsec_parser.add_subparsers(dest="wsec_subcommand")
+
+    p = wsec_sub.add_parser("cert",   help="TLS certificate ops"); _s(p); _j(p); _d(p)
+    p.add_argument("--renew",    action="store_true")
+    p.add_argument("--fix-san",  action="store_true")
+    p.add_argument("--method",   default="certbot", choices=["certbot", "acme.sh", "manual"])
+    p.set_defaults(func=cmd_wsec_cert)
+
+    p = wsec_sub.add_parser("keys",   help="SSH deploy key management"); _s(p); _j(p); _d(p)
+    p.add_argument("--add",    action="store_true")
+    p.add_argument("--rotate", action="store_true")
+    p.set_defaults(func=cmd_wsec_keys)
+
+    p = wsec_sub.add_parser("token",  help="IDP deploy token (JWT)"); _s(p); _j(p); _d(p)
+    p.add_argument("--ttl", type=int, default=3600)
+    p.set_defaults(func=cmd_wsec_token)
+
+    p = wsec_sub.add_parser("status", help="Full security status"); _s(p); _j(p)
+    p.set_defaults(func=cmd_wsec_status)
+
+    wsec_parser.set_defaults(func=lambda args: wsec_parser.print_help() or 0)
+
+    # ── net — intranet service registry and port management ───────────────────
+    net_parser = sub.add_parser(
+        "net",
+        help="Intranet network control: service registry, ports, routing, dispatch",
+    )
+    net_sub = net_parser.add_subparsers(dest="net_subcommand")
+
+    def _j(p): p.add_argument("--json", action="store_true", help="JSON output")
+
+    p = net_sub.add_parser("status", help="Full service and port status")
+    _j(p); p.set_defaults(func=cmd_net_status)
+
+    p = net_sub.add_parser("ports", help="List all intranet ports")
+    _j(p); p.set_defaults(func=cmd_net_ports)
+
+    p = net_sub.add_parser("probe", help="TCP probe a specific service")
+    p.add_argument("--service", required=True, help="Service ID (e.g. edge-site)")
+    _j(p); p.set_defaults(func=cmd_net_probe)
+
+    p = net_sub.add_parser("route", help="Show routing for a URL path")
+    p.add_argument("--from", dest="from_path", default="/", help="URL path to match")
+    _j(p); p.set_defaults(func=cmd_net_route)
+
+    net_parser.set_defaults(func=lambda args: net_parser.print_help() or 0)
+
+    # ── panel — live intranet control panel (Tornado) ─────────────────────────
+    panel_parser = sub.add_parser(
+        "panel",
+        help="Live intranet control panel web UI (Tornado, port 9090)",
+    )
+    panel_sub = panel_parser.add_subparsers(dest="panel_subcommand")
+
+    p = panel_sub.add_parser("serve", help="Start the live control panel")
+    p.add_argument("--port", type=int, default=9090, help="Port (default 9090)")
+    p.add_argument("--bind", default="127.0.0.1", help="Bind address (default 127.0.0.1)")
+    p.set_defaults(func=cmd_panel_serve)
+
+    panel_parser.set_defaults(func=lambda args: panel_parser.print_help() or 0)
+
+    # ── presence — human presence attestation ─────────────────────────────────
+    presence_parser = sub.add_parser(
+        "presence",
+        help="Human presence attestation (Touch ID / 1Password / TOTP)",
+    )
+    presence_sub = presence_parser.add_subparsers(dest="presence_subcommand")
+
+    p = presence_sub.add_parser("verify", help="Verify human presence")
+    p.add_argument("--force", action="store_true", help="Force re-verification")
+    _j(p); p.set_defaults(func=cmd_presence_verify)
+
+    p = presence_sub.add_parser("status", help="Show current presence status")
+    _j(p); p.set_defaults(func=cmd_presence_status)
+
+    presence_parser.set_defaults(func=lambda args: presence_parser.print_help() or 0)
+
+    # ── feeds — Atom/RSS 1.0 feed generation ──────────────────────────────────
+    feeds_parser = sub.add_parser(
+        "feeds",
+        help="Generate Atom 1.0 and RSS 1.0 (RDF-aligned) activity feeds",
+    )
+    feeds_sub = feeds_parser.add_subparsers(dest="feeds_subcommand")
+
+    p = feeds_sub.add_parser("generate", help="Write all feeds to output directory")
+    p.add_argument("--output-dir", default="/tmp/singine-feeds")
+    p.add_argument("--db", default="/tmp/humble-idp.db")
+    p.set_defaults(func=cmd_feeds_generate)
+
+    p = feeds_sub.add_parser("atom", help="Print Atom feed to stdout")
+    p.add_argument("--kind", default="activity", choices=["activity", "decisions"])
+    p.add_argument("--db", default="/tmp/humble-idp.db")
+    p.set_defaults(func=cmd_feeds_atom)
+
+    p = feeds_sub.add_parser("rss", help="Print RSS 1.0 feed to stdout")
+    p.add_argument("--kind", default="activity", choices=["activity", "decisions"])
+    p.add_argument("--db", default="/tmp/humble-idp.db")
+    p.set_defaults(func=cmd_feeds_rss)
+
+    feeds_parser.set_defaults(func=lambda args: feeds_parser.print_help() or 0)
+
+    # ── mcp ────────────────────────────────────────────────────────────────────
+    mcp_parser = sub.add_parser(
+        "mcp",
+        help="Singine MCP server: expose domain, AI, and governance data to Claude",
+    )
+    mcp_sub = mcp_parser.add_subparsers(dest="mcp_subcommand")
+
+    p = mcp_sub.add_parser(
+        "seed",
+        help="Seed a test SQLite database with representative Collibra domain data",
+    )
+    p.add_argument(
+        "--db", default="/tmp/singine-mcp-test.db",
+        help="Path to the SQLite database (default: /tmp/singine-mcp-test.db)",
+    )
+    p.set_defaults(func=cmd_mcp_seed)
+
+    p = mcp_sub.add_parser(
+        "serve",
+        help="Start the Singine Collibra MCP server (stdio or SSE transport)",
+    )
+    p.add_argument(
+        "--db", default="/tmp/singine-mcp-test.db",
+        help="Path to the SQLite database (default: /tmp/singine-mcp-test.db)",
+    )
+    p.add_argument(
+        "--transport", choices=["stdio", "sse"], default="stdio",
+        help="Transport: 'stdio' for MCP clients (default) or 'sse' for HTTP",
+    )
+    p.add_argument(
+        "--port", type=int, default=8765,
+        help="HTTP port when using --transport sse (default: 8765)",
+    )
+    p.set_defaults(func=cmd_mcp_serve)
+
+    mcp_parser.set_defaults(func=lambda args: mcp_parser.print_help() or 0)
+
     return parser
+
+
+def cmd_web(args) -> int:
+    """Serve a static HTML directory using Python's built-in HTTP server."""
+    import functools
+    import http.server
+
+    directory = Path(args.directory).resolve()
+    if not directory.exists():
+        print(f"Error: directory not found: {directory}", file=sys.stderr)
+        return 1
+
+    port = args.port
+
+    # Collect local IPs for display
+    ips: list[str] = []
+    try:
+        hostname = __import__("socket").gethostname()
+        ips = [__import__("socket").gethostbyname(hostname)]
+    except Exception:
+        pass
+
+    print(f"Serving {directory}")
+    print(f"  http://localhost:{port}/")
+    for ip in ips:
+        print(f"  http://{ip}:{port}/")
+    print("Ctrl-C to stop.")
+    print()
+
+    handler = functools.partial(
+        http.server.SimpleHTTPRequestHandler,
+        directory=str(directory),
+    )
+    with http.server.HTTPServer(("", port), handler) as httpd:
+        try:
+            httpd.serve_forever()
+        except KeyboardInterrupt:
+            print("\nServer stopped.")
+    return 0
+
+
+# ── www handlers ─────────────────────────────────────────────────────────────
+
+def cmd_www_deploy(args) -> int:
+    from .www import deploy
+    deploy(args.site, method=args.method,
+           skip_git=getattr(args, "skip_git", False),
+           skip_build=getattr(args, "skip_build", False),
+           skip_dropbox=getattr(args, "skip_dropbox", False),
+           dry_run=getattr(args, "dry_run", False),
+           json_out=getattr(args, "json", False))
+    return 0
+
+def cmd_www_sync(args) -> int:
+    from .www import resolve_site, git_pull, dropbox_stage, rsync_deploy, scp_deploy
+    site = resolve_site(args.site)
+    dry = getattr(args, "dry_run", False)
+    m = args.method
+    if m in ("git", "all"):    git_pull(site, dry_run=dry)
+    if m in ("dropbox", "all"): dropbox_stage(site, dry_run=dry)
+    if m in ("rsync", "all"):  rsync_deploy(site, dry_run=dry)
+    if m == "scp":             scp_deploy(site, dry_run=dry)
+    return 0
+
+def cmd_www_status(args) -> int:
+    from .www import status
+    status(args.site, json_out=getattr(args, "json", False))
+    return 0
+
+def cmd_www_diff(args) -> int:
+    from .www import diff
+    diff(args.site, json_out=getattr(args, "json", False))
+    return 0
+
+def cmd_www_pull(args) -> int:
+    from .www import git_pull, resolve_site
+    git_pull(resolve_site(args.site), dry_run=getattr(args, "dry_run", False))
+    return 0
+
+
+# ── vww handlers ──────────────────────────────────────────────────────────────
+
+def cmd_vww_cert(args) -> int:
+    from .wsec import cert_check
+    cert_check(args.site, json_out=getattr(args, "json", False))
+    return 0
+
+def cmd_vww_scan(args) -> int:
+    from .vww import scan
+    scan(args.site, json_out=getattr(args, "json", False))
+    return 0
+
+def cmd_vww_assets(args) -> int:
+    from .vww import assets
+    assets(args.site, json_out=getattr(args, "json", False))
+    return 0
+
+def cmd_vww_check(args) -> int:
+    from .vww import check
+    check(args.site, full=getattr(args, "all", False),
+          json_out=getattr(args, "json", False))
+    return 0
+
+def cmd_vww_audit(args) -> int:
+    from .vww import audit
+    audit(args.site, json_out=getattr(args, "json", False))
+    return 0
+
+
+# ── wingine handlers ──────────────────────────────────────────────────────────
+
+def cmd_wingine_build(args) -> int:
+    from .wingine import build
+    build(args.site, clean=getattr(args, "clean", False),
+          dry_run=getattr(args, "dry_run", False),
+          json_out=getattr(args, "json", False))
+    return 0
+
+def cmd_wingine_serve(args) -> int:
+    from .wingine import serve
+    serve(args.site, port=getattr(args, "port", None),
+          dry_run=getattr(args, "dry_run", False))
+    return 0
+
+def cmd_wingine_status(args) -> int:
+    from .wingine import wingine_status
+    wingine_status(args.site, json_out=getattr(args, "json", False))
+    return 0
+
+
+# ── wsec handlers ─────────────────────────────────────────────────────────────
+
+def cmd_wsec_cert(args) -> int:
+    from .wsec import cert_check, cert_renew
+    if getattr(args, "renew", False) or getattr(args, "fix_san", False):
+        cert_renew(args.site, method=args.method,
+                   dry_run=getattr(args, "dry_run", False))
+    else:
+        cert_check(args.site, json_out=getattr(args, "json", False))
+    return 0
+
+def cmd_wsec_keys(args) -> int:
+    from .wsec import keys_list, keys_add, keys_rotate
+    if getattr(args, "add", False):
+        keys_add(args.site, dry_run=getattr(args, "dry_run", False),
+                 json_out=getattr(args, "json", False))
+    elif getattr(args, "rotate", False):
+        keys_rotate(args.site, dry_run=getattr(args, "dry_run", False))
+    else:
+        keys_list(args.site, json_out=getattr(args, "json", False))
+    return 0
+
+def cmd_wsec_token(args) -> int:
+    from .wsec import token_mint
+    token_mint(args.site, ttl=getattr(args, "ttl", 3600),
+               dry_run=getattr(args, "dry_run", False),
+               json_out=getattr(args, "json", False))
+    return 0
+
+def cmd_wsec_status(args) -> int:
+    from .wsec import wsec_status
+    wsec_status(args.site, json_out=getattr(args, "json", False))
+    return 0
+
+
+# ── net handlers ──────────────────────────────────────────────────────────────
+
+def cmd_net_status(args) -> int:
+    from .net import cmd_status
+    return cmd_status(args)
+
+def cmd_net_ports(args) -> int:
+    from .net import cmd_ports
+    return cmd_ports(args)
+
+def cmd_net_probe(args) -> int:
+    from .net import cmd_probe
+    return cmd_probe(args)
+
+def cmd_net_route(args) -> int:
+    from .net import cmd_route
+    return cmd_route(args)
+
+
+# ── panel handlers ────────────────────────────────────────────────────────────
+
+def cmd_panel_serve(args) -> int:
+    from .panel_server import cmd_serve
+    return cmd_serve(args)
+
+
+# ── presence handlers ─────────────────────────────────────────────────────────
+
+def cmd_presence_verify(args) -> int:
+    from .presence import cmd_verify
+    return cmd_verify(args)
+
+def cmd_presence_status(args) -> int:
+    from .presence import cmd_status
+    return cmd_status(args)
+
+
+# ── feeds handlers ────────────────────────────────────────────────────────────
+
+def cmd_feeds_generate(args) -> int:
+    from .feeds import cmd_generate
+    return cmd_generate(args)
+
+def cmd_feeds_atom(args) -> int:
+    from .feeds import cmd_atom
+    return cmd_atom(args)
+
+def cmd_feeds_rss(args) -> int:
+    from .feeds import cmd_rss
+    return cmd_rss(args)
+
+
+# ── mcp handlers ──────────────────────────────────────────────────────────────
+
+def cmd_mcp_seed(args) -> int:
+    from .mcp.seed import run
+    run(args.db)
+    return 0
+
+
+def cmd_mcp_serve(args) -> int:
+    from .mcp.server import serve
+    serve(args.db, transport=getattr(args, "transport", "stdio"),
+          port=getattr(args, "port", 8765))
+    return 0
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:

@@ -1,6 +1,6 @@
-.TH SINGINE-TEMPLATE 1 "2026-03-17" "singine 0.2.0" "User Commands"
+.TH SINGINE-TEMPLATE 1 "2026-03-21" "singine 0.2.0" "User Commands"
 .SH NAME
-singine-template \- generate Singine-aware Maven and npm project templates
+singine-template \- generate project templates and materialize reusable Singine library entries
 .SH SYNOPSIS
 .B singine template create
 \fBmaven\fR|\fBnpm\fR \fINAME\fR
@@ -22,6 +22,16 @@ singine-template \- generate Singine-aware Maven and npm project templates
 [\fB--package-name\fR \fIPACKAGE\fR]
 [\fB--scope\fR \fISCOPE\fR]
 [\fB--module-type\fR \fBmodule\fR|\fBcommonjs\fR]
+.PP
+.B singine template list
+[\fB--family\fR \fBtemplate\fR|\fBarchetype\fR]
+[\fB--json\fR]
+.PP
+.B singine template materialize
+\fINAME\fR
+\fB--output-dir\fR \fIPATH\fR
+[\fB--title\fR \fITEXT\fR]
+[\fB--json\fR]
 .SH DESCRIPTION
 Generates a standard project skeleton that is immediately compatible with
 either
@@ -30,6 +40,14 @@ or
 .BR npm (1),
 while also including a small Singine integration surface in the generated
 README and scripts.
+.PP
+The template library also exposes reusable higher-level bundles such as:
+.IP \(bu 2
+\fBpersonal-os-essay\fR
+.IP \(bu 2
+\fBplatform-blueprint\fR
+.IP \(bu 2
+\fBzip-neighborhood-demo\fR
 .PP
 The
 .B maven
@@ -55,6 +73,19 @@ scripts
 .IP \(bu 2
 \fIREADME.md\fR and \fI.gitignore\fR
 .SH OPTIONS
+.TP
+.B --family \fBtemplate\fR|\fBarchetype\fR
+Filter
+.B singine template list
+to one family.
+.TP
+.B --output-dir \fIPATH\fR
+Destination directory for
+.B singine template materialize.
+.TP
+.B --title \fITEXT\fR
+Optional title override passed through to the selected reusable entry when it
+supports titles.
 .TP
 .B --dir \fIPATH\fR
 Directory where the template should be created. If omitted, Singine creates a
@@ -130,9 +161,16 @@ singine template create npm "Silkpage App" \\
 
 singine template create npm singine-dashboard \\
   --module-type commonjs --json
+
+singine template list --family archetype --json
+
+singine template materialize personal-os-essay \\
+  --output-dir /tmp/singine-personal-os \\
+  --json
 .fi
 .SH SEE ALSO
 .BR singine (1),
+.BR singine-archetype (1),
 .BR singine-man (1),
 .BR singine-install (1),
 .BR mvn (1),

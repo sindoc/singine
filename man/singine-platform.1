@@ -1,0 +1,90 @@
+.TH SINGINE-PLATFORM 1 "2026-03-19" "singine 0.2.0" "User Commands"
+.SH NAME
+singine-platform \- generate platform blueprints and starter scaffolds for Singine, Collibra, Flowable, and OpenShift
+.SH SYNOPSIS
+.B singine platform blueprint
+[\fB--title\fR \fITEXT\fR]
+[\fB--output-dir\fR \fIPATH\fR]
+[\fB--json\fR]
+.SH DESCRIPTION
+.B singine platform blueprint
+writes a concrete platform contract and starter scaffold for the broader
+Singine stack. The blueprint aligns:
+.IP \(bu 2
+Docker and local CentOS or RHEL farm deployment
+.IP \(bu 2
+OpenShift and edge deployment shape
+.IP \(bu 2
+Node.js web shell
+.IP \(bu 2
+Python notebook-facing API
+.IP \(bu 2
+Spring Boot metadata adapter interfaces
+.IP \(bu 2
+Singine Clojure core orchestration
+.IP \(bu 2
+Flowable execution ordering
+.IP \(bu 2
+Collibra plain-text execution attributes
+.PP
+The blueprint is intentionally scaffold-first: it creates the file layout and
+contracts, but it does not install npm packages or download external artifacts.
+.SH OPTIONS
+.TP
+.B --title
+Override the blueprint title.
+.TP
+.B --output-dir
+Directory where the scaffold is written.
+Defaults to
+.IR /tmp/singine-platform-blueprint .
+.TP
+.B --json
+Print the generated manifest as JSON instead of printing the Markdown path.
+.SH GENERATED FILES
+.IP \(bu 2
+.I platform-blueprint.json
+.IP \(bu 2
+.I platform-blueprint.md
+.IP \(bu 2
+.I deploy/openshift-template.yaml
+.IP \(bu 2
+.I webapp/package.json
+.IP \(bu 2
+.I webapp/server.js
+.IP \(bu 2
+.I webapp/public/index.html
+.IP \(bu 2
+.I webapp/public/styles.css
+.IP \(bu 2
+.I python-api/service.py
+.IP \(bu 2
+.I spring-adapter/src/main/java/io/sindoc/singine/platform/MetadataProtocolAdapter.java
+.SH COLLIBRA ALIGNMENT
+The generated blueprint explicitly carries the three plain-text attribute
+families used for governed execution:
+.IP \(bu 2
+.B Script Body
+\(em workflow definition bodies
+.IP \(bu 2
+.B Source Code
+\(em Groovy, Python, shell, and adapter source
+.IP \(bu 2
+.B Authorised Commands
+\(em pipe-separated allow-lists for sanctioned execution
+.SH EXAMPLES
+.nf
+# Write the full scaffold.
+singine platform blueprint
+
+# Write to a named output directory and print the manifest.
+singine platform blueprint \\
+  --title "Singine Edge Flowable Platform Blueprint" \\
+  --output-dir /tmp/singine-platform-blueprint \\
+  --json
+.fi
+.SH SEE ALSO
+.BR singine (1),
+.BR singine-demo (1),
+.BR singine-model (1),
+.BR singine-runtime (1)
