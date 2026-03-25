@@ -103,6 +103,16 @@ def _kubectl_get_jobs(namespace: str) -> Dict[str, Any]:
     }
 
 
+def _kubectl_get_secrets(namespace: str) -> Dict[str, Any]:
+    result = _run(["kubectl", "get", "secrets", "-n", namespace, "--no-headers"])
+    return {
+        "ok": result.returncode == 0,
+        "stdout": result.stdout.strip(),
+        "stderr": result.stderr.strip(),
+        "exit_code": result.returncode,
+    }
+
+
 def _driver_path(version: str) -> Path:
     return Path.home() / ".m2" / "repository" / "org" / "postgresql" / "postgresql" / version / f"postgresql-{version}.jar"
 
@@ -261,6 +271,93 @@ def cmd_collibra_io_create_community(args: argparse.Namespace) -> int:
         return 1
 
 
+def cmd_collibra_io_edge_datasource_diagnose(args: argparse.Namespace) -> int:
+    secrets = _kubectl_get_secrets(args.namespace)
+    jobs = _kubectl_get_jobs(args.namespace)
+    edge_logs = _kubectl_logs(args.namespace, args.component, tail=args.tail)
+    log_text = edge_logs.get("stdout", "")
+
+    secret_lines = [line for line in (secrets.get("stdout") or "").splitlines() if line.strip()]
+    secret_names = [line.split()[0] for line in secret_lines if line.split()]
+    connection_secret_present = args.id in secret_names
+
+    non_system_secret_names = [
+        name for name in secret_names
+        if name not in {args.id, "blue-key", "collibra-edge-repo-creds", "edge-repositories", "edge-secret"}
+        and not name.startswith("sh.helm.release.")
+    ]
+    capability_list_lines = [
+        line for line in log_text.splitlines() if "Capabilities currently present in CDIP:" in line
+    ]
+    capability_inventory = capability_list_lines[-1] if capability_list_lines else ""
+    capability_inventory_empty = "Capabilities currently present in CDIP: []" in capability_inventory if capability_inventory else False
+    capability_secret_present = (not capability_inventory_empty) and bool(non_system_secret_names)
+
+    connection_list_lines = [
+        line for line in log_text.splitlines() if "Connections currently present in CDIP:" in line
+    ]
+    run_capability_lines = [
+        line for line in log_text.splitlines() if "RunCapability" in line
+    ]
+    create_secret_lines = [
+        line for line in log_text.splitlines() if "CreateOrUpdateSecret" in line
+    ]
+    datasource_mentions = [line for line in log_text.splitlines() if args.id in line]
+
+    payload = {
+        "ok": True,
+        "command": "collibra io edge datasource diagnose",
+        "datasource_id": args.id,
+        "namespace": args.namespace,
+        "component": args.component,
+        "connection_secret_present": connection_secret_present,
+        "capability_secret_present": capability_secret_present,
+        "capability_secret_names": non_system_secret_names if capability_secret_present else [],
+        "jobs": jobs.get("stdout", ""),
+        "controller": {
+            "create_or_update_secret_seen": bool(create_secret_lines),
+            "run_capability_seen": bool(run_capability_lines),
+            "connection_inventory": connection_list_lines[-1] if connection_list_lines else "",
+            "capability_inventory": capability_inventory,
+            "datasource_mentions": datasource_mentions[-5:],
+        },
+        "recommendation": [],
+    }
+
+    recs: List[str] = payload["recommendation"]
+    if not connection_secret_present:
+        recs.append("The datasource connection secret is absent from Edge. Save the datasource in Collibra first.")
+    if connection_secret_present and not capability_secret_present:
+        recs.append("The datasource exists on Edge, but no capability instance is present. Finish the JDBC metadata capability assignment in Collibra.")
+    if connection_secret_present and capability_secret_present and not run_capability_lines:
+        recs.append("A capability appears to exist, but no run was dispatched yet. Trigger List databases or Test connection again.")
+    if capability_inventory_empty:
+        recs.append("Edge reports zero capability instances in CDIP. This matches Collibra's noCapabilityInstancesFound error.")
+    if jobs.get("ok") and not (jobs.get("stdout") or "").strip():
+        recs.append("No Edge jobs are currently present. A real metadata call has not launched a job.")
+    if not recs:
+        recs.append("Datasource wiring looks present. Inspect the next dispatched job for the actual JDBC outcome.")
+
+    if args.json:
+        print(json.dumps(payload))
+        return 0
+
+    print(f"[collibra io edge datasource diagnose] id={args.id}")
+    print(f"  Connection secret:   {'yes' if connection_secret_present else 'no'}")
+    print(f"  Capability secret:   {'yes' if capability_secret_present else 'no'}")
+    if payload["capability_secret_names"]:
+        print(f"  Capability names:    {', '.join(payload['capability_secret_names'])}")
+    print(f"  Controller inventory:")
+    print(f"    Connections: {payload['controller']['connection_inventory'] or 'n/a'}")
+    print(f"    Capabilities: {payload['controller']['capability_inventory'] or 'n/a'}")
+    print(f"  Controller events:   CreateOrUpdateSecret={'yes' if payload['controller']['create_or_update_secret_seen'] else 'no'}  RunCapability={'yes' if payload['controller']['run_capability_seen'] else 'no'}")
+    print(f"  Edge jobs:           {jobs.get('stdout') or 'none'}")
+    print("  Next:")
+    for item in recs:
+        print(f"    - {item}")
+    return 0
+
+
 def add_collibra_io_parser(collibra_sub: argparse._SubParsersAction) -> None:
     io_parser = collibra_sub.add_parser(
         "io",
@@ -320,3 +417,21 @@ def add_collibra_io_parser(collibra_sub: argparse._SubParsersAction) -> None:
     probe_parser.add_argument("--component", default=_DEFAULT_EDGE_COMPONENT, help=f"Edge deployment to inspect (default: {_DEFAULT_EDGE_COMPONENT})")
     probe_parser.add_argument("--json", action="store_true")
     probe_parser.set_defaults(func=cmd_collibra_io_edge_connection_probe_postgres)
+
+    datasource_parser = edge_sub.add_parser(
+        "datasource",
+        help="Diagnose datasource wiring between Collibra and the Edge runtime",
+    )
+    datasource_parser.set_defaults(func=lambda a: (datasource_parser.print_help(), 1)[1])
+    datasource_sub = datasource_parser.add_subparsers(dest="collibra_io_edge_datasource_action")
+
+    diagnose_parser = datasource_sub.add_parser(
+        "diagnose",
+        help="Diagnose why a datasource is not resolving to a runnable Edge capability",
+    )
+    diagnose_parser.add_argument("--id", required=True, help="Datasource UUID / Edge connection secret name")
+    diagnose_parser.add_argument("--namespace", default=_DEFAULT_EDGE_NAMESPACE, help=f"Kubernetes namespace (default: {_DEFAULT_EDGE_NAMESPACE})")
+    diagnose_parser.add_argument("--component", default=_DEFAULT_EDGE_COMPONENT, help=f"Edge deployment to inspect (default: {_DEFAULT_EDGE_COMPONENT})")
+    diagnose_parser.add_argument("--tail", type=int, default=600, help="Number of controller log lines to inspect (default: 600)")
+    diagnose_parser.add_argument("--json", action="store_true")
+    diagnose_parser.set_defaults(func=cmd_collibra_io_edge_datasource_diagnose)
