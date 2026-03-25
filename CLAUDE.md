@@ -612,6 +612,81 @@ Logo: `sina.khakbaz.com/img/dpdp-logo.svg`
 
 ---
 
+## 16. singine collibra Commands
+
+The `singine collibra` command family provides live Collibra REST operations
+plus full lifecycle management for the Collibra edge stack, contract IDs,
+data contracts, the ORM/SBVR pipeline, and the id-gen HTTP server.
+
+### Architecture
+
+```
+singine collibra <component> <command> [options]
+```
+
+- **Edge stack** (`singine collibra edge`): delegates to `singine/edge.py`
+  (`add_edge_parser` is reused with `name="edge"` under the collibra subparser).
+- **id/contract/server**: dynamically imported from the `singine_collibra`
+  Python package located in the collibra repo
+  (`~/ws/git/github/sindoc/collibra` or `$COLLIBRA_DIR`).
+
+### glue module: `singine/collibra_idgen.py`
+
+Adds `singine_collibra` package root to `sys.path` at runtime, then calls
+`singine_collibra.command.add_collibra_subcommands(collibra_sub)`.
+If the package is missing, a clear error is printed and exit code 1 is
+returned — the rest of the `singine` CLI is unaffected.
+
+### Command Reference
+
+```bash
+# Core REST (always available)
+singine collibra env
+singine collibra fetch community|domain|asset-type|view|workflow
+singine collibra search <query>
+
+# Edge stack (requires singine edge stack in collibra repo)
+singine collibra edge build [--target base|collibra-edge|cdn|all]
+singine collibra edge up [--detach]
+singine collibra edge down
+singine collibra edge status [--json]
+singine collibra edge logs [--service cdn] [--follow]
+singine collibra edge agent run --task "..."
+
+# Contract ID generation (requires collibra repo id-gen/)
+singine collibra id gen [--ns c|a|b] [--project P] [--kind K]
+singine collibra id gen-topic [--project P]
+singine collibra id import --uuid UUID --kind KIND
+singine collibra id tags
+singine collibra id push-tags
+singine collibra id detect-conflicts
+singine collibra id resolve-conflicts [--strategy COLLIBRA_WINS]
+
+# Data contract lifecycle
+singine collibra contract new [--project P] [--kind DataContract]
+singine collibra contract list
+singine collibra contract status <id> <STATUS>
+singine collibra contract pipeline [--id ID]
+singine collibra contract step N [--id ID]
+singine collibra contract advance [--id ID]
+singine collibra contract progress [--all] [--json]
+
+# id-gen HTTP server
+singine collibra server start [--port 7331] [--mode net|dmz]
+singine collibra server stop
+singine collibra server status
+singine collibra server dmz [--port 7331]
+```
+
+### Environment
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `COLLIBRA_DIR` | `~/ws/git/github/sindoc/collibra` | Collibra repo root |
+| `COLLIBRA_EDGE_DIR` | `$COLLIBRA_DIR/edge` | Edge stack directory |
+
+---
+
 **Last Updated**: 2026-03-15
 **Project Status**: Alpha (v0.2.0) -- Transitioning from Python to Clojure
 **Primary Developer**: skh
