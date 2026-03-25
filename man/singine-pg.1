@@ -24,6 +24,12 @@ singine-pg \- provision PostgreSQL and import SQLite databases
 [\fB--db-name\fR \fINAME\fR]
 [\fB--schema\fR \fINAME\fR]
 [\fB--json\fR]
+.br
+.B singine pg list columns
+[\fB--db-name\fR \fINAME\fR]
+[\fB--schema\fR \fINAME\fR]
+\fB--table\fR \fINAME\fR
+[\fB--json\fR]
 .SH DESCRIPTION
 .B singine pg
 provides pragmatic PostgreSQL workflows for Singine.
@@ -101,6 +107,14 @@ List public tables:
 List tables in another schema:
 .BR "python3 -m singine.command pg list tables --db-name singine_bridge --schema my_schema"
 .RE
+.SS list columns
+.TP
+.B singine pg list columns
+List columns for a specific table, including ordinal position, data type,
+nullability, and default value.
+.PP
+Example:
+.BR "python3 -m singine.command pg list columns --db-name singine_bridge --schema public --table entities"
 .SH NOTES
 .IP \(bu 2
 This workflow depends on Docker rather than a native \fBpsql\fR installation.

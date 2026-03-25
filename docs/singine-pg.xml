@@ -56,6 +56,13 @@
       <arg><option>--schema</option> <replaceable>NAME</replaceable></arg>
       <arg><option>--json</option></arg>
     </cmdsynopsis>
+    <cmdsynopsis>
+      <command>singine pg list columns</command>
+      <arg><option>--db-name</option> <replaceable>NAME</replaceable></arg>
+      <arg><option>--schema</option> <replaceable>NAME</replaceable></arg>
+      <arg><option>--table</option> <replaceable>NAME</replaceable></arg>
+      <arg><option>--json</option></arg>
+    </cmdsynopsis>
   </refsynopsisdiv>
 
   <refsect1>
@@ -116,6 +123,7 @@
     <programlisting language="bash">python3 -m singine.command pg list databases</programlisting>
     <programlisting language="bash">python3 -m singine.command pg list schemas --db-name singine_bridge</programlisting>
     <programlisting language="bash">python3 -m singine.command pg list tables --db-name singine_bridge --schema public</programlisting>
+    <programlisting language="bash">python3 -m singine.command pg list columns --db-name singine_bridge --schema public --table entities</programlisting>
   </refsect1>
 
   <refsect1>
