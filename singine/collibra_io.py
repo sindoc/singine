@@ -107,6 +107,18 @@ def _driver_path(version: str) -> Path:
     return Path.home() / ".m2" / "repository" / "org" / "postgresql" / "postgresql" / version / f"postgresql-{version}.jar"
 
 
+def _collibra_ok(result: Dict[str, Any], args: argparse.Namespace) -> int:
+    if getattr(args, "json", True):
+        print(json.dumps(result))
+    else:
+        data = result.get("data", {})
+        if isinstance(data, dict):
+            print(data.get("name") or data.get("displayName") or str(data))
+        else:
+            print(str(data))
+    return 0 if result.get("ok") else 1
+
+
 def _edge_tcp_probe(namespace: str, component: str, host: str, port: int) -> Dict[str, Any]:
     snippet = (
         "if command -v nc >/dev/null 2>&1; then "
@@ -228,6 +240,27 @@ def cmd_collibra_io_edge_connection_probe_postgres(args: argparse.Namespace) -> 
     return 0
 
 
+def cmd_collibra_io_create_community(args: argparse.Namespace) -> int:
+    from .collibra_rest import create_community
+
+    name = args.top_level or args.name
+    if not name:
+        print(json.dumps({"ok": False, "error": "Provide --name or -topLevel/--top-level"}))
+        return 1
+    try:
+        return _collibra_ok(
+            create_community(
+                name=name,
+                description=getattr(args, "description", None),
+                parent_id=getattr(args, "parent_id", None),
+            ),
+            args,
+        )
+    except Exception as exc:
+        print(json.dumps({"ok": False, "error": str(exc)}))
+        return 1
+
+
 def add_collibra_io_parser(collibra_sub: argparse._SubParsersAction) -> None:
     io_parser = collibra_sub.add_parser(
         "io",
@@ -235,6 +268,25 @@ def add_collibra_io_parser(collibra_sub: argparse._SubParsersAction) -> None:
     )
     io_parser.set_defaults(func=lambda a: (io_parser.print_help(), 1)[1])
     io_sub = io_parser.add_subparsers(dest="collibra_io_subject")
+
+    create_parser = io_sub.add_parser(
+        "create",
+        help="Create Collibra resources through governed I/O workflows",
+    )
+    create_parser.set_defaults(func=lambda a: (create_parser.print_help(), 1)[1])
+    create_sub = create_parser.add_subparsers(dest="collibra_io_create_subject")
+
+    community_parser = create_sub.add_parser(
+        "community",
+        help="Create a Collibra community",
+    )
+    community_parser.add_argument("--name", help="Community name")
+    community_parser.add_argument("-topLevel", dest="top_level", help="Create a top-level community with this name")
+    community_parser.add_argument("--top-level", dest="top_level", help="Create a top-level community with this name")
+    community_parser.add_argument("--description", help="Community description")
+    community_parser.add_argument("--parent-id", help="Parent community UUID for a sub-community")
+    community_parser.add_argument("--json", action="store_true", default=True)
+    community_parser.set_defaults(func=cmd_collibra_io_create_community)
 
     edge_parser = io_sub.add_parser(
         "edge",
