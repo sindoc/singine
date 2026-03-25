@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  logseq/deploy.xml — Singine Logseq deployment master template
+  ──────────────────────────────────────────────────────────────
+  Consumed by build.xml via:
+    <xmlproperty file="logseq/deploy.xml"
+                 collapseAttributes="false"
+                 keepRoot="true"/>
+
+  Ant property mapping (dot-notation, attribute-driven):
+  ──────────────────────────────────────────────────────
+    deploy.mothership.branch            main
+    deploy.mothership.role              mothership
+    deploy.mothership.publish-all       true
+    deploy.mothership.deploy-branch     gh-pages
+    deploy.mothership.build-dir         www
+
+    deploy.vessel.branch                vessel
+    deploy.vessel.role                  vessel
+    deploy.vessel.publish-all           false
+    deploy.vessel.deploy-branch         gh-pages-vessel
+    deploy.vessel.build-dir             www-vessel
+
+    deploy.privacy.excluded-namespaces  private,journal,inbox,draft
+    deploy.privacy.public-property      public
+    deploy.privacy.public-value         true
+    deploy.privacy.conflict-strategy    mothership-wins
+
+    deploy.node.role-env-var            SINGINE_NODE_ROLE
+    deploy.node.default-role            mothership
+
+  Environment variables
+  ─────────────────────
+  SINGINE_NODE_ROLE    Selects the active node role.
+                       Valid values: "mothership" | "vessel"
+                       When unset, falls back to deploy.node.default-role.
+
+  GIT_TOKEN            Optional. Configure the git remote URL before deploy
+                       when running in CI:
+                         git remote set-url origin \
+                           https://x-access-token:${GIT_TOKEN}@github.com/org/repo.git
+
+  Conflict strategies
+  ───────────────────
+  mothership-wins      git checkout --ours FILE  (keep the mothership version)
+  vessel-wins          git checkout --theirs FILE (keep the vessel version)
+  manual               fail immediately; human must resolve in editor
+
+  Namespace exclusion notes
+  ──────────────────────────
+  The excluded-namespaces value is a comma-separated list documenting
+  which Logseq namespaces are ALWAYS excluded from the vessel SPA,
+  regardless of the public:: property.
+
+  Logseq encodes namespace separators as triple underscores in filenames:
+    Logseq page "private/my-note"  →  file "private___my-note.md"
+
+  The static <exclude> patterns in the filter-vessel-pages Ant target
+  enforce this list.  When you add a namespace here, also add the
+  corresponding <exclude name="NAMESPACE___*.md"/> to build.xml.
+
+  Modifying this file
+  ───────────────────
+  This file is read by Ant once per build via <xmlproperty>.
+  Changes take effect on the next ant invocation with no cache to clear.
+  Restart nothing; just run: ant deploy-all
+-->
+<deploy>
+
+  <!-- ── Mothership node ──────────────────────────────────────────────── -->
+  <!--
+    The mothership is the central authoritative node.
+    It has full access to the private graph and publishes everything.
+    Maps to the central broker in the Singine edge-site architecture.
+  -->
+  <mothership
+      branch="main"
+      role="mothership"
+      publish-all="true"
+      deploy-branch="gh-pages"
+      build-dir="www"/>
+
+
+  <!-- ── Vessel node ──────────────────────────────────────────────────── -->
+  <!--
+    The vessel is a secondary edge node.
+    It publishes only pages marked public:: true.
+    Maps to an edge site in the Singine edge-site architecture.
+  -->
+  <vessel
+      branch="vessel"
+      role="vessel"
+      publish-all="false"
+      deploy-branch="gh-pages-vessel"
+      build-dir="www-vessel"/>
+
+
+  <!-- ── Privacy rules ────────────────────────────────────────────────── -->
+  <!--
+    excluded-namespaces  Comma-separated Logseq namespace prefixes that
+                         are ALWAYS excluded from the vessel build.
+                         File mapping: "private/x" → "private___x.md"
+
+    public-property      The Logseq property key that marks a page public.
+                         Logseq writes: public:: true
+
+    public-value         The value that property must equal (case-sensitive).
+
+    conflict-strategy    How to auto-resolve git merge conflicts between
+                         mothership and vessel.  See strategies above.
+  -->
+  <privacy
+      excluded-namespaces="private,journal,inbox,draft"
+      public-property="public"
+      public-value="true"
+      conflict-strategy="mothership-wins"/>
+
+
+  <!-- ── Node identity ────────────────────────────────────────────────── -->
+  <!--
+    role-env-var    Name of the shell env var that selects the active role.
+                    build.xml reads ${env.SINGINE_NODE_ROLE}.
+
+    default-role    Role used when role-env-var is absent, empty, or
+                    contains an unrecognised value.
+  -->
+  <node
+      role-env-var="SINGINE_NODE_ROLE"
+      default-role="mothership"/>
+
+</deploy>
