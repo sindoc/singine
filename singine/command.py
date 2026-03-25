@@ -387,6 +387,27 @@ def cmd_bridge_build(args: argparse.Namespace) -> int:
     return _run_cortex_bridge(["--db", args.db, "build", "--repo-root", str(REPO_ROOT)])
 
 
+def cmd_bridge_ingest_edge(args: argparse.Namespace) -> int:
+    """Ingest assets from a Collibra Edge endpoint into the bridge DB."""
+    import json as _json
+    from . import cortex_bridge
+    base_url = (getattr(args, "url", "") or "").strip()
+    if not base_url:
+        base_url = os.environ.get("COLLIBRA_DGC_URL", "https://localhost").strip()
+    site_id  = (getattr(args, "site_id", "") or os.environ.get("COLLIBRA_EDGE_SITE_ID", "")).strip()
+    verify   = getattr(args, "verify_tls", False)
+    db_path  = Path(args.db).expanduser()
+    db = cortex_bridge.BridgeDB(db_path)
+    try:
+        db.setup()
+        result = cortex_bridge.ingest_collibra_edge(db, base_url, site_id=site_id, verify_tls=verify)
+        db.commit()
+        print(_json.dumps(result, indent=2))
+    finally:
+        db.close()
+    return 0
+
+
 def cmd_bridge_passthrough(args: argparse.Namespace) -> int:
     command = [args.subcommand]
     if args.subcommand == "search":
@@ -2840,6 +2861,7 @@ def cmd_collibra_search(args: argparse.Namespace) -> int:
         return _collibra_err(exc)
 
 
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="singine",
@@ -2870,6 +2892,27 @@ def build_parser() -> argparse.ArgumentParser:
     bridge_search.add_argument("text")
     bridge_search.add_argument("--limit", type=int, default=20)
     bridge_search.set_defaults(func=cmd_bridge_passthrough)
+
+    bridge_ingest_edge = bridge_sub.add_parser(
+        "ingest-edge",
+        help="Ingest assets from a running Collibra Edge / DGC endpoint into the bridge",
+    )
+    bridge_ingest_edge.add_argument(
+        "--db", default="/tmp/sqlite.db", help="SQLite database path"
+    )
+    bridge_ingest_edge.add_argument(
+        "--url", default="",
+        help="Collibra DGC base URL (default: $COLLIBRA_DGC_URL or https://localhost)",
+    )
+    bridge_ingest_edge.add_argument(
+        "--site-id", default="", dest="site_id",
+        help="Logical site ID stored in entity metadata (default: $COLLIBRA_EDGE_SITE_ID)",
+    )
+    bridge_ingest_edge.add_argument(
+        "--verify-tls", action="store_true", default=False, dest="verify_tls",
+        help="Verify TLS certificates (default: off for self-signed dev certs)",
+    )
+    bridge_ingest_edge.set_defaults(func=cmd_bridge_ingest_edge)
 
     bridge_entity = bridge_sub.add_parser("entity", help="Inspect one bridge entity")
     bridge_entity.add_argument("--db", default="/tmp/sqlite.db", help="SQLite database path")
@@ -4045,6 +4088,13 @@ def build_parser() -> argparse.ArgumentParser:
     collibra_search_p.add_argument("--json", action="store_true", default=True)
     collibra_search_p.set_defaults(func=cmd_collibra_search)
 
+    # singine collibra edge — full edge stack (reuses singine.edge handlers)
+    add_edge_parser(collibra_sub)
+
+    # singine collibra id / contract / server — loaded from collibra repo
+    from .collibra_idgen import add_collibra_subcommands
+    add_collibra_subcommands(collibra_sub)
+
     # ------------------------------------------------------------------ web
     web_parser = sub.add_parser(
         "web",
@@ -4270,6 +4320,28 @@ def build_parser() -> argparse.ArgumentParser:
         help="HTTP port when using --transport sse (default: 8765)",
     )
     p.set_defaults(func=cmd_mcp_serve)
+
+    p = mcp_sub.add_parser(
+        "tools",
+        help="List all registered MCP tool names",
+    )
+    p.set_defaults(func=cmd_mcp_tools)
+
+    p = mcp_sub.add_parser(
+        "call",
+        help="Call a single MCP tool by name and print the JSON result",
+    )
+    p.add_argument("tool", help="Tool name (see: singine mcp tools)")
+    p.add_argument(
+        "--params", default="{}",
+        metavar="JSON",
+        help="Tool parameters as a JSON object (default: '{}')",
+    )
+    p.add_argument(
+        "--db", default="/tmp/singine-mcp-test.db",
+        help="Path to the SQLite database (default: /tmp/singine-mcp-test.db)",
+    )
+    p.set_defaults(func=cmd_mcp_call)
 
     mcp_parser.set_defaults(func=lambda args: mcp_parser.print_help() or 0)
 
@@ -4503,6 +4575,26 @@ def cmd_mcp_serve(args) -> int:
     from .mcp.server import serve
     serve(args.db, transport=getattr(args, "transport", "stdio"),
           port=getattr(args, "port", 8765))
+    return 0
+
+
+def cmd_mcp_tools(args) -> int:
+    import json as _json
+    from .mcp.server import list_tool_names
+    for name in list_tool_names():
+        print(name)
+    return 0
+
+
+def cmd_mcp_call(args) -> int:
+    import json as _json
+    from .mcp.server import call_tool
+    try:
+        params = _json.loads(args.params)
+    except _json.JSONDecodeError as exc:
+        print(f"error: --params is not valid JSON: {exc}", file=sys.stderr)
+        return 1
+    call_tool(args.db, args.tool, params)
     return 0
 
 
