@@ -680,6 +680,17 @@ _FILE_SYNC_COMPONENTS = {
     **_OPTIONAL_PODS,
 }
 
+_DEFAULT_PG_CONTAINER = "singine-pg"
+_DEFAULT_PG_HOST = "host.docker.internal"
+_DEFAULT_PG_LOCAL_HOST = "127.0.0.1"
+_DEFAULT_PG_PORT = 55432
+_DEFAULT_PG_DATABASE = "singine_bridge"
+_DEFAULT_PG_USER = "singine"
+_DEFAULT_PG_PASSWORD = "singine"
+_DEFAULT_PG_DRIVER_CLASS = "org.postgresql.Driver"
+_DEFAULT_PG_DRIVER_COORD = "org.postgresql:postgresql:42.7.5"
+_DEFAULT_PG_DRIVER_JAR = "postgresql-42.7.5.jar"
+
 
 def _pod_phase(ns: str, label: str) -> str:
     """Return phase string of the first pod matching label, or 'not found'."""
@@ -932,6 +943,75 @@ def cmd_edge_files_ls(args: argparse.Namespace) -> int:
     else:
         print(output, end="" if output.endswith("\n") else "\n")
     return result.returncode
+
+
+def cmd_edge_create_datasource_connection(args: argparse.Namespace) -> int:
+    host = args.host
+    local_host = args.local_host
+    port = args.port
+    database = args.database
+    user = args.user
+    password = args.password
+    name = args.name or database
+    driver_class = args.driver_class
+    driver_coordinate = args.driver_coordinate
+    driver_jar = args.driver_jar
+    use_json = args.json
+
+    payload = {
+        "ok": True,
+        "command": "edge create datasource connection",
+        "datasource": {
+            "name": name,
+            "database_type": "PostgreSQL",
+            "jdbc_url": f"jdbc:postgresql://{host}:{port}/{database}",
+            "local_jdbc_url": f"jdbc:postgresql://{local_host}:{port}/{database}",
+            "host": host,
+            "local_host": local_host,
+            "port": port,
+            "database": database,
+            "user": user,
+            "password": password,
+            "driver_class": driver_class,
+            "driver_coordinate": driver_coordinate,
+            "driver_jar": driver_jar,
+        },
+        "edge_screen_fields": [
+            {"label": "Connection name", "value": name},
+            {"label": "Database type", "value": "PostgreSQL"},
+            {"label": "Driver class", "value": driver_class},
+            {"label": "JDBC URL", "value": f"jdbc:postgresql://{host}:{port}/{database}"},
+            {"label": "Host", "value": host},
+            {"label": "Port", "value": str(port)},
+            {"label": "Database", "value": database},
+            {"label": "Username", "value": user},
+            {"label": "Password", "value": password},
+            {"label": "Driver JAR", "value": driver_jar},
+            {"label": "Driver Maven coordinate", "value": driver_coordinate},
+        ],
+        "notes": [
+            "Use the host.docker.internal JDBC URL from Collibra Edge or Kubernetes workloads.",
+            "Use the 127.0.0.1 JDBC URL only from the local workstation.",
+            "If the Edge UI requires a JDBC driver upload, use the PostgreSQL JDBC jar matching the listed Maven coordinate.",
+        ],
+    }
+    if use_json:
+        print(json.dumps(payload))
+        return 0
+
+    print(f"[edge create datasource connection] name={name}  database=PostgreSQL")
+    print(f"  JDBC URL (Edge):  jdbc:postgresql://{host}:{port}/{database}")
+    print(f"  JDBC URL (local): jdbc:postgresql://{local_host}:{port}/{database}")
+    print(f"  Driver class:     {driver_class}")
+    print(f"  Driver JAR:       {driver_jar}")
+    print(f"  Driver Maven:     {driver_coordinate}")
+    print(f"  Host:             {host}")
+    print(f"  Port:             {port}")
+    print(f"  Database:         {database}")
+    print(f"  Username:         {user}")
+    print(f"  Password:         {password}")
+    print("  Note:             host.docker.internal resolves inside the live Edge runtime.")
+    return 0
 
 
 def _pod_logs_recent(ns: str, label: str, lines: int = 200) -> str:
@@ -1632,6 +1712,47 @@ def add_edge_parser(sub: argparse._SubParsersAction, *, name: str = "edge", help
     p.add_argument("--dry-run", action="store_true", help="Render/install without mutating the cluster")
     p.add_argument("--json", action="store_true")
     p.set_defaults(func=cmd_edge_site_init)
+
+    # ── create datasource connection ────────────────────────────────────────
+    create_parser = edge_sub.add_parser(
+        "create",
+        help="Generate repeatable Edge-side configuration payloads",
+    )
+    create_parser.set_defaults(func=lambda a: (create_parser.print_help(), 1)[1])
+    create_sub = create_parser.add_subparsers(dest="edge_create_subject")
+
+    datasource_parser = create_sub.add_parser(
+        "datasource",
+        help="Generate datasource configuration values for the Edge UI",
+    )
+    datasource_parser.set_defaults(func=lambda a: (datasource_parser.print_help(), 1)[1])
+    datasource_sub = datasource_parser.add_subparsers(dest="edge_create_datasource_action")
+
+    p = datasource_sub.add_parser(
+        "connection",
+        help="Print PostgreSQL datasource connection details for the Collibra Edge screens",
+    )
+    p.add_argument("--name", help="Connection name (default: database name)")
+    p.add_argument("--host", default=_DEFAULT_PG_HOST,
+                   help=f"Host visible from Edge workloads (default: {_DEFAULT_PG_HOST})")
+    p.add_argument("--local-host", default=_DEFAULT_PG_LOCAL_HOST,
+                   help=f"Host visible from the local workstation (default: {_DEFAULT_PG_LOCAL_HOST})")
+    p.add_argument("--port", type=int, default=_DEFAULT_PG_PORT,
+                   help=f"PostgreSQL port (default: {_DEFAULT_PG_PORT})")
+    p.add_argument("--database", default=_DEFAULT_PG_DATABASE,
+                   help=f"Database name (default: {_DEFAULT_PG_DATABASE})")
+    p.add_argument("--user", default=_DEFAULT_PG_USER,
+                   help=f"Database username (default: {_DEFAULT_PG_USER})")
+    p.add_argument("--password", default=_DEFAULT_PG_PASSWORD,
+                   help=f"Database password (default: {_DEFAULT_PG_PASSWORD})")
+    p.add_argument("--driver-class", default=_DEFAULT_PG_DRIVER_CLASS,
+                   help=f"JDBC driver class (default: {_DEFAULT_PG_DRIVER_CLASS})")
+    p.add_argument("--driver-coordinate", default=_DEFAULT_PG_DRIVER_COORD,
+                   help=f"Suggested JDBC driver Maven coordinate (default: {_DEFAULT_PG_DRIVER_COORD})")
+    p.add_argument("--driver-jar", default=_DEFAULT_PG_DRIVER_JAR,
+                   help=f"Suggested JDBC driver jar filename (default: {_DEFAULT_PG_DRIVER_JAR})")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_edge_create_datasource_connection)
 
     # ── files ────────────────────────────────────────────────────────────────
     files_parser = edge_sub.add_parser(

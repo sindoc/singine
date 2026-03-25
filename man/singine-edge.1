@@ -128,6 +128,10 @@ points:
 and
 .BR "singine collibra edge files ls [PATH]" .
 .TP
+.B create
+Generate repeatable Edge-side configuration payloads.  Primary entry point:
+.BR "singine collibra edge create datasource connection" .
+.TP
 .B deploy
 .B install
 followed by
@@ -293,6 +297,29 @@ For another local directory, repeat the same pattern with a matching
 .B --dest
 path, for example:
 .BR "python3 -m singine.command collibra edge files sync /tmp/my-dataset --dest /tmp/my-dataset" .
+.SS create
+.TP
+.B singine collibra edge create datasource connection [\fB--name\fR \fINAME\fR] [\fB--host\fR \fIHOST\fR] [\fB--port\fR \fIPORT\fR] [\fB--database\fR \fINAME\fR] [\fB--user\fR \fIUSER\fR] [\fB--password\fR \fIPASSWORD\fR] [\fB--json\fR]
+Print the PostgreSQL datasource values to copy into the Collibra Edge
+connection screens.
+Default Edge-facing values are aligned with the Singine PostgreSQL import
+workflow:
+.RS
+.IP \(bu 2
+JDBC URL:
+.BR "jdbc:postgresql://host.docker.internal:55432/singine_bridge"
+.IP \(bu 2
+Driver class:
+.BR "org.postgresql.Driver"
+.IP \(bu 2
+Username:
+.BR "singine"
+.IP \(bu 2
+Password:
+.BR "singine"
+.RE
+Use this after:
+.BR "python3 -m singine.command pg create database fromSQLite /tmp/singine/sqlite.db --db-name singine_bridge --replace" .
 .SS javadoc
 .TP
 .B singine edge javadoc [\fB--json\fR]

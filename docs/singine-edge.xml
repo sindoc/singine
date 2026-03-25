@@ -65,6 +65,16 @@
       <arg><option>--component</option> <replaceable>COMPONENT</replaceable></arg>
       <arg><option>--namespace</option> <replaceable>NAMESPACE</replaceable></arg>
     </cmdsynopsis>
+
+    <cmdsynopsis>
+      <command>singine collibra edge create datasource connection</command>
+      <arg><option>--name</option> <replaceable>NAME</replaceable></arg>
+      <arg><option>--host</option> <replaceable>HOST</replaceable></arg>
+      <arg><option>--port</option> <replaceable>PORT</replaceable></arg>
+      <arg><option>--database</option> <replaceable>NAME</replaceable></arg>
+      <arg><option>--user</option> <replaceable>USER</replaceable></arg>
+      <arg><option>--password</option> <replaceable>PASSWORD</replaceable></arg>
+    </cmdsynopsis>
   </refsynopsisdiv>
 
   <refsect1>
@@ -81,6 +91,37 @@
       <literal>collibra-edge</literal>. The default remote path is
       <filename>/tmp/singine</filename>.
     </para>
+    <para>
+      The corresponding repeatable database workflow is to import the local
+      SQLite file into PostgreSQL and then generate the exact datasource values
+      to paste into the Collibra Edge UI.
+    </para>
+  </refsect1>
+
+  <refsect1>
+    <title>Repeatable datasource connection workflow</title>
+    <orderedlist>
+      <listitem>
+        <para>
+          Import the SQLite database into PostgreSQL:
+        </para>
+        <programlisting language="bash">python3 -m singine.command pg create database fromSQLite /tmp/singine/sqlite.db --db-name singine_bridge --replace</programlisting>
+      </listitem>
+      <listitem>
+        <para>
+          Print the Collibra Edge datasource values:
+        </para>
+        <programlisting language="bash">python3 -m singine.command collibra edge create datasource connection</programlisting>
+      </listitem>
+      <listitem>
+        <para>
+          Copy the generated JDBC URL, driver class, username, and password into
+          the Edge screens. From Edge workloads, use
+          <literal>host.docker.internal</literal> rather than
+          <literal>127.0.0.1</literal>.
+        </para>
+      </listitem>
+    </orderedlist>
   </refsect1>
 
   <refsect1>
@@ -171,7 +212,10 @@ python3 -m singine.command collibra edge files sync /tmp/singine/sqlite.db --des
 python3 -m singine.command collibra edge files sync /tmp/singine --dest /tmp/singine --dry-run
 
 # Inspect the remote directory afterwards
-python3 -m singine.command collibra edge files ls /tmp/singine</programlisting>
+python3 -m singine.command collibra edge files ls /tmp/singine
+
+# Print PostgreSQL datasource values for the Edge UI
+python3 -m singine.command collibra edge create datasource connection</programlisting>
   </refsect1>
 
   <refsect1>
