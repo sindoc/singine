@@ -1,8 +1,13 @@
 """Singine CLI glue for ``singine collibra id/contract/server`` subcommands.
 
-Dynamically imports the ``singine_collibra`` package from the collibra repository
-(default: ~/ws/git/github/sindoc/collibra or $COLLIBRA_DIR).  If the package is
-not importable, each handler prints a clear error and returns exit code 1.
+Dynamically imports the ``singine_collibra`` package from the collibra
+repository (default: ~/ws/git/github/sindoc/collibra or $COLLIBRA_DIR).
+The preferred layout is:
+
+  collibra/singine-collibra/python/singine_collibra/
+
+The legacy top-level ``collibra/singine_collibra/`` path is still accepted as a
+fallback during migration.
 """
 from __future__ import annotations
 
@@ -21,11 +26,19 @@ def _collibra_root() -> Path:
     )
 
 
+def _candidate_python_roots() -> list[str]:
+    root = _collibra_root()
+    return [
+        str(root / "singine-collibra" / "python"),
+        str(root),
+    ]
+
+
 def _ensure_singine_collibra() -> bool:
-    """Add collibra repo root to sys.path so singine_collibra is importable."""
-    root = str(_collibra_root())
-    if root not in sys.path:
-        sys.path.insert(0, root)
+    """Add candidate Collibra Python roots to sys.path so singine_collibra imports."""
+    for candidate in reversed(_candidate_python_roots()):
+        if candidate not in sys.path:
+            sys.path.insert(0, candidate)
     try:
         import singine_collibra  # noqa: F401
         return True
@@ -37,7 +50,8 @@ def _not_found(component: str) -> int:
     root = _collibra_root()
     print(
         f"[singine collibra] ERROR: singine_collibra package not found.\n"
-        f"  Expected: {root}/singine_collibra/\n"
+        f"  Expected: {root}/singine-collibra/python/singine_collibra/\n"
+        f"  Fallback: {root}/singine_collibra/\n"
         f"  Set COLLIBRA_DIR to the collibra repo root or clone it there."
     )
     return 1

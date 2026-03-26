@@ -21,7 +21,7 @@ exists for that vendor.
 Rules for assistants:
 
 1. Keep Collibra-specific implementation code in the sibling `collibra/`
-   repository, preferably under `collibra/singine_collibra/`,
+   repository, preferably under `collibra/singine-collibra/python/singine_collibra/`,
    `collibra/collibra-integrations/`, or `collibra/edge/`.
 2. Keep Singine responsible for authentication, authorisation, identity
    providers, privilege routing, JVM orchestration, command runtime, and
@@ -32,6 +32,8 @@ Rules for assistants:
 4. Prefer the sibling `silkpage/` repository for transformation-heavy work
    involving XML, XSLT, XPath, RDF, TTL, SPARQL, SQL, GraphQL, and related
    payload or document conversions.
+5. Treat the Collibra metamodel and its four-letter codes as a canonical
+   integration contract whenever Singine interacts with Collibra-aware code.
 
 Short test:
 
@@ -654,12 +656,13 @@ singine collibra <component> <command> [options]
 - **Edge stack** (`singine collibra edge`): delegates to `singine/edge.py`
   (`add_edge_parser` is reused with `name="edge"` under the collibra subparser).
 - **id/contract/server**: dynamically imported from the `singine_collibra`
-  Python package located in the collibra repo
+  Python package under `singine-collibra/python/` in the collibra repo
   (`~/ws/git/github/sindoc/collibra` or `$COLLIBRA_DIR`).
 
 ### glue module: `singine/collibra_idgen.py`
 
-Adds `singine_collibra` package root to `sys.path` at runtime, then calls
+Adds the preferred `COLLIBRA_DIR/singine-collibra/python` path to `sys.path`
+at runtime, falls back to the legacy root when needed, then calls
 `singine_collibra.command.add_collibra_subcommands(collibra_sub)`.
 If the package is missing, a clear error is printed and exit code 1 is
 returned — the rest of the `singine` CLI is unaffected.

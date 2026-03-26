@@ -11,8 +11,10 @@ Policy:
 3. Use Singine for authn/authz, identity-provider routing, JVM orchestration,
    secure execution, manpage/docbook publication, and thin command hooks.
 4. For `singine collibra ...`, prefer dynamic loading from
-   `collibra/singine_collibra` via `COLLIBRA_DIR` instead of embedding
+   `collibra/singine-collibra/python/singine_collibra` via `COLLIBRA_DIR` instead of embedding
    Collibra-aware logic directly here.
+5. Keep the Collibra metamodel and its four-letter codes explicit in the
+   integration design.
 
 Decision rule:
 

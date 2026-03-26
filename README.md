@@ -29,22 +29,25 @@ Use this split:
 | XML/XSLT/XPath/RDF/TTL/SPARQL/SQL/GraphQL and adjacent payload/document transforms | sibling `silkpage/` repo |
 
 That means `singine collibra ...` should usually be a thin hook into
-`collibra/singine_collibra` rather than a second implementation of Collibra
+`collibra/singine-collibra/python/singine_collibra` rather than a second implementation of Collibra
 behavior inside this repo.
 
 The preferred wiring is:
 
 ```text
-singine runtime + docs + authz -> collibra/singine_collibra for Collibra behavior
+singine runtime + docs + authz -> collibra/singine-collibra/python/singine_collibra for Collibra behavior
                                -> silkpage for transformation-heavy workflows
 ```
 
 Prefer reuse before adding new code:
 
-- `collibra/singine_collibra` for Collibra command implementations
+- `collibra/singine-collibra/python/singine_collibra` for Collibra command implementations
 - `collibra/collibra-integrations` and `collibra/edge` for Collibra-specific JVM and Edge work
 - `silkpage/` for XML/RDF/XSLT/XPath/SPARQL/SQL/GraphQL transformations
 - `tools-nested/collibra-fs` for Collibra CLI/file-oriented utilities
+
+One integration contract should stay explicit across all three repos: the
+Collibra metamodel and its four-letter codes.
 
 The main integration seams are:
 
