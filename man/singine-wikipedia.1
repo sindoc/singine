@@ -1,0 +1,124 @@
+.TH SINGINE-WIKIPEDIA 1 "2026-03-27" "singine 0.2.0" "User Commands"
+.SH NAME
+singine-wikipedia \- repository-backed Wikipedia contribution workflows
+.SH SYNOPSIS
+.B singine wikipedia contrib
+\fITOPIC\fR [\fB--repo-root\fR \fIPATH\fR] [\fB--action\fR \fIACTION\fR] [\fB--json\fR]
+.SH DESCRIPTION
+The
+.B wikipedia
+command family wraps repository-backed publication and maintenance workflows for
+Wikipedia-supporting knowledge-graph projects.
+The current topic surface is
+.BR collibra .
+It is intended for neutral, source-driven maintenance of a standalone repository
+that produces Markdown, Org, Logseq, XML, JSON-LD, Atom, RSS, and maintainer
+notification artifacts.
+.SH TOPICS
+.TP
+.B collibra
+Maintain the Collibra Wikipedia-support repository rooted at
+.I /Users/skh/ws/git/github/sindoc/datatech-wiki-kg
+unless
+.B --repo-root
+overrides it.
+.SH ACTIONS
+.TP
+.B status
+Report repository metadata, campaign metadata, and the pending notification
+manifest without mutating files.
+.TP
+.B refresh
+Run
+.B python3 scripts/refresh_repo.py
+inside the standalone repository to regenerate derived artifacts such as Org,
+Logseq, JSON-LD, Atom, RSS, and the pending notification manifest.
+.TP
+.B kernel-sync
+Run
+.B python3 scripts/sync_kernel_views.py
+to project selected repository content into the Singine kernel Logseq graph.
+.TP
+.B visualize
+Run
+.B python3 scripts/render_process_visual.py
+to derive the Mermaid workflow diagram from the canonical XML protocol payload.
+.TP
+.B test-case
+Run the end-to-end command-line verification:
+.B python3 scripts/test_case.py
+.TP
+.B install-hooks
+Install the repository-local post-commit hook through
+.BR python3\ scripts/install_hooks.py .
+.TP
+.B preview-mail
+Render individualized opt-in updates without sending mail.
+.TP
+.B send-mail
+Send individualized updates to opted-in recipients only.
+.SH OPTIONS
+.TP
+.B --repo-root
+Path to the standalone Wikipedia-support repository.
+.TP
+.B --action
+Workflow action to run. Supported values:
+.BR status ,
+.BR refresh ,
+.BR kernel-sync ,
+.BR visualize ,
+.BR test-case ,
+.BR install-hooks ,
+.BR preview-mail ,
+and
+.BR send-mail .
+.TP
+.B --json
+Emit a JSON payload describing the workflow result.
+.SH EXAMPLES
+.nf
+singine wikipedia contrib collibra
+singine wikipedia contrib collibra --json
+singine wikipedia contrib collibra --action refresh
+singine wikipedia contrib collibra --action kernel-sync
+singine wikipedia contrib collibra --action visualize
+singine wikipedia contrib collibra --action test-case
+singine wikipedia contrib collibra --action install-hooks
+singine wikipedia contrib collibra --action preview-mail
+singine wikipedia contrib collibra --action send-mail
+.fi
+.SH FILES
+.TP
+.I /Users/skh/ws/git/github/sindoc/datatech-wiki-kg/config/project.json
+Dependency and publication configuration for the standalone repository.
+.TP
+.I /Users/skh/ws/git/github/sindoc/datatech-wiki-kg/protocol/wikipedia-contrib-process.xml
+Canonical process payload used to derive the visual workflow.
+.TP
+.I /Users/skh/ws/git/github/sindoc/datatech-wiki-kg/visuals/wikipedia-contrib-process.mmd
+Derived Mermaid diagram for the contributor-facing process.
+.TP
+.I /Users/skh/ws/git/github/sindoc/singine/schema/singine-wikipedia-api.json
+OpenAPI description of the local HTTP interaction model for this workflow.
+.TP
+.I /Users/skh/ws/git/github/sindoc/singine/runtime/sinlisp/wikipedia_contrib.sinlisp
+SinLisp-ready command model for testing and interaction.
+.SH NOTES
+The default repository path is
+\fI/Users/skh/ws/git/github/sindoc/datatech-wiki-kg\fR.
+The wrapper prepares or refreshes artifacts, but does not automatically send
+mail unless the explicit
+.B --action send-mail
+option is used.
+.PP
+The command documentation is mirrored in Markdown, OpenAPI, Javadoc, and
+SinLisp under the
+.B singine
+repository so the workflow can be consumed by shell users, publication tooling,
+JVM documentation pipelines, and structured testing surfaces.
+.SH SEE ALSO
+.BR singine (1),
+.BR singine-smtp (1),
+.BR singine-logseq (1),
+.BR singine-man (1)

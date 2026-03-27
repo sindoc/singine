@@ -1,0 +1,51 @@
+; SinLisp command model for repository-backed Wikipedia contribution workflows.
+; This file is intended for testing, interaction planning, and adapter generation.
+
+(workflow "singine-wikipedia-contrib"
+  (topic "collibra"
+    (repo-root "/Users/skh/ws/git/github/sindoc/datatech-wiki-kg")
+    (command "status"
+      (argv "singine" "wikipedia" "contrib" "collibra" "--json")
+      (reads "config/project.json" "data/collibra-campaign.json" "notifications/pending-update.json")
+      (writes))
+    (command "refresh"
+      (argv "singine" "wikipedia" "contrib" "collibra" "--action" "refresh" "--json")
+      (reads "content/markdown/Collibra.md" "docs/process.md")
+      (writes "content/org/Collibra.org" "content/logseq/pages/Collibra.md" "graph/collibra-support.jsonld" "feeds/datatech-collibra.atom" "feeds/datatech-collibra.rss" "notifications/pending-update.json"))
+    (command "kernel-sync"
+      (argv "singine" "wikipedia" "contrib" "collibra" "--action" "kernel-sync" "--json")
+      (reads "docs/plan.md" "docs/backlog.md" "docs/roadmap.md")
+      (writes "content/logseq/pages/Wikipedia___Index.md" "~/ws/logseq/singine/kernel/pages/Wikipedia___Collibra.md"))
+    (command "visualize"
+      (argv "singine" "wikipedia" "contrib" "collibra" "--action" "visualize" "--json")
+      (reads "protocol/wikipedia-contrib-process.xml")
+      (writes "visuals/wikipedia-contrib-process.mmd"))
+    (command "test-case"
+      (argv "singine" "wikipedia" "contrib" "collibra" "--action" "test-case" "--json")
+      (reads "scripts/test_case.py")
+      (writes))
+    (command "install-hooks"
+      (argv "singine" "wikipedia" "contrib" "collibra" "--action" "install-hooks" "--json")
+      (reads "hooks/post-commit")
+      (writes ".git/hooks/post-commit"))
+    (command "preview-mail"
+      (argv "singine" "wikipedia" "contrib" "collibra" "--action" "preview-mail" "--json")
+      (reads "outreach/subscribers.json" "templates/email_invitation.txt")
+      (writes))
+    (command "send-mail"
+      (argv "singine" "wikipedia" "contrib" "collibra" "--action" "send-mail" "--json")
+      (requires "opt-in-only" "configured-smtp")
+      (reads "outreach/subscribers.json" "templates/email_invitation.txt")
+      (writes "smtp-delivery-side-effects"))))
+
+(test-suite "wikipedia-contrib"
+  (test "status-is-readable"
+    (invoke "status")
+    (expect-field "topic" "collibra")
+    (expect-field "ok" true))
+  (test "visualize-derives-mermaid"
+    (invoke "visualize")
+    (expect-path "visuals/wikipedia-contrib-process.mmd"))
+  (test "test-case-passes"
+    (invoke "test-case")
+    (expect-field "ok" true)))

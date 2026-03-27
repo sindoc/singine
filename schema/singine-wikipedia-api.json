@@ -1,0 +1,203 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Singine Wikipedia Contribution API",
+    "version": "0.1.0",
+    "summary": "Local interaction contract for repository-backed Wikipedia contribution workflows.",
+    "description": "This OpenAPI document describes the command-oriented interaction model behind `singine wikipedia contrib`. It is intended for local orchestration, testing, service adapters, and documentation generation."
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:9090",
+      "description": "Local Singine panel or test harness"
+    }
+  ],
+  "paths": {
+    "/api/wikipedia/contrib/{topic}": {
+      "post": {
+        "operationId": "runWikipediaContributionAction",
+        "summary": "Run a workflow action for a topic-specific Wikipedia support repository",
+        "parameters": [
+          {
+            "name": "topic",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": ["collibra"]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WikipediaContribRequest"
+              },
+              "examples": {
+                "visualize": {
+                  "value": {
+                    "action": "visualize",
+                    "repoRoot": "/Users/skh/ws/git/github/sindoc/datatech-wiki-kg",
+                    "json": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Workflow action result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WikipediaContribResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/wikipedia/contrib/{topic}/status": {
+      "get": {
+        "operationId": "getWikipediaContributionStatus",
+        "summary": "Read workflow metadata without modifying files",
+        "parameters": [
+          {
+            "name": "topic",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": ["collibra"]
+            }
+          },
+          {
+            "name": "repoRoot",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Workflow metadata",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WikipediaContribResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "WikipediaContribRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "status",
+              "refresh",
+              "kernel-sync",
+              "visualize",
+              "test-case",
+              "install-hooks",
+              "preview-mail",
+              "send-mail"
+            ]
+          },
+          "repoRoot": {
+            "type": "string"
+          },
+          "json": {
+            "type": "boolean",
+            "default": true
+          }
+        },
+        "required": ["action"]
+      },
+      "CommandExecution": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "command": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "cwd": {
+            "type": "string"
+          },
+          "exit_code": {
+            "type": "integer"
+          },
+          "stdout": {
+            "type": "string"
+          },
+          "stderr": {
+            "type": "string"
+          }
+        },
+        "required": ["command", "cwd", "exit_code", "stdout", "stderr"]
+      },
+      "WikipediaContribResponse": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "topic": {
+            "type": "string",
+            "enum": ["collibra"]
+          },
+          "repo_root": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "status",
+              "refresh",
+              "kernel-sync",
+              "visualize",
+              "test-case",
+              "install-hooks",
+              "preview-mail",
+              "send-mail"
+            ]
+          },
+          "exists": {
+            "type": "boolean"
+          },
+          "result": {
+            "$ref": "#/components/schemas/CommandExecution"
+          },
+          "pending_notification": {
+            "type": "object"
+          },
+          "project": {
+            "type": "object"
+          },
+          "campaign": {
+            "type": "object"
+          }
+        },
+        "required": ["ok", "topic", "repo_root", "action", "exists"]
+      }
+    }
+  }
+}

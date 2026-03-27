@@ -18,6 +18,7 @@
 #   make report          alias for test (catalog-report output)
 #   make deps            resolve + print Maven dependency tree
 #   make clean           remove output/ directory
+#   make site            build datatech-wiki-kg static site
 #   make all             deps + test + validate
 
 SCHEMA_DIR  := $(dir $(realpath $(lastword $(MAKEFILE_LIST))))
@@ -33,7 +34,7 @@ MVN_FLAGS   := -f $(POM) --no-transfer-progress
 CALABASH    := $(MVN) $(MVN_FLAGS) exec:java \
                -Dcatalog.file=$(CATALOG)
 
-.PHONY: all help test validate report deps clean output-dir
+.PHONY: all help test validate report site deps clean output-dir
 
 # ── Default target ────────────────────────────────────────────────────
 all: test validate
@@ -49,6 +50,7 @@ help:
 	@echo "  report     Alias for test"
 	@echo "  deps       Resolve and print Maven dependency tree"
 	@echo "  clean      Remove output/ directory"
+	@echo "  site       Build datatech-wiki-kg static site"
 	@echo "  all        deps + test + validate"
 	@echo ""
 	@echo "Processor: XML Calabash $(shell $(MVN) $(MVN_FLAGS) -q help:evaluate \
@@ -94,6 +96,24 @@ report: test
 deps:
 	@echo "── [singine] Resolving Maven dependency tree ───────────────────"
 	$(MVN) $(MVN_FLAGS) dependency:tree
+
+# ── datatech-wiki-kg static site: datatech-site.xpl ─────────────────
+# Transforms XML sources in datatech-wiki-kg/site/src/xml/en/ to HTML5.
+# Output: datatech-wiki-kg/site/build/en/*.html + build-report.xml
+DATATECH_BUILD := $(SCHEMA_DIR)../../../datatech-wiki-kg/site/build
+
+site:
+	@echo "── [singine] Building datatech-wiki-kg site: datatech-site.xpl ─"
+	$(CALABASH) -Dpipeline=pipelines/datatech-site.xpl
+	@echo ""
+	@echo "── Report written to: $(DATATECH_BUILD)/build-report.xml"
+	@if [ -f $(DATATECH_BUILD)/build-report.xml ]; then \
+	  echo "── Pages built:"; \
+	  grep -o 'status="[a-z]*"' $(DATATECH_BUILD)/build-report.xml || true; \
+	fi
+	@echo ""
+	@echo "── Open the site:"
+	@echo "   open $(DATATECH_BUILD)/en/index.html"
 
 # ── Clean ─────────────────────────────────────────────────────────────
 clean:
