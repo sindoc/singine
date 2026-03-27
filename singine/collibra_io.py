@@ -1,6 +1,8 @@
-"""Compatibility shim for Collibra I/O workflows.
+"""Collibra I/O workflows for Singine.
 
-Canonical impl at collibra/singine-collibra/python/singine_collibra/io.py
+This module also acts as a compatibility shim for the canonical implementation
+under ``collibra/singine-collibra/python/singine_collibra/io.py`` when that
+repository is present locally.
 """
 from __future__ import annotations
 
@@ -20,14 +22,6 @@ try:
     from singine_collibra.io import *  # noqa: F401, F403
 except ImportError:
     pass
-"""Collibra I/O workflows for Singine.
-
-This module begins the ``singine collibra io`` family with connection-oriented
-preflight commands. The goal is to explain which I/O path is appropriate and to
-verify the data-plane before touching the Collibra UI.
-"""
-
-from __future__ import annotations
 
 import argparse
 import json
