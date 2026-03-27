@@ -22,10 +22,16 @@ def _collibra_root() -> Path:
 
 
 def _ensure_singine_collibra() -> bool:
-    """Add collibra repo root to sys.path so singine_collibra is importable."""
-    root = str(_collibra_root())
-    if root not in sys.path:
-        sys.path.insert(0, root)
+    """Add likely Collibra package roots to sys.path."""
+    root = _collibra_root()
+    candidates = [
+        root,
+        root / "singine-collibra" / "python",
+    ]
+    for candidate in candidates:
+        value = str(candidate)
+        if value not in sys.path and candidate.exists():
+            sys.path.insert(0, value)
     try:
         import singine_collibra  # noqa: F401
         return True
@@ -52,6 +58,9 @@ def add_collibra_subcommands(collibra_sub: argparse._SubParsersAction) -> bool:
     """
     if not _ensure_singine_collibra():
         return False
-    from singine_collibra.command import add_collibra_subcommands as _add
+    try:
+        from singine_collibra.command import add_collibra_subcommands as _add
+    except ImportError:
+        return False
     _add(collibra_sub)
     return True

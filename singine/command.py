@@ -4879,7 +4879,6 @@ def build_parser() -> argparse.ArgumentParser:
 
     install_parser = sub.add_parser("install", help="Install singine or selected local tool dependencies")
     install_parser.add_argument("subject", nargs="?", choices=["singine", "ant", "xmldoclet", "git-filter-repo"], default="singine")
-    install_parser.add_argument("subject", nargs="?", choices=["singine", "ant", "xmldoclet"], default="singine")
     install_parser.add_argument("--prefix", default=str(DEFAULT_PREFIX))
     install_parser.add_argument("--shell", choices=["bash", "sh", "all"], default="all")
     install_parser.add_argument("--mode", choices=["base", "workstation"], default="base")
@@ -6002,14 +6001,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     wikipedia_contrib.add_argument("--json", action="store_true")
     wikipedia_contrib.set_defaults(func=cmd_wikipedia_contrib)
-    # singine collibra io — governed Collibra I/O workflows
-    from .collibra_io import add_collibra_io_parser
-    add_collibra_io_parser(collibra_sub)
-
-    # singine collibra id / contract / server — loaded from collibra repo
-    from .collibra_idgen import add_collibra_subcommands
-    add_collibra_subcommands(collibra_sub)
-
     # ------------------------------------------------------------------ web
     web_parser = sub.add_parser(
         "web",
