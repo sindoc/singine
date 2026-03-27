@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE refentry PUBLIC
+  "-//OASIS//DTD DocBook XML V4.5//EN"
+  "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd">
+
+<refentry xmlns="http://docbook.org/ns/docbook"
+          xmlns:dc="http://purl.org/dc/elements/1.1/"
+          xml:lang="en"
+          version="5.0">
+  <info>
+    <dc:title>singine-pg</dc:title>
+    <dc:creator>Sina K. Heshmati</dc:creator>
+    <dc:date>2026-03-25</dc:date>
+    <dc:format>application/docbook+xml</dc:format>
+    <dc:identifier>urn:singine:doc:pg:man:1</dc:identifier>
+    <dc:subject>PostgreSQL provisioning and SQLite import</dc:subject>
+    <dc:description>singine pg — provision a local PostgreSQL service and import SQLite content into it</dc:description>
+    <dc:language>en</dc:language>
+  </info>
+
+  <refmeta>
+    <refentrytitle>singine-pg</refentrytitle>
+    <manvolnum>1</manvolnum>
+    <refmiscinfo class="source">Singine Platform</refmiscinfo>
+    <refmiscinfo class="manual">Singine User Commands</refmiscinfo>
+  </refmeta>
+
+  <refnamediv>
+    <refname>singine-pg</refname>
+    <refpurpose>provision PostgreSQL and import SQLite databases</refpurpose>
+  </refnamediv>
+
+  <refsynopsisdiv>
+    <title>Synopsis</title>
+    <cmdsynopsis>
+      <command>singine pg create database fromSQLite</command>
+      <arg choice="req"><replaceable>SQLITE_DB</replaceable></arg>
+      <arg><option>--db-name</option> <replaceable>NAME</replaceable></arg>
+      <arg><option>--host-port</option> <replaceable>PORT</replaceable></arg>
+      <arg><option>--user</option> <replaceable>USER</replaceable></arg>
+      <arg><option>--password</option> <replaceable>PASSWORD</replaceable></arg>
+      <arg><option>--replace</option></arg>
+    </cmdsynopsis>
+    <cmdsynopsis>
+      <command>singine pg list databases</command>
+      <arg><option>--json</option></arg>
+    </cmdsynopsis>
+    <cmdsynopsis>
+      <command>singine pg list schemas</command>
+      <arg><option>--db-name</option> <replaceable>NAME</replaceable></arg>
+      <arg><option>--json</option></arg>
+    </cmdsynopsis>
+    <cmdsynopsis>
+      <command>singine pg list tables</command>
+      <arg><option>--db-name</option> <replaceable>NAME</replaceable></arg>
+      <arg><option>--schema</option> <replaceable>NAME</replaceable></arg>
+      <arg><option>--json</option></arg>
+    </cmdsynopsis>
+    <cmdsynopsis>
+      <command>singine pg list columns</command>
+      <arg><option>--db-name</option> <replaceable>NAME</replaceable></arg>
+      <arg><option>--schema</option> <replaceable>NAME</replaceable></arg>
+      <arg><option>--table</option> <replaceable>NAME</replaceable></arg>
+      <arg><option>--json</option></arg>
+    </cmdsynopsis>
+  </refsynopsisdiv>
+
+  <refsect1>
+    <title>Description</title>
+    <para>
+      <command>singine pg</command> provides PostgreSQL workflows for Singine.
+      Its primary operator path creates or reuses a local PostgreSQL Docker
+      container, creates a target database, translates a SQLite schema into
+      PostgreSQL DDL, and imports the data.
+    </para>
+    <para>
+      This is the recommended way to move a local SQLite file such as
+      <filename>/tmp/singine/sqlite.db</filename> into a network-reachable
+      database endpoint suitable for JDBC clients.
+    </para>
+    <para>
+      For callers running inside Docker Desktop Kubernetes, prefer the JDBC host
+      <literal>host.docker.internal</literal> instead of
+      <literal>127.0.0.1</literal>.
+    </para>
+  </refsect1>
+
+  <refsect1>
+    <title>Workflow</title>
+    <orderedlist>
+      <listitem>
+        <para>
+          Choose the SQLite source database.
+        </para>
+      </listitem>
+      <listitem>
+        <para>
+          Run the import:
+        </para>
+        <programlisting language="bash">python3 -m singine.command pg create database fromSQLite /tmp/singine/sqlite.db</programlisting>
+      </listitem>
+      <listitem>
+        <para>
+          Note the printed JDBC URL and credentials.
+        </para>
+      </listitem>
+      <listitem>
+        <para>
+          If you need a stable target name, rerun with
+          <option>--db-name</option>.
+        </para>
+        <programlisting language="bash">python3 -m singine.command pg create database fromSQLite /tmp/singine/sqlite.db --db-name singine_bridge --replace</programlisting>
+      </listitem>
+    </orderedlist>
+  </refsect1>
+
+  <refsect1>
+    <title>Inspection</title>
+    <para>
+      After importing a database, use the list commands to inspect which
+      databases, schemas, and tables are available.
+    </para>
+    <programlisting language="bash">python3 -m singine.command pg list databases</programlisting>
+    <programlisting language="bash">python3 -m singine.command pg list schemas --db-name singine_bridge</programlisting>
+    <programlisting language="bash">python3 -m singine.command pg list tables --db-name singine_bridge --schema public</programlisting>
+    <programlisting language="bash">python3 -m singine.command pg list columns --db-name singine_bridge --schema public --table entities</programlisting>
+  </refsect1>
+
+  <refsect1>
+    <title>Defaults</title>
+    <variablelist>
+      <varlistentry>
+        <term>container</term>
+        <listitem><para><literal>singine-pg</literal></para></listitem>
+      </varlistentry>
+      <varlistentry>
+        <term>image</term>
+        <listitem><para><literal>postgres:16-alpine</literal></para></listitem>
+      </varlistentry>
+      <varlistentry>
+        <term>host</term>
+        <listitem><para><literal>127.0.0.1</literal></para></listitem>
+      </varlistentry>
+      <varlistentry>
+        <term>port</term>
+        <listitem><para><literal>55432</literal></para></listitem>
+      </varlistentry>
+      <varlistentry>
+        <term>user</term>
+        <listitem><para><literal>singine</literal></para></listitem>
+      </varlistentry>
+      <varlistentry>
+        <term>password</term>
+        <listitem><para><literal>singine</literal></para></listitem>
+      </varlistentry>
+    </variablelist>
+  </refsect1>
+</refentry>

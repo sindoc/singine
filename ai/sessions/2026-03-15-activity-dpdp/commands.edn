@@ -1,0 +1,166 @@
+;; singine/ai/sessions/2026-03-15-activity-dpdp/commands.edn
+;;
+;; Ordered list of commands executed in session 2026-03-15-activity-dpdp.
+;; Recorded by singine ai claude governance layer.
+;; ------------------------------------------------------------------
+
+[;; ── Exploration ───────────────────────────────────────────────
+
+ {:command/id       "cmd-001"
+  :command/type     :explore
+  :command/command  "explore /Users/skh/ws/git (codebase survey)"
+  :command/status   :COMPLETED
+  :command/required-permissions ["read:filesystem:/Users/skh/ws/git"]}
+
+ {:command/id       "cmd-002"
+  :command/type     :read
+  :command/command  "read singine/CLAUDE.md"
+  :command/status   :COMPLETED
+  :command/required-permissions ["read:filesystem:singine/CLAUDE.md"]}
+
+ {:command/id       "cmd-003"
+  :command/type     :read
+  :command/command  "read sina/layout.xml"
+  :command/status   :COMPLETED
+  :command/required-permissions ["read:filesystem:sina/layout.xml"]}
+
+ ;; ── M1: Java package ──────────────────────────────────────────
+
+ {:command/id       "cmd-004"
+  :command/type     :write
+  :command/command  "write singine/core/java/singine/activity/Taxonomy.java"
+  :command/status   :COMPLETED
+  :command/required-permissions ["write:filesystem:singine/core/java/singine/activity/"]}
+
+ {:command/id       "cmd-005"
+  :command/type     :write
+  :command/command  "write singine/core/java/singine/activity/ActivityStatus.java"
+  :command/status   :COMPLETED
+  :command/required-permissions ["write:filesystem:singine/core/java/singine/activity/"]}
+
+ {:command/id       "cmd-006"
+  :command/type     :write
+  :command/command  "write singine/core/java/singine/activity/OutcomeType.java"
+  :command/status   :COMPLETED
+  :command/required-permissions ["write:filesystem:singine/core/java/singine/activity/"]}
+
+ {:command/id       "cmd-007"
+  :command/type     :write
+  :command/command  "write singine/core/java/singine/activity/Policy.java"
+  :command/status   :COMPLETED
+  :command/required-permissions ["write:filesystem:singine/core/java/singine/activity/"]}
+
+ {:command/id       "cmd-008"
+  :command/type     :write
+  :command/command  "write singine/core/java/singine/activity/Outcome.java"
+  :command/status   :COMPLETED
+  :command/required-permissions ["write:filesystem:singine/core/java/singine/activity/"]}
+
+ {:command/id       "cmd-009"
+  :command/type     :write
+  :command/command  "write singine/core/java/singine/activity/Action.java"
+  :command/status   :COMPLETED
+  :command/required-permissions ["write:filesystem:singine/core/java/singine/activity/"]}
+
+ {:command/id       "cmd-010"
+  :command/type     :write
+  :command/command  "write singine/core/java/singine/activity/Activity.java"
+  :command/status   :COMPLETED
+  :command/required-permissions ["write:filesystem:singine/core/java/singine/activity/"]}
+
+ {:command/id       "cmd-011"
+  :command/type     :write
+  :command/command  "write singine/core/java/singine/activity/ActivityTemplate.java"
+  :command/status   :COMPLETED
+  :command/required-permissions ["write:filesystem:singine/core/java/singine/activity/"]}
+
+ {:command/id       "cmd-012"
+  :command/type     :write
+  :command/command  "write singine/core/java/singine/activity/BaseAction.java"
+  :command/status   :COMPLETED
+  :command/required-permissions ["write:filesystem:singine/core/java/singine/activity/"]}
+
+ {:command/id       "cmd-013"
+  :command/type     :write
+  :command/command  "write singine/core/java/singine/activity/BaseOutcome.java"
+  :command/status   :COMPLETED
+  :command/required-permissions ["write:filesystem:singine/core/java/singine/activity/"]}
+
+ ;; ── M2: EDN taxonomy ──────────────────────────────────────────
+
+ {:command/id       "cmd-014"
+  :command/type     :write
+  :command/command  "write singine/core/resources/singine/activity/taxonomy.edn"
+  :command/status   :COMPLETED
+  :command/required-permissions ["write:filesystem:singine/core/resources/singine/activity/"]}
+
+ ;; ── M3: SVG + M4: SilkPage ────────────────────────────────────
+
+ {:command/id       "cmd-015"
+  :command/type     :write
+  :command/command  "write sina/img/dpdp-logo.svg"
+  :command/status   :COMPLETED
+  :command/required-permissions ["write:filesystem:sina/img/"]}
+
+ {:command/id       "cmd-016"
+  :command/type     :write
+  :command/command  "write sina/docs/activity/index.xml + 3 subpages"
+  :command/status   :COMPLETED
+  :command/required-permissions ["write:filesystem:sina/docs/activity/"]}
+
+ {:command/id       "cmd-017"
+  :command/type     :edit
+  :command/command  "edit sina/layout.xml (add docs/activity/ tocentry)"
+  :command/status   :COMPLETED
+  :command/required-permissions ["write:filesystem:sina/layout.xml"]}
+
+ ;; ── M5: Man pages ─────────────────────────────────────────────
+
+ {:command/id       "cmd-018"
+  :command/type     :write
+  :command/command  "write singine/man/singine-activity.1"
+  :command/status   :COMPLETED
+  :command/required-permissions ["write:filesystem:singine/man/"]}
+
+ {:command/id       "cmd-019"
+  :command/type     :write
+  :command/command  "write silkpage/man/silkpage.1"
+  :command/status   :COMPLETED
+  :command/required-permissions ["write:filesystem:silkpage/man/"]}
+
+ ;; ── M6: CLAUDE.md + Makefile ──────────────────────────────────
+
+ {:command/id       "cmd-020"
+  :command/type     :edit
+  :command/command  "edit singine/CLAUDE.md (add Section 15: Activity Taxonomy)"
+  :command/status   :COMPLETED
+  :command/required-permissions ["write:filesystem:singine/CLAUDE.md"]}
+
+ {:command/id       "cmd-021"
+  :command/type     :edit
+  :command/command  "edit singine/core/Makefile (add activity-edn target)"
+  :command/status   :COMPLETED
+  :command/required-permissions ["write:filesystem:singine/core/Makefile"]}
+
+ ;; ── M7: Git commits ───────────────────────────────────────────
+
+ {:command/id       "cmd-022"
+  :command/type     :commit
+  :command/command  "git commit singine feature/local-network-server (sha: 76a70c9)"
+  :command/status   :COMPLETED
+  :command/required-permissions ["commit:git:github/sindoc/singine"]}
+
+ {:command/id       "cmd-023"
+  :command/type     :commit
+  :command/command  "git commit backlog main (sha: 337b0e9f8)"
+  :command/status   :COMPLETED
+  :command/required-permissions ["commit:git:local/backlog"]}
+
+ ;; ── singine ai design ─────────────────────────────────────────
+
+ {:command/id       "cmd-024"
+  :command/type     :write
+  :command/command  "write singine.ai Java package + provider configs + session records"
+  :command/status   :COMPLETED
+  :command/required-permissions ["write:filesystem:singine/core/java/singine/ai/"
+                                  "write:filesystem:singine/ai/"]}]

@@ -1,0 +1,65 @@
+# docker/docker-compose.centos.yml — CentOS LTS test stack for singine
+#
+# Usage:
+#   docker compose -f docker/docker-compose.centos.yml up --build
+#   docker compose -f docker/docker-compose.centos.yml run singine-test ant test-local
+#   docker compose -f docker/docker-compose.centos.yml run singine-test ant javadoc-xml
+#   docker compose -f docker/docker-compose.centos.yml down
+#
+# Services:
+#   singine-test   — CentOS LTS (Rocky Linux 9) container with JDK 21, Ant, Maven, Gradle
+#
+# Volumes:
+#   m2-cache       — Maven local repository (shared to avoid re-downloading deps)
+#   singine-target — build output (target/, classes/)
+#
+# Environment:
+#   JAVA_HOME, SINGINE_CACERTS, SINGINE_LOCAL_PORT all set inside the container.
+#   Host can override via: SINGINE_LOCAL_PORT=3000 docker compose up ...
+
+version: "3.9"
+
+services:
+
+  singine-test:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.centos
+    image: singine-centos-test:latest
+    container_name: singine-centos-test
+
+    # DNS: singine.local → 127.0.0.1 (also set in Dockerfile /etc/hosts)
+    extra_hosts:
+      - "singine.local:127.0.0.1"
+
+    environment:
+      # JVM
+      JAVA_HOME: /usr/lib/jvm/java-21-openjdk
+      SINGINE_CACERTS: /etc/pki/ca-trust/extracted/java/cacerts
+      JAVA_TOOL_OPTIONS: >-
+        -Djavax.net.ssl.trustStore=/etc/pki/ca-trust/extracted/java/cacerts
+        -Dfile.encoding=UTF-8
+
+      # singine.local
+      SINGINE_LOCAL_HOST: singine.local
+      SINGINE_LOCAL_PORT: ${SINGINE_LOCAL_PORT:-2000}
+      SINGINE_CORTEX_DB: /tmp/sqlite.db
+
+    volumes:
+      # Maven cache (host ~/.m2 → container /root/.m2)
+      - m2-cache:/root/.m2/repository
+      # Build output persisted to host
+      - singine-target:/singine/core/target
+
+    # Run integration tests by default; override with docker compose run singine-test <cmd>
+    command: ["ant", "-f", "/singine/core/build.xml", "test-local"]
+
+    # Expose port 2000 to host for live testing (optional)
+    # ports:
+    #   - "2000:2000"
+
+volumes:
+  m2-cache:
+    driver: local
+  singine-target:
+    driver: local

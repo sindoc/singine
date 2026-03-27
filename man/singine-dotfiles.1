@@ -1,0 +1,79 @@
+.TH SINGINE-DOTFILES 1 "2026-03-22" "singine 0.2.0" "User Commands"
+.SH NAME
+singine-dotfiles \- inspect and capture home dotfiles into a controlled repo
+.SH SYNOPSIS
+.B singine dotfiles inspect
+[\fB--home-dir\fR \fIPATH\fR]
+[\fB--dotfiles-repo\fR \fIPATH\fR]
+[\fB--json\fR]
+.PP
+.B singine dotfiles dashboard
+[\fB--home-dir\fR \fIPATH\fR]
+[\fB--dotfiles-repo\fR \fIPATH\fR]
+[\fB--output-dir\fR \fIPATH\fR]
+[\fB--json\fR]
+.PP
+.B singine dotfiles capture
+\fINAME\fR
+[\fB--home-dir\fR \fIPATH\fR]
+[\fB--dotfiles-repo\fR \fIPATH\fR]
+[\fB--json\fR]
+.SH DESCRIPTION
+.B singine dotfiles
+is the first safe control layer for the personal dotfiles you named.
+It inventories shell startup files, Vim config, Claude state, Logseq state,
+Dropbox, and the controlled dotfiles repo.
+.PP
+Current targets include:
+.IP \(bu 2
+\fI.profile\fR
+.IP \(bu 2
+\fI.bash_profile\fR
+.IP \(bu 2
+\fI.bashrc\fR
+.IP \(bu 2
+\fI.zprofile\fR
+.IP \(bu 2
+\fI.zshrc\fR
+.IP \(bu 2
+\fI.vimrc\fR
+.IP \(bu 2
+\fI.box-shell\fR
+.IP \(bu 2
+\fI.claude\fR
+.IP \(bu 2
+\fI.logseq\fR
+.IP \(bu 2
+\fIDropbox\fR
+.SH COMMANDS
+.TP
+.B inspect
+Emit a JSON inventory of managed and unmanaged targets.
+.TP
+.B dashboard
+Write an HTML dashboard and JSON report. Default output is under
+.IR target/sindoc.local/dotfiles .
+.TP
+.B capture
+Copy one file-backed target into the dotfiles repo or write a manifest for one
+directory-backed target.
+.SH EXAMPLES
+.nf
+singine dotfiles inspect --json
+
+singine dotfiles dashboard \\
+  --output-dir /Users/skh/ws/git/github/sindoc/singine/target/sindoc.local/dotfiles \\
+  --json
+
+singine dotfiles capture bashrc --json
+singine dotfiles capture vimrc --json
+singine dotfiles capture claude-home --json
+singine dotfiles capture logseq-home --json
+singine dotfiles capture dropbox --json
+.fi
+.SH SEE ALSO
+.BR singine (1),
+.BR singine-man (1),
+.BR singine-ai (1),
+.BR singine-logseq (1),
+.BR singine-template (1)

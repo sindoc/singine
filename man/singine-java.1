@@ -1,0 +1,222 @@
+.TH SINGINE\-JAVA 1 "2026\-03\-22" "singine 0.2.0" "User Commands"
+.
+.SH NAME
+singine\-java \- resolve and manage Java runtime versions under Singine governance
+.
+.SH SYNOPSIS
+.B singine runtime java
+.I COMMAND
+.RI [ ARGS ]
+.PP
+.B singine runtime java list
+.RB [ \-\-json ]
+.PP
+.B singine runtime java inspect
+.RI [ DIR ]
+.RB [ \-\-json ]
+.PP
+.B singine runtime java env
+.RI [ ALIAS ]
+.RB [ \-\-json ]
+.PP
+.B singine runtime java install
+.I ALIAS
+.
+.SH DESCRIPTION
+.B singine runtime java
+is the Singine-controlled Java version resolver, exposed as a subcommand of
+.BR "singine runtime" .
+It reads the Singine Java Runtime Registry
+.RI ( runtime/java/registry.json )
+and reports or prepares the correct SDKMAN distribution for the current project
+or a given alias.
+.PP
+Applications declare their required Java version via the
+.B :java
+key in a
+.B reqs.singine
+file at the project root.
+Singine resolves that alias to an SDKMAN distribution identifier.
+.PP
+Because Java activation modifies shell environment variables
+.RB ( JAVA_HOME ,
+.BR PATH ),
+which cannot be done from a subprocess, the
+.B env
+subcommand prints
+.B export
+statements for evaluation by the calling shell:
+.PP
+.RS 4
+.EX
+eval "$(singine runtime java env)"
+.EE
+.RE
+.PP
+The shell integration in
+.I runtime/java/shell-integration.sh
+performs this evaluation automatically on
+.BR cd .
+.
+.SH COMMANDS
+.TP
+.B list \fR[\fB\-\-json\fR]
+Print all aliases registered in the registry — SDKMAN ID, major version,
+distribution, status, and the application map.
+.TP
+.B inspect \fR[\fIDIR\fR] [\fB\-\-json\fR]
+Show the alias, SDKMAN ID, status, installation state, and resolution source for
+.I DIR
+(defaults to the current directory).
+Resolution source is one of
+.IR reqs.singine ,
+.IR application-map ,
+or
+.IR policy-default .
+.TP
+.B env \fR[\fIALIAS\fR] [\fB\-\-json\fR]
+Print
+.B export
+statements for
+.B JAVA_HOME
+and
+.B PATH
+for the resolved alias.
+If
+.I ALIAS
+is omitted, resolves from the current directory.
+Intended for shell
+.BR eval :
+.PP
+.RS 8
+.EX
+eval "$(singine runtime java env lts)"
+.EE
+.RE
+.TP
+.B install \fIALIAS\fR
+Install the SDKMAN distribution for a registry alias.
+Calls
+.B sdk install java <sdkman-id>
+via a sourced SDKMAN shell.
+.
+.SH RESOLUTION ORDER
+.IP "1." 4
+.B reqs.singine
+\(em the
+.B :java
+key in the project-root
+.B reqs.singine
+file.
+.IP "2." 4
+.B application-map
+\(em the
+.I application_map
+table in
+.IR runtime/java/registry.json ,
+keyed by directory base name.
+.IP "3." 4
+.B policy default
+\(em the
+.I policy.default
+alias from
+.IR runtime/java/registry.json .
+Currently
+.IR lts .
+.
+.SH REGISTRY
+.TP
+.B SINGINE_REGISTRY
+Full path to the registry JSON file. Highest priority override.
+.TP
+.B SINGINE_ROOT
+Root of the
+.I singine-personal-os
+checkout; registry is resolved at
+.IR $SINGINE_ROOT/runtime/java/registry.json .
+.TP
+.B SDKMAN_DIR
+Override the SDKMAN home (default:
+.IR ~/.sdkman ).
+.PP
+Status values in the registry:
+.RS
+.TP
+.I active
+Recommended — default for new projects.
+.TP
+.I permitted
+Allowed — for specific legacy or toolchain integrations.
+.TP
+.I preview
+Experimental — use with care.
+.RE
+.
+.SH REQS.SINGINE
+Per-project Java version is declared in
+.B reqs.singine
+at the project root using EDN/Clojure map syntax:
+.PP
+.RS 4
+.EX
+{:java "lts"}
+.EE
+.RE
+.PP
+.B reqs.singine
+is the Singine source of truth for all project runtime requirements.
+Python packages listed under
+.B :python-packages
+are used to generate
+.BR requirements.txt .
+A template is provided at
+.IR $SINGINE_ROOT/runtime/java/reqs.singine.example .
+.
+.SH FILES
+.TP
+.I runtime/java/registry.json
+Authoritative registry of permitted Java versions and resolution policy.
+.TP
+.I runtime/java/policy.sinlisp
+Singine rules governing resolution order and constraints.
+.TP
+.I runtime/java/shell-integration.sh
+Shell hooks for automatic per-directory version switching on
+.BR cd .
+.TP
+.I runtime/java/reqs.singine.example
+Template
+.B reqs.singine
+for new projects.
+.
+.SH EXAMPLES
+.SS List all registry aliases
+.EX
+singine runtime java list
+.EE
+.SS Inspect what Java a project would use
+.EX
+singine runtime java inspect ~/ws/git/local/collibra\-cli
+.EE
+.SS Activate in the current shell
+.EX
+eval "$(singine runtime java env)"
+.EE
+.SS Activate a specific alias
+.EX
+eval "$(singine runtime java env lts\-prev)"
+.EE
+.SS Install a distribution
+.EX
+singine runtime java install graal
+.EE
+.
+.SH SEE ALSO
+.BR singine (1),
+.BR singine\-runtime (1),
+.BR singine\-platform (1),
+.BR sdk (1)
+.
+.SH AUTHOR
+skh <skh@sindoc.io>
+singine 0.2.0                     2026-03-22              SINGINE-JAVA(1)

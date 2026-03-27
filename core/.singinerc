@@ -1,0 +1,58 @@
+# .singinerc — singine main configuration
+#
+# Source this file in your shell:
+#   source ~/.singinerc          (bash/zsh)
+#   . ~/.singinerc               (POSIX sh)
+#
+# Or copy to ~/.singinerc and add to ~/.bashrc / ~/.zshrc:
+#   [ -f ~/.singinerc ] && source ~/.singinerc
+#
+# Sources .singine-jvm automatically if present.
+#
+# ===========================================================================
+
+# ── singine root directory ─────────────────────────────────────────────────
+# The directory where singine is installed.
+# Override if you install to a non-standard location.
+
+export SINGINE_ROOT="${SINGINE_ROOT:-$HOME/.singine}"
+
+# ── Source JVM configuration ───────────────────────────────────────────────
+_singine_jvm="${SINGINE_ROOT}/.singine-jvm"
+[ ! -f "$_singine_jvm" ] && _singine_jvm="$(dirname "${BASH_SOURCE[0]:-$0}")/.singine-jvm"
+[ -f "$_singine_jvm" ] && source "$_singine_jvm"
+
+# ── singine.local network ──────────────────────────────────────────────────
+# Default binding for the singine local network layer.
+# Port 2000 is the canonical singine local-network port.
+
+export SINGINE_LOCAL_HOST="${SINGINE_LOCAL_HOST:-singine.local}"
+export SINGINE_LOCAL_PORT="${SINGINE_LOCAL_PORT:-2000}"
+export SINGINE_LOCAL_URL="http://${SINGINE_LOCAL_HOST}:${SINGINE_LOCAL_PORT}"
+
+# ── singine.cortex bridge ──────────────────────────────────────────────────
+# SQLite path for the cortex semantic bridge.
+# Also used by: singine bridge search, singine bridge sparql, /bridge HTTP route.
+
+export SINGINE_CORTEX_DB="${SINGINE_CORTEX_DB:-/tmp/sqlite.db}"
+
+# ── singine AI sessions ────────────────────────────────────────────────────
+# Root directory for singine.ai session store (~/.singine/ai/).
+export SINGINE_AI_ROOT="${SINGINE_AI_ROOT:-$HOME/.singine/ai}"
+
+# ── activity shell init ────────────────────────────────────────────────────
+# Dot files sourced by Action.execute() before running each activity.
+# See singine.activity.Action interface documentation.
+export SINGINE_ACTIVITY_SH="${SINGINE_ACTIVITY_SH:-$HOME/.singine/activity.sh}"
+export SINGINE_ACTIVITY_BASH="${SINGINE_ACTIVITY_BASH:-$HOME/.singine/activity.bash}"
+
+# ── PATH ───────────────────────────────────────────────────────────────────
+# Add singine bin to PATH if installed.
+[ -d "$HOME/.local/bin" ] && [[ ":$PATH:" != *":$HOME/.local/bin:"* ]] &&
+  export PATH="$HOME/.local/bin:$PATH"
+
+# ── Diagnostics ────────────────────────────────────────────────────────────
+# Uncomment to print resolved singine configuration on source:
+# echo "[singinerc] SINGINE_LOCAL_URL=${SINGINE_LOCAL_URL}"
+# echo "[singinerc] SINGINE_CORTEX_DB=${SINGINE_CORTEX_DB}"
+# echo "[singinerc] SINGINE_AI_ROOT=${SINGINE_AI_ROOT}"

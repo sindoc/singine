@@ -1,0 +1,28 @@
+FROM python:3.11-slim
+
+LABEL description="singine Lambda stub — Kafka consumer + HTTP invocation endpoint"
+
+WORKDIR /app
+
+# Install singine and messaging clients
+COPY setup.py MANIFEST.in ./
+COPY singine/ ./singine/
+RUN pip install --no-cache-dir -e . \
+    && pip install --no-cache-dir \
+       confluent-kafka==2.3.0 \
+       pika==1.3.2 \
+       fastapi==0.111.0 \
+       uvicorn==0.30.1 \
+       httpx==0.27.0
+
+COPY docker/lambda_stub.py /app/lambda_stub.py
+
+ENV KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+ENV RABBITMQ_URL=amqp://singine:singine@rabbitmq:5672/
+ENV SINGINE_LAMBDA_PORT=8090
+ENV SINGINE_LOG_DIR=/data/gitlog
+ENV SINGINE_DOMAIN_DB=/data/humble-idp.db
+
+EXPOSE 8090
+
+CMD ["python", "/app/lambda_stub.py"]

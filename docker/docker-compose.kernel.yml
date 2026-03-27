@@ -1,0 +1,122 @@
+version: "3.9"
+
+# docker-compose.kernel.yml — singine kernel bridge stack
+#
+# Indexes the fa-KfK-HDYAT-KRNL-421b Logseq kernel into a shared SQLite bridge
+# and exposes search via a one-shot CLI service.
+#
+# osType variants (same compose, ENV-driven):
+#   Mac       SINGINE_OS_TYPE=darwin  (default on macOS host)
+#   GNU/Linux SINGINE_OS_TYPE=linux
+#   Mobile    SINGINE_OS_TYPE=mobile  (kernel volume read-only, no commit)
+#
+# TLS: handled upstream by nginx/httpd — this stack speaks plain HTTP internally.
+# Security: JVM-grade (SHA digest, GnuPG-signed packages) via Dockerfile.kernel.
+# 1Password: secrets resolved at startup via SINGINE_OP_ITEM (read-only mount).
+#
+# Commands:
+#   Build:   docker compose -f docker/docker-compose.kernel.yml run --rm kernel-build
+#   Search:  docker compose -f docker/docker-compose.kernel.yml run --rm kernel-search
+#   Sources: docker compose -f docker/docker-compose.kernel.yml run --rm kernel-sources
+#   Sync:    docker compose -f docker/docker-compose.kernel.yml run --rm kernel-sync
+#
+# Or via docker/Makefile:
+#   make kernel-build
+#   make kernel-search SINGINE_KERNEL_SEARCH=smtp
+#   make kernel-sync
+
+x-kernel-base: &kernel-base
+  build:
+    context: ..
+    dockerfile: docker/Dockerfile.kernel
+  image: singine-kernel:latest
+
+  environment:
+    SINGINE_CORTEX_DB:    "${SINGINE_CORTEX_DB:-/tmp/sqlite.db}"
+    SINGINE_KERNEL_GRAPH: "/kernel"
+    SINGINE_OS_TYPE:      "${SINGINE_OS_TYPE:-linux}"
+    SINGINE_REF:          "${SINGINE_REF:-C12}"
+
+  volumes:
+    # Logseq kernel graph (read-only — Logseq Sync owns the writes)
+    - type: bind
+      source: "${SINGINE_KERNEL_GRAPH:-${HOME}/ws/logseq/singine/sindoc/fa-KfK-HDYAT-KRNL-421b}"
+      target: /kernel
+      read_only: true
+      bind:
+        create_host_path: false
+
+    # singine config (~/.singine/backend.config points to /kernel inside container)
+    - type: bind
+      source: "${HOME}/.singine"
+      target: /home/singine/.singine
+      read_only: true
+      bind:
+        create_host_path: true
+
+    # Shared SQLite cortex DB (persisted across runs)
+    - singine-cortex:/tmp
+
+  networks:
+    - singine-net
+
+  user: "1000:1000"
+
+services:
+
+  # ── kernel-build: index kernel graph into bridge ──────────────────────────
+  kernel-build:
+    <<: *kernel-base
+    container_name: singine-kernel-build
+    command: ["bridge", "build", "--db", "/tmp/sqlite.db"]
+    profiles: ["build", "sync"]
+
+  # ── kernel-sources: list indexed sources ─────────────────────────────────
+  kernel-sources:
+    <<: *kernel-base
+    container_name: singine-kernel-sources
+    command: ["bridge", "sources", "--db", "/tmp/sqlite.db"]
+    profiles: ["sources", "sync"]
+
+  # ── kernel-search: search bridge (override SINGINE_KERNEL_SEARCH) ─────────
+  kernel-search:
+    <<: *kernel-base
+    container_name: singine-kernel-search
+    environment:
+      SINGINE_CORTEX_DB:    "${SINGINE_CORTEX_DB:-/tmp/sqlite.db}"
+      SINGINE_KERNEL_GRAPH: "/kernel"
+      SINGINE_OS_TYPE:      "${SINGINE_OS_TYPE:-linux}"
+      SINGINE_REF:          "${SINGINE_REF:-C12}"
+      SINGINE_KERNEL_SEARCH: "${SINGINE_KERNEL_SEARCH:-singine}"
+    command:
+      - "bridge"
+      - "search"
+      - "--db"
+      - "/tmp/sqlite.db"
+      - "${SINGINE_KERNEL_SEARCH:-singine}"
+    profiles: ["search"]
+
+  # ── kernel-sync: build + sources in sequence ──────────────────────────────
+  kernel-sync:
+    <<: *kernel-base
+    container_name: singine-kernel-sync
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        singine bridge build --db /tmp/sqlite.db &&
+        singine bridge sources --db /tmp/sqlite.db
+    profiles: ["sync"]
+
+volumes:
+  singine-cortex:
+    driver: local
+    labels:
+      singine.uri: "urn:singine:kernel:cortex"
+      singine.ref: "C12"
+
+networks:
+  singine-net:
+    name: singine-net
+    driver: bridge
+    labels:
+      singine.uri: "urn:singine:net:bridge"

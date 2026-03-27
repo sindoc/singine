@@ -1,0 +1,38 @@
+.TH SINGINE-RUNTIME 1 "2026-03-13" "singine 0.2.0" "User Commands"
+.SH NAME
+singine-runtime \- inspect runtime capabilities and execute wrapped commands
+.SH SYNOPSIS
+.B singine runtime
+\fISUBCOMMAND\fR [\fIOPTIONS\fR]
+.SH DESCRIPTION
+The
+.B runtime
+command reports local runtime capabilities and executes Singine or external
+commands inside a structured JSON envelope that captures terminal context,
+sourced environment, and execution results.
+.SH SUBCOMMANDS
+.TP
+.B inspect
+Show shell, JVM, Racket, and Emacs runtime information.
+.TP
+.B exec \fICOMMAND ...\fR
+Run a Singine subcommand inside a runtime envelope.
+.TP
+.B exec-external \fICOMMAND ...\fR
+Run an external binary inside the same envelope without shell interpolation.
+.SH ENVIRONMENT
+.TP
+.B SINGINE_SESSION_TOKEN
+If present, the token prefix is included in
+.B exec-external
+payloads.
+.SH EXAMPLES
+.nf
+singine runtime inspect
+singine runtime exec bridge sources --db /tmp/sqlite.db
+singine runtime exec-external collibractl community list --output json
+.fi
+.SH SEE ALSO
+.BR singine (1),
+.BR singine-server (1),
+.BR singine-snapshot (1)

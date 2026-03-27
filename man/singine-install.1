@@ -1,0 +1,102 @@
+.TH SINGINE-INSTALL 1 "2026-03-13" "singine 0.2.0" "User Commands"
+.SH NAME
+singine-install \- install the singine launcher, manpages, or selected local tool dependencies
+.SH SYNOPSIS
+.B singine install
+[\fIsingine\fR|\fIant\fR|\fIxmldoclet\fR|\fIgit-filter-repo\fR]
+[\fB--prefix\fR \fIPATH\fR] [\fB--shell\fR \fBbash\fR|\fBsh\fR|\fBall\fR]
+[\fB--mode\fR \fBbase\fR|\fBworkstation\fR] [\fB--json\fR]
+[\fIsingine\fR|\fIant\fR|\fIxmldoclet\fR]
+[\fB--prefix\fR \fIPATH\fR] [\fB--shell\fR \fBbash\fR|\fBsh\fR|\fBall\fR] [\fB--json\fR]
+.SH DESCRIPTION
+Without an explicit subject, installs the
+.B singine
+launcher under a local prefix, copies all available manpages to that prefix,
+and appends PATH and MANPATH exports to the requested shell startup files.
+.PP
+With
+.B --mode workstation
+the base launcher install also ensures
+.B git-filter-repo
+is available, so development machines can perform history rewrites such as
+public-directory removal workflows.
+.PP
+With
+.B ant
+as the subject, installs Apache Ant using Homebrew if it is not already
+available on
+.BR PATH .
+.PP
+With
+.B xmldoclet
+as the subject, ensures Maven is available and then downloads the Saxonica
+.B com.saxonica:xmldoclet
+artifact into
+.IR ~/.m2
+for use by
+.BR ant\ javadoc-xml .
+.PP
+With
+.B git-filter-repo
+as the subject, installs
+.B git-filter-repo
+using Homebrew if it is not already available on
+.BR PATH .
+.SH SUBJECTS
+.TP
+.B singine
+Install the singine launcher and bundled manpages.
+.TP
+.B ant
+Ensure Apache Ant is installed, aligned with the Ant-based build expectations
+used by SilkPage and Singine core build files.
+.TP
+.B xmldoclet
+Ensure the Saxonica XML doclet jar is present in the local Maven repository,
+installing Maven first via Homebrew when required.
+.TP
+.B git-filter-repo
+Ensure
+.B git-filter-repo
+is installed for Git history rewrite tasks on development machines.
+.SH OPTIONS
+.TP
+.B --prefix \fIPATH\fR
+Installation prefix. Default is
+.IR ~/.local .
+.TP
+.B --shell
+Update
+.IR .bashrc ,
+.IR .profile ,
+or both.
+.TP
+.B --mode
+Install profile for the
+.B singine
+subject. Use
+.B workstation
+to require development-machine tooling, including
+.BR git-filter-repo .
+.TP
+.B --json
+Emit install metadata as JSON.
+.SH EXAMPLES
+.nf
+singine install
+singine install --mode workstation
+singine install singine --prefix ~/.local --shell bash
+singine install ant
+singine install xmldoclet
+singine install git-filter-repo
+singine install singine --prefix ~/.local --shell bash
+singine install ant
+singine install xmldoclet
+singine install --prefix ~/.local --shell bash
+singine install --json
+.fi
+.SH SEE ALSO
+.BR singine (1),
+.BR singine-man (1),
+.BR brew (1),
+.BR mvn (1)

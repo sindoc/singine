@@ -1,0 +1,69 @@
+%% singine_logo_01.tex — Lambda Convergence
+%%
+%% The composition IS a λ.
+%% "Singine"  descends upper-left  }
+%%                                  }→  λ  (the engine)
+%% "سین‌جین" descends upper-right  }
+%%
+%% Both naming traditions point at the same truth:
+%% λ-calculus is the mathematical engine of all computation.
+%% Persian سین‌جین (singin) = to scrutinise / interrogate deeply.
+%%
+%% compile:  xelatex singine_logo_01.tex
+
+\documentclass[border=32pt]{standalone}
+\usepackage{tikz}
+\usepackage{fontspec}
+\usepackage{bidi}
+\usepackage{xcolor}
+
+\newfontfamily\latinfont[
+  Path=/System/Library/Fonts/,
+  Ligatures=TeX, Kerning=On, Numbers=OldStyle
+]{SFNS.ttf}
+
+\newfontfamily\persianfont[
+  Path=/Users/skh/Library/Fonts/,
+  Script=Arabic, Language=Persian,
+  Ligatures=Required, RawFeature={+mark}
+]{Amiri-Regular.ttf}
+
+\definecolor{ink}  {rgb}{0.08,0.08,0.10}
+\definecolor{mred} {rgb}{0.52,0.11,0.07}
+\definecolor{cream}{rgb}{0.97,0.96,0.94}
+\definecolor{hair} {rgb}{0.35,0.30,0.28}
+
+\pagecolor{cream}
+
+\begin{document}
+\begin{tikzpicture}[x=1cm, y=1cm]
+
+  %% ── λ — the engine, the convergence point ────────────────────
+  \node[font=\latinfont\fontsize{120pt}{120pt}\selectfont,
+        text=ink, inner sep=0pt] (lam) at (0,0) {λ};
+
+  %% ── Latin "Singine" — upper left ─────────────────────────────
+  %% reads left-to-right, finishing near the λ apex
+  \node[font=\latinfont\fontsize{58pt}{70pt}\selectfont,
+        text=ink, anchor=south] at (-4.2, 6.8) {Singine};
+
+  %% ── Persian "سین‌جین" — upper right ──────────────────────────
+  %% reads right-to-left, also converging toward the λ apex
+  \node[font=\persianfont\fontsize{54pt}{65pt}\selectfont,
+        text=mred, anchor=south] at (4.2, 6.8) {\RL{سین‌جین}};
+
+  %% ── Hairlines — the two legs of λ ────────────────────────────
+  %% diverge from the apex (~y=3.0) out to each name
+  \draw[hair, line width=0.38pt, opacity=0.65]
+    (-0.55, 3.2) -- (-4.2, 6.3);
+  \draw[hair, line width=0.38pt, opacity=0.65]
+    ( 0.55, 3.2) -- ( 4.2, 6.3);
+
+  %% ── Fine tagline ─────────────────────────────────────────────
+  %% optional; comment out for a cleaner mark
+  \node[font=\latinfont\fontsize{10pt}{12pt}\selectfont,
+        text=hair, opacity=0.55, anchor=north] at (0,-2.4)
+        {AI agent engineering · querying the machine};
+
+\end{tikzpicture}
+\end{document}

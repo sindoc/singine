@@ -1,0 +1,99 @@
+.TH SINGINE-ESSAY 1 "2026-03-19" "singine 0.2.0" "User Commands"
+.SH NAME
+singine-essay \- generate reflective essay bundles and publication artefacts
+.SH SYNOPSIS
+.B singine essay personal-os
+[\fB--title\fR \fITEXT\fR]
+[\fB--output-dir\fR \fIPATH\fR]
+[\fB--onepager\fR \fIPATH\fR]
+[\fB--metamodel-root\fR \fIPATH\fR]
+[\fB--json\fR]
+.SH DESCRIPTION
+.B singine essay personal-os
+writes a multi-format bundle around the idea of software as a personal
+operating system. The generated artefacts line up:
+.IP \(bu 2
+Logseq reflection surfaces
+.IP \(bu 2
+Collibra and metamodel references
+.IP \(bu 2
+SQLite-friendly local memory assumptions
+.IP \(bu 2
+XML request/response workflow boundaries
+.IP \(bu 2
+Ballerina service choreography
+.IP \(bu 2
+C and Rust bridge contracts
+.IP \(bu 2
+Pico, SinLisp, and ixml grammar surfaces
+.IP \(bu 2
+HTML, SVG, and LaTeX publication outputs
+.PP
+The bundle is driven by local references such as the `sindoc42` onepager PDF,
+the `lutino.collibra` metamodel tree, Logseq material, notebook fragments, and
+XML request/response examples under `~/ws/today`.
+.SH OPTIONS
+.TP
+.B --title
+Override the essay title.
+.TP
+.B --output-dir
+Directory where the bundle is written.
+Defaults to
+.IR /tmp/singine-personal-os .
+.TP
+.B --onepager
+Path to the onepager PDF used as a local anchor.
+Defaults to
+.IR /Users/skh/ws/today/cleanUp/sindoc42-onepager.pdf .
+.TP
+.B --metamodel-root
+Path to the Collibra-style metamodel root.
+Defaults to
+.IR /Users/skh/ws/today/metamodel/reference/current/latest/lutino.collibra.singine.process.C213(1) .
+.TP
+.B --json
+Print the generated manifest as JSON instead of printing the Markdown path.
+.SH GENERATED FILES
+.IP \(bu 2
+.I essay.md
+.IP \(bu 2
+.I essay.html
+.IP \(bu 2
+.I visual.svg
+.IP \(bu 2
+.I essay.tex
+.IP \(bu 2
+.I workflow/request.xml
+.IP \(bu 2
+.I workflow/response.xml
+.IP \(bu 2
+.I rules/personal_os_rules.sinlisp
+.IP \(bu 2
+.I interfaces/adapter.bal
+.IP \(bu 2
+.I interfaces/bridge.h
+.IP \(bu 2
+.I interfaces/bridge.rs
+.IP \(bu 2
+.I interfaces/bridge.pico
+.IP \(bu 2
+.I interfaces/grammar.ixml
+.IP \(bu 2
+.I manifest.json
+.SH EXAMPLES
+.nf
+# Write the full bundle.
+singine essay personal-os
+
+# Write the bundle to a named location and print the manifest.
+singine essay personal-os \\
+  --output-dir /tmp/singine-personal-os \\
+  --json
+.fi
+.SH SEE ALSO
+.BR singine (1),
+.BR singine-man (1),
+.BR singine-model (1),
+.BR singine-logseq (1),
+.BR singine-xml (1)

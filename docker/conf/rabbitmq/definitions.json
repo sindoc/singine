@@ -1,0 +1,92 @@
+{
+  "rabbit_version": "3.12.0",
+  "users": [
+    {"name": "singine", "password_hash": "singine", "tags": "administrator"}
+  ],
+  "vhosts": [{"name": "/"}],
+  "permissions": [
+    {"user": "singine", "vhost": "/", "configure": ".*", "write": ".*", "read": ".*"}
+  ],
+  "exchanges": [
+    {
+      "name": "singine.raw.messaging",
+      "vhost": "/",
+      "type": "topic",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {}
+    },
+    {
+      "name": "singine.staging.messaging",
+      "vhost": "/",
+      "type": "topic",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {}
+    }
+  ],
+  "queues": [
+    {
+      "name": "singine.raw.geo.queue",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {"x-message-ttl": 86400000}
+    },
+    {
+      "name": "singine.raw.lifecycle.queue",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {"x-message-ttl": 86400000}
+    },
+    {
+      "name": "singine.staging.geo.queue",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {"x-message-ttl": 604800000}
+    },
+    {
+      "name": "singine.staging.lifecycle.queue",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {"x-message-ttl": 604800000}
+    }
+  ],
+  "bindings": [
+    {
+      "source": "singine.raw.messaging",
+      "vhost": "/",
+      "destination": "singine.raw.geo.queue",
+      "destination_type": "queue",
+      "routing_key": "*.geo.#",
+      "arguments": {}
+    },
+    {
+      "source": "singine.raw.messaging",
+      "vhost": "/",
+      "destination": "singine.raw.lifecycle.queue",
+      "destination_type": "queue",
+      "routing_key": "*.lifecycle.#",
+      "arguments": {}
+    },
+    {
+      "source": "singine.staging.messaging",
+      "vhost": "/",
+      "destination": "singine.staging.geo.queue",
+      "destination_type": "queue",
+      "routing_key": "*.geo.#",
+      "arguments": {}
+    },
+    {
+      "source": "singine.staging.messaging",
+      "vhost": "/",
+      "destination": "singine.staging.lifecycle.queue",
+      "destination_type": "queue",
+      "routing_key": "*.lifecycle.#",
+      "arguments": {}
+    }
+  ]
+}

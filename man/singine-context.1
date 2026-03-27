@@ -1,0 +1,30 @@
+.TH SINGINE-CONTEXT 1 "2026-03-13" "singine 0.2.0" "User Commands"
+.SH NAME
+singine-context \- inspect terminal context and sourced environment
+.SH SYNOPSIS
+.B singine context
+[\fB--shell\fR \fBbash\fR|\fBsh\fR] [\fB--json\fR] [\fB--glossary-root\fR \fIPATH\fR]
+.SH DESCRIPTION
+Shows the current terminal context, sourced shell environment markers, and
+glossary-backed definitions used by Singine to distinguish live runtime state
+from inherited shell setup.
+.SH OPTIONS
+.TP
+.B --shell
+Report context for a specific shell shape.
+.TP
+.B --json
+Emit structured JSON output.
+.TP
+.B --glossary-root \fIPATH\fR
+Override the glossary package root.
+.SH EXAMPLES
+.nf
+singine context
+singine context --json
+singine context --shell bash
+.fi
+.SH SEE ALSO
+.BR singine (1),
+.BR singine-runtime (1),
+.BR singine-snapshot (1)

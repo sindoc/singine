@@ -1,0 +1,67 @@
+.TH SINGINE-IDP 1 "2026-03-13" "singine 0.2.0" "User Commands"
+.SH NAME
+singine-idp \- identity provider commands for session, token, key, and user operations
+.SH SYNOPSIS
+.B singine idp
+\fISUBCOMMAND\fR [\fIOPTIONS\fR]
+.SH DESCRIPTION
+The
+.B idp
+command wraps the humble IdP server used by Singine. It manages login state,
+token inspection, API keys, user registry access, and related operational tasks.
+.SH COMMON ENVIRONMENT
+.TP
+.B IDP_URL
+Override the default IdP base URL, which is
+.IR https://id.singine.local .
+.SH TYPICAL SUBCOMMANDS
+.TP
+.B status
+Check IdP health and show current local session status.
+.TP
+.B login
+Open a governed IdP-backed session.
+.TP
+.B logout
+Delete the local session and notify the IdP when possible.
+.TP
+.B token ...
+Issue or verify tokens.
+.TP
+.B key ...
+Issue, list, or revoke API keys.
+.TP
+.B user ...
+Inspect or manage users.
+.TP
+.B git ...
+Snapshot or restore IdP state through the git-backed helper surface.
+.TP
+.B saml metadata
+Fetch or print the IdP SAML metadata document.
+.TP
+.B saml sp-list
+List configured SAML service providers known to the IdP.
+.TP
+.B saml login-url
+Print the browser login URL for a configured SAML service provider.
+.SH SAML SCENARIO
+The current SAML support is a local/demo Web SSO profile intended to validate
+metadata publication, browser login, and POSTed SAML responses against a demo
+service provider. Assertions are not XML-signed yet.
+.SH FILES
+.TP
+.I ~/.singine/session.json
+Local session file.
+.SH EXAMPLES
+.nf
+singine idp status
+singine idp login --state ~/.singine/auth/totp.json --code 123456
+singine idp logout
+singine idp saml metadata
+singine idp saml sp-list
+singine idp saml login-url --sp demo-sp
+.fi
+.SH SEE ALSO
+.BR singine (1),
+.BR singine-auth (1)

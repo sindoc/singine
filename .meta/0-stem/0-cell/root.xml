@@ -106,7 +106,7 @@ Edge-capable: sinedge-agent + sinedge-engine installed at ~/.local/opt/singine/s
           xml-pi="lang sparql"
           description="#lang sparql — SPARQL query executed against Jena triple store"/>
 
-    <!-- Identity variants idv1–idv5 (BSD identity stack) -->
+    <!-- Identity variants idv1–idv10 (BSD + enterprise + IdP stack) -->
     <lang id="lang-idv1" token="idv1" runtime="process-builder"
           handler-ns="singine.pos.identity"
           xml-pi="lang idv1"
@@ -127,6 +127,26 @@ Edge-capable: sinedge-agent + sinedge-engine installed at ~/.local/opt/singine/s
           handler-ns="singine.pos.identity"
           xml-pi="lang idv5"
           description="#lang idv5 — PAM + NSS (BSD-native, /etc/passwd, /etc/nsswitch.conf)"/>
+    <lang id="lang-idv6" token="idv6" runtime="jdk-http-client"
+          handler-ns="singine.pos.identity"
+          xml-pi="lang idv6"
+          description="#lang idv6 — Okta OIDC (discovery endpoint, client_credentials flow)"/>
+    <lang id="lang-idv7" token="idv7" runtime="process-builder"
+          handler-ns="singine.pos.identity"
+          xml-pi="lang idv7"
+          description="#lang idv7 — Collibra LDAP (ou=Users,dc=collibra,dc=com)"/>
+    <lang id="lang-idv8" token="idv8" runtime="process-builder"
+          handler-ns="singine.pos.identity"
+          xml-pi="lang idv8"
+          description="#lang idv8 — Active Directory (LDAP/LDAPS, sAMAccountName, memberOf)"/>
+    <lang id="lang-idv9" token="idv9" runtime="jdk-http-client"
+          handler-ns="singine.pos.identity"
+          xml-pi="lang idv9"
+          description="#lang idv9 — MCP Identity (Model Context Protocol resource token)"/>
+    <lang id="lang-idv10" token="idv10" runtime="tcp-socket"
+          handler-ns="singine.pos.identity"
+          xml-pi="lang idv10"
+          description="#lang idv10 — SMTP/IMAP auth probe (RFC 3501, TCP socket test)"/>
   </lang-registry>
 
   <!-- ── namespace declarations ────────────────────────────────────────── -->
@@ -318,6 +338,14 @@ Edge-capable: sinedge-agent + sinedge-engine installed at ~/.local/opt/singine/s
               urn="urn:singine:asset:LOCP"
               description="Location probe: IATA/postal→URN, SOAP 1.2 request, RelaxNG+Schematron+SODA+NannyML metadata deduction."/>
 
+  <asset-type opcode="IDPR" name="IdentityProvider"
+              command="singine pos idpr"
+              kafka-topic="singine.pos.idp"
+              handler="singine.pos.idp/idpr!"
+              collibra-domain="singine.Auth" status="active"
+              urn="urn:singine:asset:IDPR"
+              description="Self-hosted OpenID Connect IdP: RSA-4096 key pair, JWT/JWS issuance, JVM cacert audit, private-network file-access tokens."/>
+
   <!-- ═══════════════════════════════════════════════════════════════════
        SNAP PIPELINE — vision → text → index → RDF → NL → SPARQL → API
        ═══════════════════════════════════════════════════════════════════ -->
@@ -455,6 +483,8 @@ Edge-capable: sinedge-agent + sinedge-engine installed at ~/.local/opt/singine/s
     <topic name="singine.pos.location"       partitions="1" replication="1"/>
     <topic name="singine.events.release"     partitions="1" replication="1"/>
     <topic name="singine.hf.publish"         partitions="1" replication="1"/>
+    <topic name="singine.pos.idp"            partitions="1" replication="1"/>
+    <topic name="singine.auth.token"         partitions="1" replication="1"/>
   </kafka-topics>
 
   <db-dialects default="sqlite">

@@ -1,0 +1,93 @@
+# Dockerfile.edge — singine:edge — Spring Boot 3 + Apache Camel 4 edge HTTP node
+# Pattern: tool baked in, volume mount for persistence, ENV for config.
+# Reference: ~/ws/today/Dockerfile.timez.snippet + docker/Dockerfile.pos
+#
+# Build (via docker-compose.edge.yml, or manually):
+#   docker build -f docker/Dockerfile.edge -t singine-edge:latest .
+#
+# Ports:
+#   8080 — Spring Boot HTTP (REST API + Turbo Streams)
+#   8081 — Spring Boot Actuator (health, metrics)
+#
+# REST API (Rails naming conventions):
+#   GET  /messages          → MAIL :search  (singine.mail.messages.index)
+#   GET  /messages/:id      → MAIL :fetch   (singine.mail.messages.show)
+#   POST /messages          → MAIL :send    (singine.mail.messages.create)
+#   POST /messages/:id/fwd  → MAIL :forward (singine.mail.messages.forward)
+#   POST /messages/snap     → MAIL :snap    (singine.mail.messages.snap)
+#   GET  /health            → 200 OK + JSON status
+#
+# Volume mounts:
+#   /app/data    — singine data dir (SQLite, indexes, git-snap output)
+#   /app/.loc    — singine locale config (.loc/etc/config/)
+#
+# ENV:
+#   CAMEL_MAIL_HOST      — IMAP/SMTP host (default: singine-mail)
+#   CAMEL_IMAP_PORT      — IMAP port (default: 143)
+#   CAMEL_SMTP_PORT      — SMTP port (default: 587)
+#   MAIL_USER            — mail user (default: singine)
+#   MAIL_PASS            — mail password (default: singinepass)
+#   KAFKA_BROKERS        — Kafka bootstrap servers (default: localhost:9092)
+#   SPRING_PROFILES_ACTIVE — active Spring profile (default: singine)
+
+FROM debian:stable-slim
+
+LABEL org.opencontainers.image.title="singine-edge"
+LABEL org.opencontainers.image.description="singine edge node — Spring Boot + Apache Camel HTTP API"
+LABEL org.opencontainers.image.source="https://github.com/sindoc/singine"
+LABEL singine.uri="urn:singine:edge:http"
+LABEL singine.opcodes="MAIL,BLKP,CATC"
+
+# ── ENV defaults ─────────────────────────────────────────────────────────────
+ENV CAMEL_MAIL_HOST=singine-mail \
+    CAMEL_IMAP_PORT=143 \
+    CAMEL_SMTP_PORT=587 \
+    MAIL_USER=singine \
+    MAIL_PASS=singinepass \
+    KAFKA_BROKERS=localhost:9092 \
+    SPRING_PROFILES_ACTIVE=singine \
+    DEBIAN_FRONTEND=noninteractive
+
+# ── System dependencies ───────────────────────────────────────────────────────
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      curl \
+      ca-certificates \
+      git \
+      && rm -rf /var/lib/apt/lists/*
+
+# ── Java 21 via SDKMAN (cleanest path on Debian slim) ─────────────────────────
+# Alternative: use eclipse-temurin:21-jre-slim as base image
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      openjdk-21-jre-headless \
+      && rm -rf /var/lib/apt/lists/*
+
+# ── Clojure CLI (for running singine-core routes inline) ─────────────────────
+RUN curl -fsSL https://download.clojure.org/install/linux-install.sh | bash
+
+# ── Project layout ───────────────────────────────────────────────────────────
+WORKDIR /app
+
+# Copy singine-core (Clojure) — needed for route definitions
+COPY core/deps.edn          deps.edn
+COPY core/src/              src/
+COPY core/resources/        resources/
+COPY core/classes/          classes/
+
+# Copy Spring Boot edge application (Maven module, built separately)
+# When the edge Maven module does not exist yet, we run in Clojure-only mode
+COPY docker/edge/            edge/
+
+# ── CSS + frontend assets ─────────────────────────────────────────────────────
+# Mulish font (from guiti.be family assets) + Tailwind 4 CDN + singine theme
+COPY docker/edge/src/main/resources/static/ /app/static/
+
+# ── Volume: data dir + locale config ─────────────────────────────────────────
+VOLUME ["/app/data", "/app/.loc"]
+
+# ── Entrypoint ────────────────────────────────────────────────────────────────
+COPY docker/conf/edge-entrypoint.sh /usr/local/bin/edge-entrypoint.sh
+RUN  chmod +x /usr/local/bin/edge-entrypoint.sh
+
+EXPOSE 8080 8081
+
+ENTRYPOINT ["/usr/local/bin/edge-entrypoint.sh"]

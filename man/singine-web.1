@@ -1,0 +1,268 @@
+.TH SINGINE-WEB 1 "2026-03-21" "singine 0.3.0" "User Commands"
+.SH NAME
+singine-web \- web asset management, security, and deployment
+.SH SYNOPSIS
+.B singine www
+\fISUBCOMMAND\fR [\fIOPTIONS\fR]
+.br
+.B singine vww
+\fISUBCOMMAND\fR [\fIOPTIONS\fR]
+.br
+.B singine wingine
+\fISUBCOMMAND\fR [\fIOPTIONS\fR]
+.br
+.B singine wsec
+\fISUBCOMMAND\fR [\fIOPTIONS\fR]
+.SH DESCRIPTION
+The
+.B singine web
+surface is four command families that together cover the full lifecycle
+of a web property — from source control through build, staging, deployment,
+and security governance.
+.PP
+.TP
+.B www
+Deploy pipeline.
+.BR "git pull" " \(ra"
+.BR "wingine build" " \(ra"
+Dropbox stage
+.BR " \(ra"
+.BR "rsync / scp" " to remote server."
+.TP
+.B vww
+Read-only validation and audit: TLS certificate check, HTTP security
+headers, asset inventory, full security report.
+.TP
+.B wingine
+Build engine.  Invokes each site's native pipeline:
+.I python-cortex
+(XML \(ra HTML via xsltproc) for
+.I markupware.com
+and
+.I maven-war
+for
+.IR lutino.io .
+.TP
+.B wsec
+Web security.  Manages TLS certificates, ed25519 SSH deploy keys (via the
+singine IDP trust store), and short-lived JWT deploy tokens.
+.SH REGISTERED SITES
+.TP
+.B markupware.com
+XML/DocBook static site.  Built by
+.I cortex/build.py
+from
+.IR ~/ws/git/markupware.com/ .
+Output in
+.IR html/ .
+.TP
+.B lutino.io
+Subscription-management Java web application.  Built by
+.I mvn package
+from
+.IR ~/ws/git/lutino.io/lutino/ .
+Output in
+.IR target/lutino_webapp/ .
+.SH www SUBCOMMANDS
+.TP
+.B deploy
+Full pipeline in one command.  Options:
+.RS
+.TP
+.B \-\-site \fISITE\fR
+Required.  \fImarkupware.com\fR or \fIlutino.io\fR.
+.TP
+.B \-\-method \fIMETHOD\fR
+\fIrsync\fR (default) | \fIscp\fR | \fIdropbox\fR | \fIall\fR.
+.TP
+.B \-\-skip\-git
+Skip the git pull step.
+.TP
+.B \-\-skip\-build
+Skip the wingine build step.
+.TP
+.B \-\-skip\-dropbox
+Skip the Dropbox staging step.
+.TP
+.B \-\-dry\-run
+Print commands; make no changes.
+.TP
+.B \-\-json
+Machine-readable output.
+.RE
+.TP
+.B sync
+Sync via a single specified method without the full pipeline.
+Options: \fB\-\-site\fR, \fB\-\-method\fR {git|rsync|scp|dropbox|all}, \fB\-\-dry\-run\fR.
+.TP
+.B status
+Show deployment state: recent git log, remote SSH reachability, paths.
+.TP
+.B diff
+Show \fIgit status \-\-short\fR for the local source repo.
+.TP
+.B pull
+\fIgit pull\fR only.  No build or sync.
+.SH vww SUBCOMMANDS
+.TP
+.B cert
+Check TLS certificate: expiry, SAN coverage, issuer.
+Reports ERR_TLS_CERT_ALTNAME_INVALID if any required SAN is missing.
+.TP
+.B scan
+HTTP security scan: HTTPS redirect, security response headers
+(HSTS, CSP, X-Content-Type-Options, X-Frame-Options, Referrer-Policy,
+Permissions-Policy), server header exposure.
+.TP
+.B assets
+List all tracked web assets in the local build output, grouped by type.
+.TP
+.B check
+Quick health check.  \fB\-\-all\fR runs cert + scan + asset inventory.
+.TP
+.B audit
+Full audit report: cert + scan + assets + SSH key status + recent git log.
+.SH wingine SUBCOMMANDS
+.TP
+.B build
+Build the site from source.
+\fB\-\-clean\fR forces a full rebuild (cortex pipeline only).
+.TP
+.B serve
+Serve the built output locally on
+.I http://localhost:<port>/
+using Python's built-in HTTP server.
+Default ports: 8080 (markupware.com), 8081 (lutino.io).
+.TP
+.B status
+Show build output directory existence and file count.
+.SH wsec SUBCOMMANDS
+.TP
+.B cert
+Inspect or renew the TLS certificate.
+.RS
+.TP
+.B \-\-fix\-san
+Renew with the full set of required SANs.
+.TP
+.B \-\-renew
+Renew unconditionally.
+.TP
+.B \-\-method \fIMETHOD\fR
+\fIcertbot\fR (default) | \fIacme.sh\fR | \fImanual\fR.
+.TP
+.B \-\-dry\-run
+Certbot or acme.sh dry-run / test mode.
+.RE
+.TP
+.B keys
+Manage ed25519 SSH deploy keys.
+.RS
+.TP
+.B \-\-add
+Generate a new deploy key and register it in the singine IDP trust store.
+.TP
+.B \-\-rotate
+Archive current key and generate a replacement.
+.PP
+Keys are stored under
+.IR ~/.singine/keys/ .
+Each key is registered as
+\fIurn:singine:deploy:<site>\fR
+in
+.IR singine.jks .
+.RE
+.TP
+.B token
+Mint a short-lived JWT deploy token (HS256, default TTL 3600 s) via the
+singine IDP.
+Claims include
+.IR sub ,
+.IR site ,
+.IR role=deploy ,
+.IR iss=urn:singine:idp .
+.TP
+.B status
+Full security status: cert check + key inventory combined.
+.SH IDP TRUST CHAIN
+.nf
+singine-root-ca  (singine.jks / singine.sec.trust)
+  \(lq\(en singine-deploy-<site>  (ed25519, urn:singine:deploy:<site>)
+        \(lq\(en JWT deploy token  (HS256, iss: urn:singine:idp)
+.fi
+.SH ENVIRONMENT
+.TP
+.B SINGINE_DEPLOY_SECRET
+HS256 secret for JWT deploy tokens.
+Default (dev only): \fIsingine\-deploy\-<site>\-changeme\fR.
+.TP
+.B SINGINE_DOMAIN_DB
+Path to the singine domain event log SQLite database.
+Default: \fI/tmp/humble\-idp.db\fR.
+.TP
+.B SINGINE_KS_PASS
+Password for the singine JKS trust store.
+Default: \fIsingine\-changeit\fR.
+.SH EXAMPLES
+.SS First-time site setup
+.nf
+singine wsec keys   --site markupware.com --add
+singine www status  --site markupware.com
+singine www deploy  --site markupware.com --dry-run
+singine www deploy  --site markupware.com
+.fi
+.SS Fix TLS certificate (markupware.com)
+.nf
+singine vww cert    --site markupware.com
+singine wsec cert   --site markupware.com --fix-san --dry-run
+singine wsec cert   --site markupware.com --fix-san --method certbot
+singine vww cert    --site markupware.com
+.fi
+.SS Regular deploy
+.nf
+singine www diff    --site lutino.io
+singine www deploy  --site lutino.io
+.fi
+.SS Audit before deploy
+.nf
+singine vww audit   --site markupware.com
+singine wingine status --site markupware.com
+singine wsec status --site markupware.com
+.fi
+.SS Incremental sync only
+.nf
+singine www sync --site markupware.com --method dropbox
+singine www sync --site markupware.com --method rsync
+.fi
+.SH FILES
+.TP
+.I singine/www.py
+Site registry, deploy pipeline, Dropbox staging, rsync/scp dispatch.
+.TP
+.I singine/vww.py
+TLS scan, HTTP header scan, asset inventory, audit report.
+.TP
+.I singine/wingine.py
+Build backend registry (python-cortex, maven-war), local serve.
+.TP
+.I singine/wsec.py
+TLS cert check/renew, ed25519 key management, JWT token mint.
+.TP
+.I singine/command.py
+CLI registration (\fBbuild_parser()\fR).
+.TP
+.I ~/.singine/keys/
+SSH deploy key storage.
+.TP
+.I ~/.singine/singine.jks
+Singine JKS trust store (deploy keys registered here).
+.SH SEE ALSO
+.BR singine (1),
+.BR singine-transfer (1),
+.BR singine-auth (1),
+.BR singine-idp (1),
+.BR singine-domain (1),
+.BR singine-edge (1)
+.PP
+Full documentation:
+.I docs/singine-web.md

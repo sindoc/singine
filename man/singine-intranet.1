@@ -1,0 +1,84 @@
+.TH SINGINE-INTRANET 1 "2026-03-22" "singine 0.2.0" "User Commands"
+.SH NAME
+singine-intranet \- generate local sindoc.local intranet control pages
+.SH SYNOPSIS
+.B singine intranet control-center
+[\fB--output-dir\fR \fIPATH\fR]
+[\fB--home-dir\fR \fIPATH\fR]
+[\fB--dotfiles-repo\fR \fIPATH\fR]
+[\fB--ai-root-dir\fR \fIPATH\fR]
+[\fB--repo-ai-dir\fR \fIPATH\fR]
+[\fB--json\fR]
+.br
+.B singine intranet publish
+[\fB--site-root\fR \fIPATH\fR]
+[\fB--deploy-root\fR \fIPATH\fR]
+[\fB--silkpage-root\fR \fIPATH\fR]
+[\fB--ssl-dir\fR \fIPATH\fR]
+[\fB--domain\fR \fIDOMAIN\fR]
+[\fB--no-sync\fR]
+[\fB--json\fR]
+.br
+.B singine intranet cert-bootstrap
+[\fB--ssl-dir\fR \fIPATH\fR]
+[\fB--domain\fR \fIDOMAIN\fR]
+[\fB--force\fR]
+[\fB--json\fR]
+.SH DESCRIPTION
+.B singine intranet control-center
+writes a unified local control-plane page under
+.IR sindoc.local .
+It brings together:
+.IP \(bu 2
+machine identity and repo root
+.IP \(bu 2
+dotfiles summary and link to the dotfiles control page
+.IP \(bu 2
+Claude and Codex session summary and link to the session dashboard
+.IP \(bu 2
+live Docker edge container status
+.IP \(bu 2
+command snippets for edge runtime actions
+.PP
+.B singine intranet publish
+syncs the generated intranet into a Silkpage-style deploy root, writes a local
+deployment dashboard under
+.IR /deploy/ ,
+and emits the matching Apache vhost, hosts fragment, and TLS readiness report
+for
+.IR sindoc.local .
+It also writes a Firefox
+.I policies.json
+snippet that enables enterprise-root import.
+.PP
+.B singine intranet cert-bootstrap
+creates a local root CA and a server certificate for
+.IR sindoc.local
+under
+.IR ~/.config/lutino/ssl ,
+so Apache has concrete TLS material to serve and Firefox can be pointed at a
+real trust anchor instead of a missing certificate path.
+.SH EXAMPLES
+.nf
+singine intranet control-center \\
+  --output-dir /Users/skh/ws/git/github/sindoc/singine/target/sindoc.local/control \\
+  --json
+
+singine intranet cert-bootstrap \\
+  --ssl-dir /Users/skh/.config/lutino/ssl \\
+  --json
+
+singine intranet publish \\
+  --site-root /Users/skh/ws/git/github/sindoc/singine/target/sindoc.local \\
+  --deploy-root /Users/skh/var/deploy/sindoc.local \\
+  --silkpage-root /Users/skh/ws/git/github/sindoc/silkpage \\
+  --json
+
+singine web /Users/skh/ws/git/github/sindoc/singine/target/sindoc.local --port 8080
+.fi
+.SH SEE ALSO
+.BR singine (1),
+.BR singine-ai (1),
+.BR singine-dotfiles (1),
+.BR singine-edge (1),
+.BR singine-man (1)

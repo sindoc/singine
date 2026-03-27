@@ -1,7 +1,8 @@
 (ns singine.pos.registry
-  "POS opcode registry — registers BLKP, CATC, MCEL, GITP, IDNT, FORM, LOCP in sinedge-engine.
+  "POS opcode registry — registers BLKP, CATC, MCEL, GITP, IDNT, FORM, LOCP, IDPR, MAIL
+   in sinedge-engine.
 
-   Requiring this namespace has a side effect: all seven opcodes are registered.
+   Requiring this namespace has a side effect: all nine opcodes are registered.
    The engine.clj requires this namespace at startup.
 
    Registration contract per sinedge.engine/register!:
@@ -13,7 +14,9 @@
             [singine.pos.git-op           :as gitp]
             [singine.pos.identity         :as idnt]
             [singine.pos.form             :as form]
-            [singine.pos.location         :as loc]))
+            [singine.pos.location         :as loc]
+            [singine.pos.idp              :as idp]
+            [singine.net.mail             :as mail]))
 
 ;; ── BLKP — Block Processor ───────────────────────────────────────────────────
 
@@ -74,9 +77,25 @@
           opts     (select-keys args [:subject :dry-run :cc])]
       (loc/probe! auth location opts))))
 
+;; ── IDPR — Identity Provider ─────────────────────────────────────────────────
+
+(engine/register! "IDPR"
+  (fn [auth args]
+    (let [op   (or (:op args) (keyword (get args "op" "discover")))
+          opts (dissoc args :op "op")]
+      (idp/idpr! auth op opts))))
+
+;; ── MAIL — SMTP send + IMAP search/fetch/forward + git-snap ─────────────────
+
+(engine/register! "MAIL"
+  (fn [auth args]
+    (let [op   (or (:op args) (keyword (get args "op" "search")))
+          opts (dissoc args :op "op")]
+      (mail/mail! auth op opts))))
+
 ;; ── Registry summary ─────────────────────────────────────────────────────────
 
 (defn registered-opcodes
   "Return the list of opcodes registered by this namespace."
   []
-  ["BLKP" "CATC" "MCEL" "GITP" "IDNT" "FORM" "LOCP"])
+  ["BLKP" "CATC" "MCEL" "GITP" "IDNT" "FORM" "LOCP" "IDPR" "MAIL"])

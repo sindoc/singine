@@ -1,0 +1,154 @@
+.TH SINGINE-BRIDGE 1 "2026-03-16" "singine 0.2.0" "User Commands"
+.SH NAME
+singine-bridge \- SQLite and JDBC bridge operations for Singine, AI session, Silkpage, and Collibra data
+.SH SYNOPSIS
+.B singine bridge
+\fISUBCOMMAND\fR [\fIOPTIONS\fR]
+.br
+.B singine jdbc-url
+[\fB--db\fR \fIPATH\fR]
+.SH DESCRIPTION
+The bridge subcommands merge local Singine, AI session, Silkpage, Claude, and
+Codex data into a SQLite physical schema suitable for SPARQL-shaped queries and
+JDBC access through
+\fBjdbc:sqlite:\fR URLs.
+.PP
+AI conversation data — sessions, interactions, permissions, mandates, and
+artefacts — can be synced into the bridge from
+.BR singine-ai (1)
+using
+.B "singine ai last session data --db PATH"
+or by passing
+.B --db
+when opening an interactive session.
+Once synced, the full conversation record is available to every bridge
+subcommand.
+.SH SUBCOMMANDS
+.TP
+.B build
+Create or rebuild the bridge database from all available local sources.
+This step is required before running queries against newly synced AI session data.
+.TP
+.B sources
+List data source roots and entity/fragment counts.
+AI session tables (ai_sessions, ai_interactions, ai_mandates) appear here once
+at least one session has been synced.
+.TP
+.B search \fITEXT\fR
+Perform full-text fragment search over the merged dataset.
+Searches across all sources including AI session content.
+.TP
+.B entity \fIIRI\fR
+Inspect one entity and its outgoing statements.
+AI sessions are addressable by IRI of the form
+.IR urn:singine:ai:session:claude:SESSION-ID .
+.TP
+.B sparql \fIQUERY\fR
+Translate a supported SPARQL subset into SQL and execute it against the bridge.
+See
+.B SPARQL EXAMPLES
+below for AI session query patterns.
+.TP
+.B graphql \fIQUERY\fR
+Execute a GraphQL-shaped request over the same bridge. Supported roots are
+\fIsources\fR, \fIsearch\fR, \fIentity\fR, and \fIsparql\fR.
+.SH SUPPORTED SPARQL SHAPES
+.TP
+.B SELECT ?s WHERE { ?s a <Type> . }
+Type lookup.
+.TP
+.B SELECT ?s ?label WHERE { ?s a <Type> ; rdfs:label ?label . }
+Type lookup with labels.
+.TP
+.B SELECT ?s WHERE { ?s <Predicate> "literal" . }
+Literal property match.
+.TP
+.B SELECT ?o WHERE { <Subject> <Predicate> ?o . }
+Outbound relation lookup.
+.TP
+.B SELECT ?s ?o WHERE { ?s <Predicate> ?o . }
+Predicate scan.
+.SH AI SESSION DATA
+After syncing session data with
+.B "singine ai last session data --db PATH"
+or
+.BR "singine ai claude --db PATH" ,
+the bridge holds the following tables:
+.TP
+.B ai_sessions
+One row per session. Columns: session_id, provider, model, session_urn,
+provider_object_ref, started_at, ended_at, status, metadata_json.
+.TP
+.B ai_interactions
+One row per user or assistant turn. Columns: interaction_id, session_id,
+created_at, role, content, metadata_json.
+.TP
+.B ai_mandates
+One row per recorded mandate. Columns: mandate_id, session_id, created_at,
+action_name, resource, decision, note.
+.PP
+EDN-backed sessions (governed Claude Code sessions) additionally expose their
+artefact list and permission counts through the entities and statements tables
+once ingested via
+.IR load_*_into_singine.py
+style ingestion scripts.
+.SH SPARQL EXAMPLES
+.SS AI session queries
+.nf
+# List all conversation assets by label
+singine bridge sparql --db /tmp/singine-ai.db \\
+  'SELECT ?s ?label WHERE { ?s a <ConversationAsset> ; rdfs:label ?label . }'
+
+# Find all sessions for a specific provider
+singine bridge sparql --db /tmp/singine-ai.db \\
+  'SELECT ?s WHERE { ?s <singine:provider> "claude" . }'
+
+# List all artefacts produced across sessions
+singine bridge sparql --db /tmp/singine-ai.db \\
+  'SELECT ?s ?o WHERE { ?s <singine:artefactPath> ?o . }'
+
+# Find interactions mentioning a keyword
+singine bridge sparql --db /tmp/singine-ai.db \\
+  'SELECT ?s WHERE { ?s <singine:content> "parquet" . }'
+
+# List permissions granted in a session
+singine bridge sparql --db /tmp/singine-ai.db \\
+  'SELECT ?s ?o WHERE { ?s <singine:permissionResource> ?o . }'
+
+# Resolve a session by URN
+singine bridge entity urn:singine:ai:session:claude:2026-03-16-china-debt-timeline \\
+  --db /tmp/singine-ai.db
+.fi
+.SS General bridge queries
+.nf
+singine bridge build --db /tmp/sqlite.db
+singine bridge search --db /tmp/sqlite.db "china debt"
+singine bridge sparql --db /tmp/sqlite.db \\
+  'SELECT ?s ?label WHERE { ?s a markdown ; rdfs:label ?label . } LIMIT 10'
+singine bridge graphql --db /tmp/sqlite.db \\
+  '{ search(text:"kernel", limit:5) { iri label snippet } }'
+singine jdbc-url --db /tmp/sqlite.db
+
+# Centralise the latest AI conversation first, then inspect the shared store
+singine ai last session data --db /tmp/singine-ai.db
+singine bridge sources --db /tmp/singine-ai.db
+singine bridge search --db /tmp/singine-ai.db "claude"
+.fi
+.SH JDBC ACCESS
+The bridge database is a standard SQLite file accessible via any JDBC-compatible
+tool using the URL printed by
+.BR singine-jdbc-url (1):
+.nf
+singine jdbc-url --db /tmp/singine-ai.db
+# Returns: jdbc:sqlite:/tmp/singine-ai.db
+.fi
+.PP
+This URL can be used in DBeaver, IntelliJ DataGrip, Apache Spark
+.IR jdbc.url
+configuration, or the Collibra catalog JDBC connection dialog.
+.SH SEE ALSO
+.BR singine (1),
+.BR singine-ai (1),
+.BR singine-jdbc-url (1),
+.BR singine-xml (1),
+.BR singine-policy (1)

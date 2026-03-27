@@ -1,0 +1,177 @@
+.TH SINGINE-TEMPLATE 1 "2026-03-21" "singine 0.2.0" "User Commands"
+.SH NAME
+singine-template \- generate project templates and materialize reusable Singine library entries
+.SH SYNOPSIS
+.B singine template create
+\fBmaven\fR|\fBnpm\fR \fINAME\fR
+[\fB--dir\fR \fIPATH\fR]
+[\fB--description\fR \fITEXT\fR]
+[\fB--version\fR \fIVERSION\fR]
+[\fB--force\fR]
+[\fB--json\fR]
+.PP
+.B singine template create maven
+\fINAME\fR
+[\fB--group-id\fR \fIGROUP\fR]
+[\fB--artifact-id\fR \fIARTIFACT\fR]
+[\fB--package-name\fR \fIPACKAGE\fR]
+[\fB--java-version\fR \fIRELEASE\fR]
+.PP
+.B singine template create npm
+\fINAME\fR
+[\fB--package-name\fR \fIPACKAGE\fR]
+[\fB--scope\fR \fISCOPE\fR]
+[\fB--module-type\fR \fBmodule\fR|\fBcommonjs\fR]
+.PP
+.B singine template list
+[\fB--family\fR \fBtemplate\fR|\fBarchetype\fR]
+[\fB--json\fR]
+.PP
+.B singine template materialize
+\fINAME\fR
+\fB--output-dir\fR \fIPATH\fR
+[\fB--title\fR \fITEXT\fR]
+[\fB--json\fR]
+.SH DESCRIPTION
+Generates a standard project skeleton that is immediately compatible with
+either
+.BR mvn (1)
+or
+.BR npm (1),
+while also including a small Singine integration surface in the generated
+README and scripts.
+.PP
+The template library also exposes reusable higher-level bundles such as:
+.IP \(bu 2
+\fBpersonal-os-essay\fR
+.IP \(bu 2
+\fBplatform-blueprint\fR
+.IP \(bu 2
+\fBzip-neighborhood-demo\fR
+.PP
+The
+.B maven
+template creates:
+.IP \(bu 2
+\fIpom.xml\fR with compiler, surefire, and exec plugins
+.IP \(bu 2
+\fIsrc/main/java\fR and \fIsrc/test/java\fR trees
+.IP \(bu 2
+\fIREADME.md\fR and \fI.gitignore\fR
+.PP
+The
+.B npm
+template creates:
+.IP \(bu 2
+\fIpackage.json\fR with standard
+.B start
+and
+.B test
+scripts
+.IP \(bu 2
+\fIsrc/\fR and \fItest/\fR trees
+.IP \(bu 2
+\fIREADME.md\fR and \fI.gitignore\fR
+.SH OPTIONS
+.TP
+.B --family \fBtemplate\fR|\fBarchetype\fR
+Filter
+.B singine template list
+to one family.
+.TP
+.B --output-dir \fIPATH\fR
+Destination directory for
+.B singine template materialize.
+.TP
+.B --title \fITEXT\fR
+Optional title override passed through to the selected reusable entry when it
+supports titles.
+.TP
+.B --dir \fIPATH\fR
+Directory where the template should be created. If omitted, Singine creates a
+new project directory derived from the generated artifact or package name under
+the current working directory. If you pass
+.B --dir .
+explicitly, Singine scaffolds into the current working directory instead of
+creating a nested project directory.
+.TP
+.B --description \fITEXT\fR
+Project description embedded in generated metadata files.
+.TP
+.B --version \fIVERSION\fR
+Project version. Default is
+.IR 0.1.0-SNAPSHOT
+for Maven templates and
+.IR 0.1.0
+for npm templates when not explicitly overridden.
+.TP
+.B --force
+Overwrite existing files in the target directory.
+.TP
+.B --json
+Emit the generated file list and derived metadata as JSON.
+.TP
+.B --group-id \fIGROUP\fR
+Maven
+.B groupId
+value. Only used with the
+.B maven
+template.
+.TP
+.B --artifact-id \fIARTIFACT\fR
+Maven
+.B artifactId
+value. Only used with the
+.B maven
+template.
+.TP
+.B --package-name \fINAME\fR
+Java package name for Maven templates or package name for npm templates.
+.TP
+.B --java-version \fIRELEASE\fR
+Java language level for the Maven compiler plugin. Default is
+.IR 17 .
+.TP
+.B --scope \fISCOPE\fR
+npm scope, without the leading
+.BR @ .
+Hyphens are preserved, so
+.B --scope my-team
+produces package names such as
+.BR @my-team/silkpage-ui .
+.TP
+.B --module-type \fBmodule\fR|\fBcommonjs\fR
+JavaScript module format for the npm template. Default is
+.BR module .
+.SH EXAMPLES
+.nf
+singine template create maven singine-spec-demo \\
+  --dir ~/ws/git/local/singine-spec-demo \\
+  --group-id com.markupware \\
+  --artifact-id singine-spec-demo
+
+singine template create npm silkpage-spec-ui \\
+  --dir ~/ws/git/local/silkpage-spec-ui \\
+  --scope sindoc
+
+mkdir ~/ws/git/local/silkpage-app && cd ~/ws/git/local/silkpage-app
+singine template create npm "Silkpage App" \\
+  --dir . \\
+  --scope my-team
+
+singine template create npm singine-dashboard \\
+  --module-type commonjs --json
+
+singine template list --family archetype --json
+
+singine template materialize personal-os-essay \\
+  --output-dir /tmp/singine-personal-os \\
+  --json
+.fi
+.SH SEE ALSO
+.BR singine (1),
+.BR singine-archetype (1),
+.BR singine-man (1),
+.BR singine-install (1),
+.BR mvn (1),
+.BR npm (1)

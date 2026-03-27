@@ -1,0 +1,365 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  singine/core/build.xml — Apache Ant JVM control layer
+  ======================================================
+  All JVM invocation, compilation, and test execution is controlled here.
+  Docker lifecycle is also managed via Ant exec tasks so everything is
+  reproducible from a single `ant <target>` call with no shell magic.
+
+  Targets:
+    ant compile           — javac all Java sources → classes/
+    ant javadoc-html      — generate standard HTML Javadoc under target/javadoc-html/
+    ant javadoc-xml       — generate XML Javadoc via Saxonica xmldoclet
+    ant test              — run Clojure test suite (full)
+    ant test-mail         — run only tc-mail01..tc-mail05
+    ant repl              — start Clojure REPL
+    ant mail-docker-up    — start Postfix + Dovecot via docker-compose
+    ant mail-docker-down  — stop mail Docker stack
+    ant mail-snap         — run git-snap! against live IMAP (needs Docker up)
+    ant jar               — build singine-core.jar (tools.build AOT)
+    ant clean             — remove classes/ and target/
+    ant all               — clean → compile → test → jar
+
+  Configuration (override via -D flag or environment):
+    imap.host       (default: localhost)
+    imap.port       (default: 993)
+    smtp.host       (default: localhost)
+    smtp.port       (default: 587)
+    mail.user       (default: singine@localhost)
+    mail.folder     (default: INBOX)
+    mail.search     (default: invoice)
+    java.home.bin   (default: /usr/bin)
+    clojure.bin     (default: /Users/skh/.local/clojure/bin/clojure)
+    sqlite.jar      (computed from ~/.m2 by init target)
+    m2.classpath    (computed from ~/.m2 by init target)
+    xmldoclet.jar   (computed from ~/.m2 by init target)
+-->
+
+<project name="singine-core" default="all" basedir=".">
+
+  <!-- ── Properties ──────────────────────────────────────────────────────── -->
+
+  <property name="src.java"      value="${basedir}/java"/>
+  <property name="src.clj"       value="${basedir}/src"/>
+  <property name="test.clj"      value="${basedir}/test"/>
+  <property name="classes"       value="${basedir}/classes"/>
+  <property name="target"        value="${basedir}/target"/>
+  <property name="docker.dir"    value="${basedir}/../docker"/>
+
+  <property name="clojure.bin"   value="/Users/skh/.local/clojure/bin/clojure"/>
+  <property name="imap.host"     value="localhost"/>
+  <property name="imap.port"     value="993"/>
+  <property name="smtp.host"     value="localhost"/>
+  <property name="smtp.port"     value="587"/>
+  <property name="mail.user"     value="singine@localhost"/>
+  <property name="mail.folder"   value="INBOX"/>
+  <property name="mail.search"   value="invoice"/>
+
+  <!--
+    JVM configuration via $JAVA_HOME.
+    Override with: ant -Djava.home.bin=$JAVA_HOME/bin <target>
+    Or export JAVA_HOME before invoking ant; the env.JAVA_HOME property is
+    set automatically when the variable is present in the shell environment.
+
+    cacerts: set via -Djavax.net.ssl.trustStore or $SINGINE_CACERTS.
+    Defaults to $JAVA_HOME/conf/security/cacerts (Java 9+) or
+    $JAVA_HOME/lib/security/cacerts (Java 8).
+
+    DNS: singine.local → 127.0.0.1 for test-local target.
+    For production: add "127.0.0.1  singine.local" to /etc/hosts.
+  -->
+  <property environment="env"/>
+  <!-- Prefer $JAVA_HOME/bin if set, fall back to /usr/bin -->
+  <condition property="java.home.bin" value="${env.JAVA_HOME}/bin" else="/usr/bin">
+    <isset property="env.JAVA_HOME"/>
+  </condition>
+  <!-- singine.local default port -->
+  <property name="singine.local.port" value="2000"/>
+  <!-- CentOS test image tag -->
+  <property name="centos.image" value="singine-centos-test:latest"/>
+
+  <!-- ── Init: detect dependency jars from local Maven cache ─────────────── -->
+
+  <target name="init" description="Detect dependency jars and xmldoclet from ~/.m2">
+    <exec executable="bash" outputproperty="sqlite.jar" failonerror="true">
+      <arg value="-c"/>
+      <arg value="find ${user.home}/.m2 -name 'sqlite-jdbc-*.jar' | sort | tail -1"/>
+    </exec>
+    <exec executable="bash" outputproperty="m2.classpath" failonerror="true">
+      <arg value="-c"/>
+      <arg value="find ${user.home}/.m2/repository -name '*.jar' | sort | paste -sd ':' -"/>
+    </exec>
+    <exec executable="bash" outputproperty="xmldoclet.jar" failonerror="false">
+      <arg value="-c"/>
+      <arg value="find ${user.home}/.m2 -path '*com/saxonica/xmldoclet/*/xmldoclet-*.jar' | sort | tail -1"/>
+    </exec>
+    <echo message="sqlite.jar = ${sqlite.jar}"/>
+    <echo message="m2.classpath detected from ~/.m2/repository"/>
+    <echo message="xmldoclet.jar = ${xmldoclet.jar}"/>
+    <mkdir dir="${classes}"/>
+    <mkdir dir="${target}"/>
+  </target>
+
+  <!-- ── Compile: javac all Java sources ─────────────────────────────────── -->
+
+  <target name="compile" depends="init" description="javac all Java sources → classes/">
+    <exec executable="bash" failonerror="true">
+      <env key="PATH" value="${java.home.bin}:/usr/bin:/bin"/>
+      <arg value="-c"/>
+      <arg value="'${java.home.bin}/javac' -d '${classes}' -cp '${classes}:${m2.classpath}' $(find '${src.java}' -name '*.java' | sort)"/>
+    </exec>
+    <echo message="Java compilation complete → ${classes}"/>
+    <echo message="JDK: ${java.home.bin}"/>
+  </target>
+
+  <!--
+    javadoc-html: standard HTML Javadoc for all singine.* packages.
+    Uses $JAVA_HOME/bin/javadoc when JAVA_HOME is set.
+    Covers: singine.activity, singine.auth, singine.local (+ all sub-packages).
+  -->
+  <target name="javadoc-html" depends="compile" description="Generate standard HTML Javadoc (all singine.* packages)">
+    <exec executable="bash" failonerror="true">
+      <env key="PATH" value="${java.home.bin}:/usr/bin:/bin"/>
+      <arg value="-c"/>
+      <arg value="'${java.home.bin}/javadoc' -quiet -classpath '${classes}:${m2.classpath}' -d '${target}/javadoc-html' -sourcepath '${src.java}' -subpackages singine"/>
+    </exec>
+    <echo message="HTML Javadoc complete → ${target}/javadoc-html"/>
+  </target>
+
+  <!--
+    javadoc-xml: Norman Walsh's xmldoclet (com.saxonica:xmldoclet).
+    Generates machine-readable XML Javadoc for all singine.* packages.
+
+    Invokable from:
+      ant javadoc-xml                   (Ant, uses $JAVA_HOME if set)
+      mvn verify -P xmldoclet           (Maven, see pom.xml)
+      gradle javadocXml                 (Gradle, see build.gradle)
+      lein javadoc-xml                  (Leiningen, see project.clj)
+      docker run -rm singine-centos-test ant javadoc-xml    (Docker)
+      ansible-playbook ansible/singine-jvm.yml -tags javadoc    (Ansible)
+
+    Output: target/javadoc-xml/
+    Key file: target/javadoc-xml/javadoc.xml (merged XML tree)
+
+    Custom cacerts: pass -Djavax.net.ssl.trustStore=/path/to/cacerts
+    Custom DNS:     singine.local resolved at HTTP layer (Host header).
+  -->
+  <target name="javadoc-xml" depends="compile" description="Generate XML Javadoc via Norman Walsh xmldoclet (all singine.* packages)">
+    <fail unless="xmldoclet.jar"
+          message="xmldoclet jar not found in ~/.m2. Run: mvn dependency:get -Dartifact=com.saxonica:xmldoclet:0.17.0"/>
+    <exec executable="bash" failonerror="true">
+      <env key="PATH" value="${java.home.bin}:/usr/bin:/bin"/>
+      <arg value="-c"/>
+      <arg value="'${java.home.bin}/javadoc' -quiet -classpath '${classes}:${m2.classpath}' -docletpath '${xmldoclet.jar}:${m2.classpath}' -doclet com.saxonica.xmldoclet.XmlDoclet -d '${target}/javadoc-xml' -sourcepath '${src.java}' -subpackages singine"/>
+    </exec>
+    <echo message="XML Javadoc complete → ${target}/javadoc-xml"/>
+    <echo message="Primary output: ${target}/javadoc-xml/javadoc.xml"/>
+  </target>
+
+  <!-- ── Test: full Clojure test suite ────────────────────────────────────── -->
+
+  <target name="test" depends="compile" description="Run full Clojure test suite">
+    <exec executable="bash" failonerror="true">
+      <env key="PATH" value="/Users/skh/.local/clojure/bin:/usr/bin:/bin"/>
+      <arg value="-c"/>
+      <arg value="cd '${basedir}' &amp;&amp; clojure -M:test"/>
+    </exec>
+  </target>
+
+  <!-- ── Test-mail: only tc-mail01..tc-mail05 ─────────────────────────────── -->
+
+  <target name="test-mail" depends="compile" description="Run only MAIL opcode tests">
+    <exec executable="bash" failonerror="true">
+      <env key="PATH" value="/Users/skh/.local/clojure/bin:/usr/bin:/bin"/>
+      <arg value="-c"/>
+      <arg value="cd '${basedir}' &amp;&amp; clojure -M:test -n singine.pos.tc-suite-test"/>
+    </exec>
+    <echo message="MAIL tests complete"/>
+  </target>
+
+  <!-- ── REPL ─────────────────────────────────────────────────────────────── -->
+
+  <target name="repl" depends="compile" description="Start Clojure REPL">
+    <exec executable="bash" failonerror="false">
+      <env key="PATH" value="/Users/skh/.local/clojure/bin:/usr/bin:/bin"/>
+      <arg value="-c"/>
+      <arg value="cd '${basedir}' &amp;&amp; clojure -M:repl"/>
+    </exec>
+  </target>
+
+  <!-- ── Docker: mail stack (Postfix + Dovecot) ───────────────────────────── -->
+
+  <target name="mail-docker-up" description="Start Postfix + Dovecot Docker stack">
+    <exec executable="docker" failonerror="true">
+      <arg value="compose"/>
+      <arg value="-f"/>
+      <arg value="${docker.dir}/docker-compose.mail.yml"/>
+      <arg value="up"/>
+      <arg value="-d"/>
+      <arg value="--build"/>
+    </exec>
+    <echo message="Mail Docker stack started. SMTP:1025  IMAP:1143"/>
+  </target>
+
+  <target name="mail-docker-down" description="Stop Postfix + Dovecot Docker stack">
+    <exec executable="docker" failonerror="false">
+      <arg value="compose"/>
+      <arg value="-f"/>
+      <arg value="${docker.dir}/docker-compose.mail.yml"/>
+      <arg value="down"/>
+    </exec>
+    <echo message="Mail Docker stack stopped."/>
+  </target>
+
+  <target name="mail-docker-logs" description="Tail mail stack logs">
+    <exec executable="docker" failonerror="false">
+      <arg value="compose"/>
+      <arg value="-f"/>
+      <arg value="${docker.dir}/docker-compose.mail.yml"/>
+      <arg value="logs"/>
+      <arg value="--tail=50"/>
+    </exec>
+  </target>
+
+  <!-- ── Mail snap: git-versioned IMAP snapshot ────────────────────────────── -->
+
+  <target name="mail-snap" depends="compile" description="Run git-snap! against live IMAP">
+    <exec executable="bash" failonerror="true">
+      <env key="PATH" value="/Users/skh/.local/clojure/bin:/usr/bin:/bin"/>
+      <arg value="-c"/>
+      <arg value="cd '${basedir}' &amp;&amp; clojure -M -e &quot;(require '[singine.net.mail :as m]) (let [auth {:user \&quot;${mail.user}\&quot; :roles [:admin] :exp Long/MAX_VALUE} opts {:imap-host \&quot;${imap.host}\&quot; :imap-port ${imap.port} :imap-tls false :user \&quot;${mail.user}\&quot; :pass \&quot;\&quot; :search \&quot;${mail.search}\&quot; :max 10 :dry-run false}] (println ((m/git-snap! auth opts))))&quot;"/>
+    </exec>
+  </target>
+
+  <!-- ── Jar: build singine-core.jar ─────────────────────────────────────── -->
+
+  <target name="jar" depends="compile" description="Build singine-core uberjar">
+    <exec executable="bash" failonerror="true">
+      <env key="PATH" value="/Users/skh/.local/clojure/bin:/usr/bin:/bin"/>
+      <arg value="-c"/>
+      <arg value="cd '${basedir}' &amp;&amp; clojure -T:build uber"/>
+    </exec>
+    <echo message="singine-core.jar built → ${target}/"/>
+  </target>
+
+  <!-- ── Clean ─────────────────────────────────────────────────────────────── -->
+
+  <target name="clean" description="Remove classes/ and target/">
+    <delete dir="${classes}" includeemptydirs="true"/>
+    <delete dir="${target}"  includeemptydirs="true"/>
+    <echo message="Clean complete."/>
+  </target>
+
+  <!-- ── test-centos: run tests inside CentOS LTS (Rocky Linux 9) Docker ───── -->
+
+  <!--
+    Builds the CentOS LTS test image and runs the full Java + Clojure test suite
+    inside it, using the JDK installed in the container (not $JAVA_HOME on the host).
+
+    The Dockerfile is at: docker/Dockerfile.centos
+    It installs: OpenJDK 21, Ant, Maven, Gradle, Python 3, SQLite, DNS tools.
+
+    Environment variables passed into the container:
+      SINGINE_CACERTS — path to custom cacerts inside the container
+      SINGINE_DNS     — singine.local DNS record (injected into /etc/hosts)
+
+    Invokable from:
+      ant test-centos
+      docker run -rm singine-centos-test ant test-local
+  -->
+  <target name="test-centos-build" description="Build CentOS LTS test Docker image">
+    <exec executable="docker" failonerror="true">
+      <arg value="build"/>
+      <arg value="-t"/>
+      <arg value="${centos.image}"/>
+      <arg value="-f"/>
+      <arg value="${docker.dir}/Dockerfile.centos"/>
+      <arg value="${basedir}/.."/>
+    </exec>
+    <echo message="CentOS test image built: ${centos.image}"/>
+  </target>
+
+  <target name="test-centos" depends="test-centos-build"
+          description="Run Java integration tests inside CentOS LTS Docker (Rocky Linux 9)">
+    <exec executable="docker" failonerror="true">
+      <arg value="run"/>
+      <arg value="--rm"/>
+      <arg value="--name"/>
+      <arg value="singine-test-centos"/>
+      <arg value="-e"/>
+      <arg value="SINGINE_LOCAL_PORT=${singine.local.port}"/>
+      <arg value="${centos.image}"/>
+      <arg value="ant"/>
+      <arg value="-f"/>
+      <arg value="/singine/core/build.xml"/>
+      <arg value="test-local"/>
+    </exec>
+    <echo message="CentOS integration tests complete."/>
+  </target>
+
+  <!-- ── ansible-jvm: provision JVM environment via Ansible ────────────────── -->
+
+  <!--
+    Runs the Ansible playbook that installs and configures:
+      - OpenJDK (version controlled by ansible/singine-jvm.yml)
+      - $JAVA_HOME and PATH in dot files
+      - Custom cacerts
+      - DNS: singine.local → 127.0.0.1
+
+    Targets: localhost by default (see ansible/inventory/local).
+    Override inventory: ant ansible-jvm -Dansible.inventory=my-inventory
+
+    Dot files deployed:
+      ~/.singine-jvm   — JVM environment variables (source in .bashrc / .zshrc)
+      ~/.singinerc     — singine main configuration
+      ~/.singine-dns   — DNS settings for singine.local
+
+    Requires: ansible-playbook on PATH.
+  -->
+  <property name="ansible.inventory" value="${basedir}/ansible/inventory/local"/>
+
+  <target name="ansible-jvm" description="Provision JVM, cacerts, DNS, and dot files via Ansible">
+    <exec executable="ansible-playbook" failonerror="true">
+      <arg value="-i"/>
+      <arg value="${ansible.inventory}"/>
+      <arg value="${basedir}/ansible/singine-jvm.yml"/>
+      <arg value="-v"/>
+    </exec>
+    <echo message="Ansible JVM provisioning complete."/>
+  </target>
+
+  <!-- ── test-local: singine.local integration test (Java, port 2000) ──────── -->
+
+  <!--
+    Runs SingineLocalIntegrationTest — a self-contained Java integration test
+    that verifies the full singine.local stack:
+
+      * SQLite master data (4 trusted individuals, access grants)
+      * Embedded HTTP server at port 2000 (singine.local canonical address)
+      * HTTP request/response for all roles (API_CONSUMER, SSH_OPERATOR,
+        CORTEX_BRIDGE_USER, ADMIN)
+      * singine.crypt: HS256 and RS256 JWS sign + verify (JwsToken, CertAuthority)
+      * singine.cortex: /bridge?action=sources stub response
+      * DNS management: singine.local → 127.0.0.1 registration
+      * XML catalog content: collibra-catalog URN assertions
+      * Response headers: X-Singine-Host, X-Singine-Port, X-Singine-Catalog
+
+    Covers 15 test cases (TC-01 … TC-15).
+    Exit code 1 if any TC fails; exit code 0 if all pass.
+  -->
+  <target name="test-local" depends="compile" description="Run singine.local Java integration tests (15 TCs)">
+    <exec executable="java" failonerror="true">
+      <arg value="-cp"/>
+      <arg value="${classes}:${m2.classpath}"/>
+      <arg value="singine.local.SingineLocalIntegrationTest"/>
+    </exec>
+    <echo message="singine.local integration tests complete."/>
+  </target>
+
+  <!-- ── All ──────────────────────────────────────────────────────────────── -->
+
+  <target name="all" depends="clean,compile,test" description="clean → compile → test">
+    <echo message="singine-core build complete."/>
+  </target>
+
+</project>

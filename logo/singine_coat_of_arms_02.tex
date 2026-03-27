@@ -1,0 +1,257 @@
+%% singine_coat_of_arms_02.tex — Grand Heraldic System
+%%
+%% Composition inspired by the grand royal arms layout:
+%% crest, flowing canopy, side standards, central shield, and motto ribbon.
+%% The symbolism remains Singine's:
+%% lambda calculus, operator command, indexed knowledge, trusted mesh,
+%% and bounded capability broadcast.
+%%
+%% compile: xelatex singine_coat_of_arms_02.tex
+
+\documentclass[border=24pt]{standalone}
+\usepackage{tikz}
+\usepackage{fontspec}
+\usepackage{bidi}
+\usepackage{xcolor}
+
+\newfontfamily\latinfont[
+  Path=/System/Library/Fonts/,
+  Ligatures=TeX, Kerning=On, Numbers=OldStyle
+]{SFNS.ttf}
+
+\newfontfamily\persianfont[
+  Path=/Users/skh/Library/Fonts/,
+  Script=Arabic, Language=Persian,
+  Ligatures=Required, RawFeature={+mark}
+]{Amiri-Regular.ttf}
+
+\definecolor{ink}  {rgb}{0.08,0.08,0.10}
+\definecolor{mred} {rgb}{0.52,0.11,0.07}
+\definecolor{cream}{rgb}{0.97,0.96,0.94}
+\definecolor{hair} {rgb}{0.35,0.30,0.28}
+\definecolor{gold}{rgb}{0.74,0.61,0.39}
+
+\pagecolor{cream}
+
+\begin{document}
+\begin{tikzpicture}[x=1cm,y=1cm,line cap=round,line join=round]
+
+  %% title
+  \node[font=\latinfont\fontsize{40pt}{42pt}\selectfont, text=ink] at (0,13.0) {Singine};
+  \node[font=\persianfont\fontsize{24pt}{28pt}\selectfont, text=mred] at (0,12.05) {\RL{سین‌جین}};
+
+  %% top beacon and rod
+  \draw[gold, line width=1.0pt] (0,11.45) -- (0,10.45);
+  \fill[mred] (0,11.7) -- (-0.34,11.1) -- (0,10.75) -- (0.34,11.1) -- cycle;
+  \fill[ink] (0,10.35) circle (0.09);
+  \draw[gold, line width=0.7pt, opacity=0.95]
+    (-1.0,11.15) .. controls (-0.62,11.05) and (-0.36,11.02) .. (-0.04,11.0)
+    (1.0,11.15) .. controls (0.62,11.05) and (0.36,11.02) .. (0.04,11.0)
+    (-0.8,10.62) .. controls (-0.45,10.72) and (-0.25,10.8) .. (-0.03,10.92)
+    (0.8,10.62) .. controls (0.45,10.72) and (0.25,10.8) .. (0.03,10.92);
+
+  %% twisted torse
+  \foreach \x/\c in {-2.7/ink,-2.0/mred,-1.3/ink,-0.6/mred,0.1/ink,0.8/mred,1.5/ink,2.2/mred,2.9/ink} {
+    \fill[\c] (\x,10.0) ellipse (0.46 and 0.15);
+  }
+
+  %% network pavilion canopy
+  \draw[ink, line width=1.15pt]
+    (-6.8,9.6)
+      .. controls (-5.6,10.15) and (-4.8,10.2) ..
+    (-4.2,9.75)
+      .. controls (-3.35,9.15) and (-2.65,8.95) ..
+    (-1.65,9.52)
+      .. controls (-0.95,9.9) and (-0.35,10.28) ..
+    (0,10.12)
+      .. controls (0.35,10.28) and (0.95,9.9) ..
+    (1.65,9.52)
+      .. controls (2.65,8.95) and (3.35,9.15) ..
+    (4.2,9.75)
+      .. controls (4.8,10.2) and (5.6,10.15) ..
+    (6.8,9.6);
+
+  \draw[mred, line width=1.1pt]
+    (-6.8,9.42)
+      .. controls (-5.65,9.96) and (-4.82,10.0) ..
+    (-4.18,9.52)
+      .. controls (-3.4,8.96) and (-2.66,8.76) ..
+    (-1.66,9.3)
+      .. controls (-0.92,9.68) and (-0.32,10.0) ..
+    (0,9.85)
+      .. controls (0.32,10.0) and (0.92,9.68) ..
+    (1.66,9.3)
+      .. controls (2.66,8.76) and (3.4,8.96) ..
+    (4.18,9.52)
+      .. controls (4.82,10.0) and (5.65,9.96) ..
+    (6.8,9.42);
+
+  %% canopy nodes and links
+  \foreach \x/\y in {-5.5/9.88,-3.8/9.45,-2.05/9.3,0/9.86,2.05/9.3,3.8/9.45,5.5/9.88} {
+    \fill[gold] (\x,\y) circle (0.09);
+  }
+  \draw[gold, line width=0.7pt]
+    (-5.5,9.88) -- (-3.8,9.45) -- (-2.05,9.3) -- (0,9.86) -- (2.05,9.3) -- (3.8,9.45) -- (5.5,9.88);
+
+  %% side standards
+  \draw[gold, line width=1.1pt] (-5.6,7.95) -- (-6.35,0.8);
+  \draw[gold, line width=1.1pt] (5.6,7.95) -- (6.35,0.8);
+  \fill[ink] (-5.95,7.55) -- (-4.7,7.55) -- (-4.45,6.0) -- (-5.7,6.0) -- cycle;
+  \fill[mred] (5.95,7.55) -- (4.7,7.55) -- (4.45,6.0) -- (5.7,6.0) -- cycle;
+  \draw[gold, line width=0.95pt] (-5.95,7.55) -- (-4.7,7.55) -- (-4.45,6.0) -- (-5.7,6.0) -- cycle;
+  \draw[gold, line width=0.95pt] (5.95,7.55) -- (4.7,7.55) -- (4.45,6.0) -- (5.7,6.0) -- cycle;
+  \node[font=\latinfont\fontsize{24pt}{24pt}\selectfont, text=cream] at (-5.18,6.67) {λ};
+  \draw[cream, line width=0.85pt]
+    (5.04,7.2) -- (5.42,6.66) -- (5.04,6.12)
+    (5.56,6.12) -- (5.94,6.12);
+
+  %% outer pavilion curtains
+  \draw[ink, line width=1.15pt]
+    (-5.55,9.55)
+      .. controls (-6.35,8.5) and (-6.55,7.2) ..
+    (-6.08,5.95)
+      .. controls (-5.75,5.08) and (-5.52,4.15) ..
+    (-5.82,2.95)
+      .. controls (-6.08,1.92) and (-5.98,0.88) ..
+    (-5.35,-0.1);
+  \draw[ink, line width=1.15pt]
+    (5.55,9.55)
+      .. controls (6.35,8.5) and (6.55,7.2) ..
+    (6.08,5.95)
+      .. controls (5.75,5.08) and (5.52,4.15) ..
+    (5.82,2.95)
+      .. controls (6.08,1.92) and (5.98,0.88) ..
+    (5.35,-0.1);
+  \draw[mred, line width=0.8pt, opacity=0.9]
+    (-5.2,9.0) .. controls (-5.95,7.8) and (-5.8,6.55) .. (-5.3,5.25)
+    (-5.3,5.25) .. controls (-4.9,4.2) and (-4.85,3.25) .. (-5.25,1.85);
+  \draw[mred, line width=0.8pt, opacity=0.9]
+    (5.2,9.0) .. controls (5.95,7.8) and (5.8,6.55) .. (5.3,5.25)
+    (5.3,5.25) .. controls (4.9,4.2) and (4.85,3.25) .. (5.25,1.85);
+
+  %% central collar ring
+  \draw[gold, line width=1.0pt]
+    (0,4.7) circle (3.5);
+  \foreach \a in {0,15,...,345} {
+    \fill[gold] (\a:3.5) circle (0.07);
+  }
+
+  %% main shield
+  \path[fill=cream, draw=ink, line width=1.5pt]
+    (-4.1,6.9)
+      .. controls (-4.15,4.0) and (-3.72,1.7) ..
+    (-2.35,-0.25)
+      .. controls (-1.45,-1.58) and (-0.45,-2.55) ..
+    (0,-2.92)
+      .. controls (0.45,-2.55) and (1.45,-1.58) ..
+    (2.35,-0.25)
+      .. controls (3.72,1.7) and (4.15,4.0) ..
+    (4.1,6.9) -- cycle;
+
+  \begin{scope}
+  \clip
+    (-4.1,6.9)
+      .. controls (-4.15,4.0) and (-3.72,1.7) ..
+    (-2.35,-0.25)
+      .. controls (-1.45,-1.58) and (-0.45,-2.55) ..
+    (0,-2.92)
+      .. controls (0.45,-2.55) and (1.45,-1.58) ..
+    (2.35,-0.25)
+      .. controls (3.72,1.7) and (4.15,4.0) ..
+    (4.1,6.9) -- cycle;
+
+  %% quarters
+  \fill[ink]   (-4.2,2.15) rectangle (0.0,7.05);
+  \fill[cream] (0.0,2.15) rectangle (4.2,7.05);
+  \fill[cream] (-4.2,-3.0) rectangle (0.0,2.15);
+  \fill[mred]  (0.0,-3.0) rectangle (4.2,2.15);
+
+  \draw[hair, line width=0.5pt, opacity=0.6] (-4.1,2.15) -- (4.1,2.15);
+  \draw[hair, line width=0.5pt, opacity=0.6] (0,6.9) -- (0,-2.92);
+
+  %% upper-left lambda chamber
+  \node[font=\latinfont\fontsize{68pt}{68pt}\selectfont, text=cream] at (-2.05,4.62) {λ};
+  \draw[gold, line width=0.6pt]
+    (-3.1,5.95) -- (-2.1,5.1)
+    (-1.0,5.95) -- (-2.0,5.1);
+
+  %% upper-right prompt chamber with star
+  \draw[ink, line width=1.15pt]
+    (1.0,5.55) -- (1.85,4.8) -- (1.0,4.05)
+    (2.15,4.05) -- (3.05,4.05);
+  \fill[mred] (2.92,5.85) -- (3.12,5.43) -- (3.57,5.37) -- (3.25,5.08)
+             -- (3.32,4.63) -- (2.92,4.82) -- (2.51,4.63) -- (2.58,5.08)
+             -- (2.27,5.37) -- (2.72,5.43) -- cycle;
+
+  %% lower-left code ledger
+  \draw[ink, line width=1.0pt] (-3.45,1.05) rectangle (-1.05,-1.05);
+  \draw[ink, line width=0.85pt] (-2.98,1.05) -- (-2.98,-1.05);
+  \draw[ink, line width=0.75pt, opacity=0.85]
+    (-2.7,0.48) -- (-1.38,0.48)
+    (-2.7,0.02) -- (-1.38,0.02)
+    (-2.7,-0.44) -- (-1.74,-0.44);
+  \fill[mred] (-3.53,0.42) rectangle (-3.14,-0.22);
+
+  %% lower-right trusted mesh
+  \fill[cream] (1.1,0.88) circle (0.15);
+  \fill[cream] (3.0,0.45) circle (0.15);
+  \fill[cream] (2.35,-0.95) circle (0.15);
+  \fill[cream] (1.42,-1.42) circle (0.15);
+  \draw[cream, line width=0.95pt]
+    (1.1,0.88) -- (3.0,0.45) -- (2.35,-0.95) -- (1.42,-1.42) -- (1.1,0.88)
+    (1.1,0.88) -- (2.35,-0.95)
+    (3.0,0.45) -- (1.42,-1.42);
+  \draw[gold, line width=0.75pt]
+    (3.25,0.42) -- (3.72,0.42)
+    (3.2,0.18) -- (3.62,-0.05)
+    (3.2,0.66) -- (3.62,0.9);
+
+  %% center inescutcheon
+  \fill[cream] (0,2.15) circle (1.62);
+  \draw[ink, line width=1.1pt] (0,2.15) circle (1.62);
+  \draw[mred, line width=0.75pt, opacity=0.8, dash pattern=on 2pt off 2pt] (0,2.15) circle (1.28);
+  \draw[ink, line width=1.15pt]
+    (0,3.1) -- (0.92,2.15) -- (0,1.2) -- (-0.92,2.15) -- cycle;
+  \draw[ink, line width=1.1pt]
+    (-0.48,2.15) -- (0.48,2.15)
+    (0,1.66) -- (0,2.64);
+  \fill[mred] (0,2.15) circle (0.12);
+
+  \end{scope}
+
+  %% redraw shield outline
+  \path[fill=none, draw=ink, line width=1.5pt]
+    (-4.1,6.9)
+      .. controls (-4.15,4.0) and (-3.72,1.7) ..
+    (-2.35,-0.25)
+      .. controls (-1.45,-1.58) and (-0.45,-2.55) ..
+    (0,-2.92)
+      .. controls (0.45,-2.55) and (1.45,-1.58) ..
+    (2.35,-0.25)
+      .. controls (3.72,1.7) and (4.15,4.0) ..
+    (4.1,6.9) -- cycle;
+
+  %% side vector braces under canopy
+  \draw[hair, line width=0.65pt]
+    (-4.85,6.2) -- (-3.95,6.0) -- (-3.28,5.2) -- (-2.6,4.8);
+  \draw[hair, line width=0.65pt]
+    (4.85,6.2) -- (3.95,6.0) -- (3.28,5.2) -- (2.6,4.8);
+
+  %% motto ribbon
+  \path[fill=cream, draw=hair, line width=0.9pt]
+    (-5.05,-4.1)
+      .. controls (-3.55,-4.48) and (-1.58,-4.58) ..
+    (0,-4.38)
+      .. controls (1.58,-4.58) and (3.55,-4.48) ..
+    (5.05,-4.1)
+      .. controls (3.62,-3.8) and (1.56,-3.7) ..
+    (0,-3.88)
+      .. controls (-1.56,-3.7) and (-3.62,-3.8) ..
+    (-5.05,-4.1) -- cycle;
+  \node[font=\latinfont\fontsize{12pt}{13pt}\selectfont, text=ink] at (0,-4.05)
+    {Query \,•\, Bind \,•\, Broadcast};
+  \node[font=\latinfont\fontsize{8.4pt}{9.8pt}\selectfont, text=hair, opacity=0.82] at (0,-4.8)
+    {bounded engine under trusted network geometry};
+
+\end{tikzpicture}
+\end{document}

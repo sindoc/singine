@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<spec:publication xmlns:spec="https://markupware.com/ns/spec"
+                  xml:id="singine-spec"
+                  project="singine"
+                  title="Singine and SilkPage Technical Specifications"
+                  edition="2026-03"
+                  owner="MarkupWare"
+                  doclet="../core/target/javadoc-xml/doclet.xml"
+                  manpages-dir="../man">
+  <spec:abstract>
+    Singine and SilkPage share a publication-oriented architecture grounded in XML,
+    Java, HTTP, and standards-compliant metadata. This manifest drives generated
+    reference material from JVM xmldoclet output, manual command specifications,
+    curated architectural notes, and reproducible command paths for template
+    generation, Logseq-to-Org/XML conversion, and server/snapshot inspection.
+  </spec:abstract>
+
+  <spec:project name="singine" homepage="https://singine.markupware.com/" kind="engine">
+    <spec:description>
+      Singine is an execution engine that governs secure activities across CLI,
+      JVM, AI, transport, and publication workflows.
+    </spec:description>
+    <spec:stack>
+      <spec:technology>XML</spec:technology>
+      <spec:technology>Java</spec:technology>
+      <spec:technology>Rust</spec:technology>
+      <spec:technology>Go</spec:technology>
+      <spec:technology>C</spec:technology>
+      <spec:technology>HTTP</spec:technology>
+      <spec:technology>Apache httpd</spec:technology>
+      <spec:technology>nginx</spec:technology>
+      <spec:technology>dynamic DNS</spec:technology>
+      <spec:technology>Node.js</spec:technology>
+      <spec:technology>Electron</spec:technology>
+      <spec:technology>service workers</spec:technology>
+      <spec:technology>Ant</spec:technology>
+      <spec:technology>Groovy</spec:technology>
+      <spec:technology>Python</spec:technology>
+      <spec:technology>Clojure</spec:technology>
+    </spec:stack>
+  </spec:project>
+
+  <spec:project name="silkpage" homepage="https://silkpage.markupware.com/" kind="publisher">
+    <spec:description>
+      SilkPage is an XML-first publishing framework whose XSLT and RDF layers
+      provide the presentation and metadata model for the generated specifications.
+    </spec:description>
+  </spec:project>
+
+  <spec:publication-feeds>
+    <spec:feed type="doap" href="https://silkpage.markupware.com/doap.rdf"/>
+    <spec:feed type="doap" href="https://silkpage.markupware.com/core/doap.rdf"/>
+    <spec:feed type="doap" href="https://silkpage.markupware.com/docs/doap.rdf"/>
+    <spec:feed type="web" href="https://www.markupware.com/"/>
+    <spec:feed type="web" href="https://silkpage.markupware.com/"/>
+    <spec:feed type="web" href="https://www.dixite.com/"/>
+  </spec:publication-feeds>
+
+  <spec:manpages>
+    <spec:page name="singine" section="1" purpose="Top-level command index">
+      <spec:see-also>singine-man</spec:see-also>
+      <spec:see-also>singine-find</spec:see-also>
+      <spec:see-also>singine-mv</spec:see-also>
+      <spec:see-also>singine-activity</spec:see-also>
+    </spec:page>
+    <spec:page name="singine-find" section="1" purpose="Find files about a topic">
+      <spec:see-also>singine</spec:see-also>
+      <spec:see-also>singine-mv</spec:see-also>
+      <spec:see-also>singine-activity</spec:see-also>
+    </spec:page>
+    <spec:page name="singine-mv" section="1" purpose="Move stdin-delivered paths to a destination directory">
+      <spec:see-also>singine</spec:see-also>
+      <spec:see-also>singine-find</spec:see-also>
+      <spec:see-also>singine-transfer</spec:see-also>
+    </spec:page>
+    <spec:page name="singine-activity" section="1" purpose="Inspect activity taxonomy and execution semantics">
+      <spec:see-also>singine</spec:see-also>
+      <spec:see-also>singine-find</spec:see-also>
+      <spec:see-also>singine-mv</spec:see-also>
+    </spec:page>
+    <spec:page name="singine-install" section="1" purpose="Install launchers and toolchain dependencies">
+      <spec:see-also>singine</spec:see-also>
+      <spec:see-also>singine-man</spec:see-also>
+    </spec:page>
+    <spec:page name="singine-template" section="1" purpose="Generate Singine-aware Maven and npm project templates">
+      <spec:see-also>singine</spec:see-also>
+      <spec:see-also>singine-man</spec:see-also>
+      <spec:see-also>singine-logseq</spec:see-also>
+    </spec:page>
+    <spec:page name="singine-logseq" section="1" purpose="Discover Logseq graphs and export them to Org and XML">
+      <spec:see-also>singine</spec:see-also>
+      <spec:see-also>singine-server</spec:see-also>
+      <spec:see-also>singine-snapshot</spec:see-also>
+    </spec:page>
+    <spec:page name="singine-server" section="1" purpose="Inspect the local Singine HTTP surface and publication/runtime boundary">
+      <spec:see-also>singine</spec:see-also>
+      <spec:see-also>singine-snapshot</spec:see-also>
+      <spec:see-also>singine-logseq</spec:see-also>
+    </spec:page>
+    <spec:page name="singine-snapshot" section="1" purpose="Persist a runtime, server, git, docker, and Logseq snapshot">
+      <spec:see-also>singine</spec:see-also>
+      <spec:see-also>singine-server</spec:see-also>
+      <spec:see-also>singine-logseq</spec:see-also>
+    </spec:page>
+    <spec:page name="singine-domain" section="1"
+               purpose="Domain layer — master data, events, transactions, and reference data over SQLite">
+      <spec:see-also>singine</spec:see-also>
+      <spec:see-also>singine-model</spec:see-also>
+      <spec:see-also>singine-policy</spec:see-also>
+      <spec:see-also>singine-decide</spec:see-also>
+      <spec:see-also>singine-bridge</spec:see-also>
+    </spec:page>
+  </spec:manpages>
+
+  <spec:java-modules>
+    <spec:module name="humble-idp-java"
+                 root="humble-idp/java"
+                 doclet="humble-idp/java/target/javadoc-xml/javadoc.xml"
+                 docbook="humble-idp/java/docs/domain-book.xml"
+                 purpose="Java domain layer — master data, events, transactions, reference data">
+      <spec:package name="idp.domain"              purpose="Core Collibra-aligned value types and enumerations"/>
+      <spec:package name="idp.domain.masterdata"   purpose="Master data interfaces and records"/>
+      <spec:package name="idp.domain.events"       purpose="Append-only domain event log"/>
+      <spec:package name="idp.domain.transactions" purpose="Governed transaction lifecycle"/>
+      <spec:package name="idp.domain.refdata"      purpose="Reference data code sets"/>
+      <spec:package name="idp.db"                  purpose="SQLite persistence implementations"/>
+    </spec:module>
+  </spec:java-modules>
+</spec:publication>

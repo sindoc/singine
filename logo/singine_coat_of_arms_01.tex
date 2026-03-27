@@ -1,0 +1,215 @@
+%% singine_coat_of_arms_01.tex — Hacker Heraldry
+%%
+%% A coat of arms for Singine:
+%% - central escutcheon: the bounded engine
+%% - lambda: computation and reduction
+%% - prompt rune: the operator surface
+%% - linked nodes: trusted mesh and announced capability
+%% - beacon crest: broadcast into the trusted network
+%%
+%% The tone is old lab / wizard-book / early hacker heraldry,
+%% but the composition is original and tied to Singine's system model.
+%%
+%% compile: xelatex singine_coat_of_arms_01.tex
+
+\documentclass[border=24pt]{standalone}
+\usepackage{tikz}
+\usepackage{fontspec}
+\usepackage{bidi}
+\usepackage{xcolor}
+
+\newfontfamily\latinfont[
+  Path=/System/Library/Fonts/,
+  Ligatures=TeX, Kerning=On, Numbers=OldStyle
+]{SFNS.ttf}
+
+\newfontfamily\persianfont[
+  Path=/Users/skh/Library/Fonts/,
+  Script=Arabic, Language=Persian,
+  Ligatures=Required, RawFeature={+mark}
+]{Amiri-Regular.ttf}
+
+\definecolor{ink}  {rgb}{0.08,0.08,0.10}
+\definecolor{mred} {rgb}{0.52,0.11,0.07}
+\definecolor{cream}{rgb}{0.97,0.96,0.94}
+\definecolor{hair} {rgb}{0.35,0.30,0.28}
+\definecolor{gold}{rgb}{0.74,0.61,0.39}
+
+\pagecolor{cream}
+
+\begin{document}
+\begin{tikzpicture}[x=1cm,y=1cm,line cap=round,line join=round]
+
+  %% ── Title lockup ─────────────────────────────────────────────
+  \node[font=\latinfont\fontsize{38pt}{40pt}\selectfont,
+        text=ink] at (0,11.9) {Singine};
+  \node[font=\persianfont\fontsize{24pt}{28pt}\selectfont,
+        text=mred] at (0,10.95) {\RL{سین‌جین}};
+
+  %% ── Crest: beacon / capability broadcast ────────────────────
+  \draw[ink, line width=1.2pt]
+    (0,10.1) -- (0,9.2);
+  \fill[mred] (0,10.35) -- (-0.28,9.8) -- (0,9.5) -- (0.28,9.8) -- cycle;
+  \draw[gold, line width=0.9pt, opacity=0.9]
+    (-0.9,9.95) -- (-0.32,9.82)
+    (0.9,9.95) -- (0.32,9.82)
+    (-0.72,9.46) -- (-0.22,9.62)
+    (0.72,9.46) -- (0.22,9.62);
+  \fill[ink] (0,9.1) circle (0.08);
+
+  %% ── Torse / lab ribbon ──────────────────────────────────────
+  \foreach \x/\c in {-2.1/ink,-1.4/mred,-0.7/ink,0/mred,0.7/ink,1.4/mred,2.1/ink} {
+    \fill[\c] (\x,8.85) ellipse (0.55 and 0.18);
+  }
+
+  %% ── Shield outline ──────────────────────────────────────────
+  \path[fill=cream, draw=ink, line width=1.6pt]
+    (-4.6,8.2)
+      .. controls (-4.6,5.0) and (-4.0,2.2) ..
+    (-2.6,-0.1)
+      .. controls (-1.5,-1.9) and (-0.55,-2.95) ..
+    (0,-3.45)
+      .. controls (0.55,-2.95) and (1.5,-1.9) ..
+    (2.6,-0.1)
+      .. controls (4.0,2.2) and (4.6,5.0) ..
+    (4.6,8.2) -- cycle;
+
+  \begin{scope}
+  \clip
+    (-4.6,8.2)
+      .. controls (-4.6,5.0) and (-4.0,2.2) ..
+    (-2.6,-0.1)
+      .. controls (-1.5,-1.9) and (-0.55,-2.95) ..
+    (0,-3.45)
+      .. controls (0.55,-2.95) and (1.5,-1.9) ..
+    (2.6,-0.1)
+      .. controls (4.0,2.2) and (4.6,5.0) ..
+    (4.6,8.2) -- cycle;
+
+  %% ── Quarters ────────────────────────────────────────────────
+  \fill[ink]   (-4.7,2.35) rectangle (0.0,8.3);
+  \fill[cream] (0.0,2.35) rectangle (4.7,8.3);
+  \fill[cream] (-4.7,-3.6) rectangle (0.0,2.35);
+  \fill[mred]  (0.0,-3.6) rectangle (4.7,2.35);
+
+  \draw[hair, line width=0.55pt, opacity=0.55] (-4.6,2.35) -- (4.6,2.35);
+  \draw[hair, line width=0.55pt, opacity=0.55] (0,8.2) -- (0,-3.45);
+
+  %% ── Quarter I: lambda calculus / engine ─────────────────────
+  \node[font=\latinfont\fontsize{72pt}{72pt}\selectfont,
+        text=cream] at (-2.25,5.25) {λ};
+  \draw[gold, line width=0.6pt, opacity=0.9]
+    (-3.45,6.85) -- (-2.35,5.95)
+    (-1.0,6.85) -- (-2.05,5.95);
+
+  %% ── Quarter II: operator prompt / command rune ──────────────
+  \draw[ink, line width=1.25pt]
+    (1.15,6.35) -- (2.05,5.55) -- (1.15,4.75);
+  \draw[ink, line width=1.25pt]
+    (2.35,4.75) -- (3.25,4.75);
+  \fill[mred] (3.18,6.45) -- (3.42,5.96) -- (3.92,5.9) -- (3.56,5.55)
+             -- (3.64,5.05) -- (3.18,5.28) -- (2.73,5.05) -- (2.8,5.55)
+             -- (2.45,5.9) -- (2.95,5.96) -- cycle;
+  \node[font=\latinfont\fontsize{9pt}{10pt}\selectfont,
+        text=hair, opacity=0.8] at (2.25,3.75) {operator surface};
+
+  %% ── Quarter III: indexed knowledge / codebook ───────────────
+  \draw[ink, line width=1.1pt]
+    (-3.5,1.15) rectangle (-1.1,-0.95);
+  \draw[ink, line width=0.9pt]
+    (-3.05,1.15) -- (-3.05,-0.95);
+  \draw[ink, line width=0.8pt, opacity=0.85]
+    (-2.78,0.52) -- (-1.45,0.52)
+    (-2.78,0.06) -- (-1.45,0.06)
+    (-2.78,-0.4) -- (-1.82,-0.4);
+  \fill[mred] (-3.58,0.45) rectangle (-3.16,-0.25);
+  \node[font=\latinfont\fontsize{9pt}{10pt}\selectfont,
+        text=hair, opacity=0.8] at (-2.3,-1.45) {local knowledge};
+
+  %% ── Quarter IV: trusted network / capability mesh ───────────
+  \fill[cream] (1.2,0.95) circle (0.17);
+  \fill[cream] (3.3,0.5) circle (0.17);
+  \fill[cream] (2.55,-1.0) circle (0.17);
+  \fill[cream] (1.45,-1.45) circle (0.17);
+  \draw[cream, line width=1.0pt]
+    (1.2,0.95) -- (3.3,0.5)
+    (1.2,0.95) -- (2.55,-1.0)
+    (2.55,-1.0) -- (3.3,0.5)
+    (1.45,-1.45) -- (2.55,-1.0)
+    (1.45,-1.45) -- (1.2,0.95);
+  \draw[gold, line width=0.8pt, opacity=0.9]
+    (3.58,0.45) -- (4.08,0.45)
+    (3.52,0.2) -- (3.96,-0.05)
+    (3.52,0.7) -- (3.96,0.95);
+  \node[font=\latinfont\fontsize{9pt}{10pt}\selectfont,
+        text=cream, opacity=0.85] at (2.28,-2.15) {trusted mesh};
+
+  %% ── Inescutcheon: bounded core ──────────────────────────────
+  \fill[cream] (0,2.35) circle (1.78);
+  \draw[ink, line width=1.2pt] (0,2.35) circle (1.78);
+  \draw[mred, line width=0.8pt, opacity=0.8, dash pattern=on 2pt off 2pt]
+    (0,2.35) circle (1.42);
+  \draw[ink, line width=1.25pt]
+    (0,3.38) -- (1.02,2.35) -- (0,1.32) -- (-1.02,2.35) -- cycle;
+  \draw[ink, line width=1.25pt]
+    (-0.55,2.35) -- (0.55,2.35)
+    (0,1.78) -- (0,2.92);
+  \fill[mred] (0,2.35) circle (0.13);
+
+  \end{scope}
+
+  %% Re-draw shield border after clipped fills
+  \path[fill=none, draw=ink, line width=1.6pt]
+    (-4.6,8.2)
+      .. controls (-4.6,5.0) and (-4.0,2.2) ..
+    (-2.6,-0.1)
+      .. controls (-1.5,-1.9) and (-0.55,-2.95) ..
+    (0,-3.45)
+      .. controls (0.55,-2.95) and (1.5,-1.9) ..
+    (2.6,-0.1)
+      .. controls (4.0,2.2) and (4.6,5.0) ..
+    (4.6,8.2) -- cycle;
+
+  %% Mantling / cloth
+  \draw[mred, line width=1.3pt]
+    (-4.55,7.85)
+      .. controls (-6.1,7.0) and (-6.0,5.8) ..
+    (-5.55,4.45)
+      .. controls (-5.15,4.0) and (-4.95,3.5) ..
+    (-5.55,2.8)
+      .. controls (-6.05,2.2) and (-5.95,1.35) ..
+    (-4.75,0.55);
+  \draw[mred, line width=1.3pt]
+    (4.55,7.85)
+      .. controls (6.1,7.0) and (6.0,5.8) ..
+    (5.55,4.45)
+      .. controls (5.15,4.0) and (4.95,3.5) ..
+    (5.55,2.8)
+      .. controls (6.05,2.2) and (5.95,1.35) ..
+    (4.75,0.55);
+  \draw[hair, line width=0.5pt, opacity=0.7]
+    (-4.15,7.35) .. controls (-5.05,6.55) and (-5.05,5.6) .. (-4.5,4.6);
+  \draw[hair, line width=0.5pt, opacity=0.7]
+    (4.15,7.35) .. controls (5.05,6.55) and (5.05,5.6) .. (4.5,4.6);
+
+  %% Motto ribbon
+  \path[fill=cream, draw=hair, line width=0.9pt]
+    (-4.75,-4.45)
+      .. controls (-3.45,-4.85) and (-1.45,-4.95) ..
+    (0,-4.75)
+      .. controls (1.45,-4.95) and (3.45,-4.85) ..
+    (4.75,-4.45)
+      .. controls (3.35,-4.12) and (1.35,-4.0) ..
+    (0,-4.18)
+      .. controls (-1.35,-4.0) and (-3.35,-4.12) ..
+    (-4.75,-4.45) -- cycle;
+  \node[font=\latinfont\fontsize{12pt}{13pt}\selectfont,
+        text=ink] at (0,-4.42)
+        {Query \,•\, Bound \,•\, Announce};
+
+  %% Fine caption
+  \node[font=\latinfont\fontsize{8.6pt}{10pt}\selectfont,
+        text=hair, opacity=0.8] at (0,-5.15)
+        {agent shell · service bridge · trusted capability broadcast};
+\end{tikzpicture}
+\end{document}

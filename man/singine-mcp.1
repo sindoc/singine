@@ -1,0 +1,220 @@
+.TH SINGINE-MCP 1 "2026-03-25" "singine 0.2.0" "User Commands"
+.SH NAME
+singine mcp \- Singine Collibra MCP server for querying governed domain data
+.SH SYNOPSIS
+.B singine mcp
+.I COMMAND
+.RI [ OPTIONS ]
+.SH DESCRIPTION
+.B singine mcp
+exposes Collibra-ingested domain data, AI session records, and governance
+decisions as tools and resources via the Model Context Protocol (MCP).
+MCP clients \(em including Claude Desktop and Claude Code \(em can connect to
+this server to query the Singine domain layer without direct SQL access.
+.PP
+The server is backed by a single SQLite database that is expected to contain
+the Singine domain schema (seven tables) along with optional AI session and
+AI access governance tables.  A seed command is provided for testing.
+.SH COMMANDS
+.TP
+.B seed
+Populate a SQLite database with representative Collibra domain data.
+Creates all schema tables and inserts business terms, capabilities,
+processes, data categories, domain events, governed transactions,
+reference data, AI sessions, and governance decisions.
+.nf
+singine mcp seed [--db PATH]
+.fi
+.TP
+.B serve
+Start the MCP server.  The default transport is
+.B stdio
+(used by MCP clients that launch the server as a subprocess).
+Use
+.B --transport sse
+to expose an HTTP/SSE endpoint instead.
+.nf
+singine mcp serve [--db PATH] [--transport stdio|sse] [--port N]
+.fi
+.SH OPTIONS
+.TP
+.B --db PATH
+Path to the SQLite database.
+Defaults to
+.IR /tmp/singine-mcp-test.db .
+For production use, point this at the shared Singine domain database.
+.TP
+.B --transport stdio|sse
+MCP transport.
+.B stdio
+(default) is used by Claude Desktop and Claude Code, which launch the
+server as a managed subprocess and communicate over stdin/stdout.
+.B sse
+starts an HTTP server (suitable for browser-based clients or debugging).
+.TP
+.B --port N
+HTTP port for the SSE transport.  Default:
+.BR 8765 .
+.SH MCP TOOLS
+The following tools are registered with the MCP server and available to
+any connected MCP client.
+.SS Domain \(em master data
+.TP
+.B list_assets(asset_type, limit)
+List Collibra assets.
+.I asset_type
+is one of
+.BR BusinessTerm ,
+.BR BusinessCapability ,
+.BR BusinessProcess ,
+.BR DataCategory .
+.TP
+.B find_assets(query, asset_type, limit)
+Case-insensitive substring search across name, definition, and description.
+.TP
+.B get_asset(asset_type, asset_id)
+Retrieve a single asset by primary key UUID.
+.SS Domain \(em events
+.TP
+.B list_domain_events(event_type, subject_id, limit)
+List domain events ordered newest-first.
+Filterable by event type (e.g.\&
+.BR CATALOG_ASSET_REGISTERED )
+or subject UUID.
+.SS Domain \(em transactions
+.TP
+.B list_transactions(tx_type, status, limit)
+List governed transactions (policy evaluations, mandate grants, decisions).
+.SS Domain \(em reference data
+.TP
+.B list_reference_data(code_set, limit)
+List reference data entries.
+.I code_set
+values include
+.B scenario-codes
+and
+.BR iata-codes .
+.SS AI sessions
+.TP
+.B list_ai_sessions(limit)
+List recent AI sessions across all providers.
+.TP
+.B get_ai_session(session_id)
+Return full session bundle: metadata, all interactions, and mandates.
+.SS Governance
+.TP
+.B list_governance_approvals(ai_system, limit)
+List AI access governance approvals.
+.TP
+.B list_governance_decisions(ai_system, decision, limit)
+List governance decisions (APPROVED / REJECTED).
+.TP
+.B get_invocation_summary(ai_system)
+Summarise AI invocation counters.
+.SS Cross-cutting
+.TP
+.B execute_sql(sql, params)
+Execute a SELECT-only SQL query.  All other statement types are rejected.
+.TP
+.B list_tables()
+List all tables present in the database.
+.TP
+.B describe_table(table_name)
+Return column information for a table (via PRAGMA table_info).
+.SH MCP RESOURCES
+.TP
+.B singine://domain/schema
+JSON summary of all tables and their columns.
+.TP
+.B singine://domain/capabilities
+All business capabilities as JSON.
+.TP
+.B singine://domain/terms
+All business terms as JSON.
+.SH DATABASE SCHEMA
+The expected schema mirrors the Java
+.I SchemaBootstrap
+class in the Humble IDP domain layer.  The key tables are:
+.IP \(bu 2
+.B business_term
+\(em canonical glossary definitions (Collibra BusinessTerm assets)
+.IP \(bu 2
+.B business_capability
+\(em organisational capabilities aligned to Collibra
+.IP \(bu 2
+.B business_process
+\(em processes linked to capabilities
+.IP \(bu 2
+.B data_category
+\(em hierarchical data classification (Personal, Financial, Operational, \&...)
+.IP \(bu 2
+.B domain_event
+\(em append-only event log (CATALOG_ASSET_REGISTERED, AI_SESSION_STARTED, \&...)
+.IP \(bu 2
+.B governed_transaction
+\(em policy evaluations, mandate grants, governance decisions
+.IP \(bu 2
+.B reference_data_entry
+\(em code-sets: scenario-codes, iata-codes, \&...
+.PP
+Optional tables (gracefully absent if not present):
+.IP \(bu 2
+.B ai_sessions, ai_interactions, ai_mandates
+\(em governed AI session records (see
+.BR singine-ai (1))
+.IP \(bu 2
+.B approvals, decisions, invocation_counters
+\(em AI access governance (see
+.BR singine-policy (1))
+.SH CONFIGURE AS CLAUDE CODE MCP SERVER
+Add an entry to your Claude Code MCP configuration
+.RI ( claude_desktop_config.json
+or the Claude Code settings file):
+.nf
+{
+  "mcpServers": {
+    "singine-collibra": {
+      "command": "singine",
+      "args": ["mcp", "serve", "--db", "/path/to/domain.db"],
+      "env": {
+        "SINGINE_ROOT": "/private/tmp/singine-personal-os"
+      }
+    }
+  }
+}
+.fi
+.SH EXAMPLES
+.nf
+# Seed the default test database and inspect it.
+singine mcp seed
+sqlite3 /tmp/singine-mcp-test.db ".tables"
+
+# Seed a custom database.
+singine mcp seed --db ~/.singine/domain.db
+
+# Start the server in stdio mode (used by Claude Desktop / Claude Code).
+singine mcp serve --db ~/.singine/domain.db
+
+# Start the server in SSE mode for debugging.
+singine mcp serve --db /tmp/singine-mcp-test.db --transport sse --port 8765
+
+# Query via the CLI (smoke test without an MCP client).
+python -c "
+from singine.mcp.server import configure, list_assets
+configure('/tmp/singine-mcp-test.db')
+for a in list_assets('BusinessCapability'):
+    print(a['name'])
+"
+.fi
+.SH ENVIRONMENT
+.TP
+.B SINGINE_ROOT
+Root directory of the Singine personal OS tree.  Used by the server to
+locate policy files and registries when running alongside other singine
+commands.
+.SH SEE ALSO
+.BR singine (1),
+.BR singine-domain (1),
+.BR singine-ai (1),
+.BR singine-policy (1),
+.BR singine-bridge (1)

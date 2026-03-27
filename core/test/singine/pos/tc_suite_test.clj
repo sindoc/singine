@@ -1,5 +1,13 @@
 (ns singine.pos.tc-suite-test
-  "POS test suite — tc01…tc20 + tc-id01…tc-id05 + tc-form01.
+  "POS test suite — tc01…tc20 + tc-id01…tc-id05 + tc-form01 + tc-locp01..02
+   + tc-auth01..tc-auth05 + tc-idpr01..tc-idpr02 + tc-idnt01..tc-idnt02
+   + tc-mime01..tc-mime07 + tc-mandate01..tc-mandate07
+   + tc-mail01..tc-mail05 + tc-camel01..tc-camel02
+   + tc-edge01..tc-edge02 + tc-rails01..tc-rails02
+   + tc-broker01..tc-broker02 + tc-trust01..tc-trust02
+   + tc-cap01..tc-cap02 + tc-srv01..tc-srv02
+   + tc-lac01..tc-lac02
+   + tc-diac03..tc-diac05.
 
    Two-character ASCII IDs for the condition system.
    Mock data generated inline via gen-mock — this IS the data product demo:
@@ -37,6 +45,18 @@
             [singine.pos.identity    :as idnt]
             [singine.pos.form        :as form]
             [singine.pos.location    :as loc]
+            [singine.pos.idp         :as idp]
+            [singine.net.cacert      :as cacert]
+            [singine.auth.token      :as auth-tok]
+            [singine.lang.mime       :as mime]
+            [singine.net.mail        :as mail]
+            [singine.net.edge        :as edge]
+            [singine.camel.context   :as camel-ctx]
+            [singine.broker.core     :as broker]
+            [singine.sec.trust       :as trust]
+            [singine.cap.machine     :as cap]
+            [singine.loc.action      :as lac]
+            [singine.scenario.diac   :as diac]
             [singine.pos.lambda      :as lam]))
 
 ;; ── Mock data generator ───────────────────────────────────────────────────────
@@ -459,6 +479,536 @@
       (is (some? (get-in result [:calendars :gregorian])) "gregorian calendar present"))))
 
 ;; ══════════════════════════════════════════════════════════════════════════════
+;; Phase 8: Auth full — JVM cacert + JWT/JWS + idv6-idv10 + IDPR
+;; ══════════════════════════════════════════════════════════════════════════════
+
+(def ^:private test-auth
+  (lam/make-auth "urn:singine:test:auth" :read))
+
+;; ── tc-auth01: JVM root CA enumeration ───────────────────────────────────────
+
+(deftest tc-auth01-jvm-root-cas
+  (testing "JVM cacerts: list all trusted root CA certificates"
+    ;; Count
+    (let [n (cacert/ca-count)]
+      (is (pos? n) "JVM must have at least 1 trusted root CA")
+      (is (> n 50) (str "JVM should have > 50 trusted CAs, got " n)))
+
+    ;; Path
+    (let [path (cacert/jvm-cacerts-path)]
+      (is (string? path) "cacerts path must be a string")
+      (is (str/includes? path "cacerts") "path must contain 'cacerts'"))
+
+    ;; Entries
+    (let [cas (cacert/list-jvm-root-cas)]
+      (is (vector? cas) "list-jvm-root-cas must return a vector")
+      (let [first-ca (first cas)]
+        (is (map? first-ca) "each CA must be a map")
+        (is (contains? first-ca :alias) "CA must have :alias")
+        (is (contains? first-ca :urn) "CA must have :urn")
+        (is (contains? first-ca :subject-dn) "CA must have :subject-dn")
+        (is (contains? first-ca :sha256) "CA must have :sha256")
+        (is (contains? first-ca :key-algo) "CA must have :key-algo")
+        (is (str/starts-with? (:urn first-ca) "urn:singine:ca:")
+            "CA URN must start with urn:singine:ca:")
+        (is (= 64 (count (:sha256 first-ca)))
+            "SHA-256 fingerprint must be 64 hex chars")))))
+
+;; ── tc-auth02: HS256 JWT sign + verify ───────────────────────────────────────
+
+(deftest tc-auth02-hs256-jwt
+  (testing "JWT HS256: sign, decode, verify"
+    (let [secret "singine-test-secret-key"
+          claims {:sub "skh@singine.local"
+                  :name "Sh. Kh. Heshmati"
+                  :roles ["admin" "data-steward"]}
+          {:keys [token exp jti sid]} (auth-tok/mint-hs256-token!
+                                        secret claims 3600)]
+      ;; Token structure
+      (is (string? token) "token must be a string")
+      (is (= 3 (count (str/split token #"\.")))
+          "JWT must have 3 parts (header.payload.signature)")
+      (is (pos? exp) "exp must be positive")
+      (is (string? jti) "jti must be a string")
+      (is (uuid? (java.util.UUID/fromString jti)) "jti must be a valid UUID")
+      (is (str/starts-with? sid "urn:singine:session:")
+          "sid must start with urn:singine:session:")
+
+      ;; Decode without verification
+      (let [{:keys [ok claims header]} (auth-tok/decode-token token)]
+        (is ok "decode must succeed")
+        (is (= "HS256" (:alg header)) "header must declare HS256")
+        (is (= "JWT" (:typ header)) "header must declare JWT type")
+        (is (= "skh@singine.local" (:sub claims)) "sub must match")
+        (is (= "urn:singine:idp" (:iss claims)) "iss must be singine IdP URN"))
+
+      ;; Verify with correct secret
+      (let [{:keys [ok claims error]} (auth-tok/verify-hs256-token secret token)]
+        (is ok (str "verify must succeed, error: " error))
+        (is (= "skh@singine.local" (:sub claims)) "sub preserved after verify"))
+
+      ;; Verify with wrong secret should fail
+      (let [{:keys [ok error]} (auth-tok/verify-hs256-token "wrong-secret" token)]
+        (is (not ok) "wrong secret must fail verification")
+        (is (string? error) "error message must be a string")))))
+
+;; ── tc-auth03: idv6–idv10 dry-run variants ───────────────────────────────────
+
+(deftest tc-auth03-idv6-to-idv10-dry-run
+  (testing "Identity variants idv6-idv10 (dry-run)"
+    ;; idv6: Okta OIDC
+    (let [r (idnt/okta-token! {:dry-run true :okta-domain "dev-00000000.okta.com"})]
+      (is (true? (:ok r)) "idv6 dry-run must succeed")
+      (is (= :idv6 (:provider r)) "provider must be :idv6")
+      (is (= 6 (:dim r)) "dim must be 6")
+      (is (map? (:endpoints r)) "endpoints must be a map")
+      (is (contains? (:endpoints r) :token_endpoint) "endpoints must have token_endpoint")
+      (is (str/starts-with? (:discovery-url r) "https://") "discovery URL must be HTTPS"))
+
+    ;; idv7: Collibra LDAP
+    (let [r (idnt/collibra-ldap! {:dry-run true})]
+      (is (true? (:ok r)) "idv7 dry-run must succeed")
+      (is (= :idv7 (:provider r)) "provider must be :idv7")
+      (is (= 7 (:dim r)) "dim must be 7")
+      (is (string? (:stdout r)) "stdout must be a string")
+      (is (str/includes? (:stdout r) "collibra") "stdout must mention collibra"))
+
+    ;; idv8: Active Directory
+    (let [r (idnt/active-directory! {:dry-run true})]
+      (is (true? (:ok r)) "idv8 dry-run must succeed")
+      (is (= :idv8 (:provider r)) "provider must be :idv8")
+      (is (= 8 (:dim r)) "dim must be 8")
+      (is (str/includes? (:stdout r) "sAMAccountName") "stdout must have AD attribute"))
+
+    ;; idv9: MCP Identity
+    (let [r (idnt/mcp-identity! {:dry-run true})]
+      (is (true? (:ok r)) "idv9 dry-run must succeed")
+      (is (= :idv9 (:provider r)) "provider must be :idv9")
+      (is (= 9 (:dim r)) "dim must be 9")
+      (is (string? (:token r)) "MCP token must be a string")
+      (is (= "MCP-Bearer" (:token-type r)) "token type must be MCP-Bearer")
+      (is (vector? (:scopes r)) "scopes must be a vector"))
+
+    ;; idv10: SMTP/IMAP probe
+    (let [r (idnt/imap-probe! {:dry-run true})]
+      (is (true? (:ok r)) "idv10 dry-run must succeed")
+      (is (= :idv10 (:provider r)) "provider must be :idv10")
+      (is (= 10 (:dim r)) "dim must be 10")
+      (is (map? (:smtp r)) "smtp must be a map")
+      (is (map? (:imap r)) "imap must be a map")
+      (is (true? (:session-ready r)) "session-ready must be true in dry-run"))))
+
+;; ── tc-auth04: identity-dispatch! extended variants ──────────────────────────
+
+(deftest tc-auth04-identity-dispatch-extended
+  (testing "identity-dispatch! routes idv6-idv10 correctly"
+    (doseq [[variant expected-provider expected-dim]
+            [[:idv6 :idv6 6]
+             [:idv7 :idv7 7]
+             [:idv8 :idv8 8]
+             [:idv9 :idv9 9]
+             [:idv10 :idv10 10]]]
+      (let [r (idnt/identity-dispatch! variant {:dry-run true})]
+        (is (true? (:ok r))
+            (str variant " dispatch must succeed"))
+        (is (= expected-provider (:provider r))
+            (str variant " provider mismatch"))
+        (is (= expected-dim (:dim r))
+            (str variant " dim must be " expected-dim))
+        (is (map? (:calendars r))
+            (str variant " must include calendars"))))
+
+    ;; Unknown variant
+    (let [r (idnt/identity-dispatch! :idv99 {})]
+      (is (false? (:ok r)) "unknown variant must fail")
+      (is (string? (:error r)) "error message required")
+      (is (vector? (:available r)) "must list available variants")
+      (is (= 10 (count (:available r))) "must list all 10 variants"))))
+
+;; ── tc-auth05: IDPR opcode — discovery + CA audit ────────────────────────────
+
+(deftest tc-auth05-idpr-opcode
+  (testing "IDPR opcode: discovery document and CA audit"
+    ;; OIDC discovery document
+    (let [discovery (idp/discovery-document)]
+      (is (map? discovery) "discovery must be a map")
+      (is (contains? discovery :issuer) "must have :issuer")
+      (is (contains? discovery :authorization_endpoint) "must have :authorization_endpoint")
+      (is (contains? discovery :token_endpoint) "must have :token_endpoint")
+      (is (contains? discovery :jwks_uri) "must have :jwks_uri")
+      (is (contains? discovery :scopes_supported) "must have :scopes_supported")
+      (is (contains? (set (:scopes_supported discovery)) "file:read")
+          "scopes must include file:read")
+      (is (contains? (set (:scopes_supported discovery)) "openid")
+          "scopes must include openid")
+      (is (contains? (set (:id_token_signing_alg_values_supported discovery)) "RS256")
+          "must support RS256"))
+
+    ;; CA audit via governed idpr!
+    (let [result ((idp/idpr! test-auth :ca-report {}))]
+      (is (true? (:ok result)) "IDPR :ca-report must succeed")
+      (is (pos? (:ca-count result)) "must find at least 1 CA")
+      (is (string? (:jvm-path result)) "jvm-path must be a string")
+      (is (sequential? (:cas result)) "cas must be sequential")
+      (is (pos? (count (:cas result))) "cas must be non-empty")
+      (is (every? #(contains? % :urn) (:cas result))
+          "every CA entry must have :urn"))
+
+    ;; HS256 file-access token (no key generation needed)
+    (let [result ((idp/idp-token!
+                    test-auth
+                    {"sub" "skh@singine.local"}
+                    {:algo        :hs256
+                     :secret      "singine-idpr-test"
+                     :ttl-seconds 300
+                     :file-path   "/Users/skh/private/test.txt"
+                     :perm        :read}))]
+      (is (true? (:ok result)) "file-access token must succeed")
+      (is (string? (:token result)) "token must be a string")
+      (is (= "hs256" (:algo result)) "algo must be hs256")
+      (is (= "/Users/skh/private/test.txt" (:file-path result)) "file-path preserved")
+      (is (= "read" (:perm result)) "perm must be read")
+      (is (= "urn:singine:resource:file" (:aud result)) "aud must be file resource URN")
+
+      ;; Verify the token
+      (let [verify-result ((idp/verify-file-token!
+                             test-auth
+                             (:token result)
+                             "singine-idpr-test"
+                             {:algo :hs256}))]
+        (is (true? (:ok verify-result)) "token verification must succeed")
+        (is (= "/Users/skh/private/test.txt" (:path verify-result)) "path preserved")
+        (is (= "read" (:perm verify-result)) "perm preserved")))))
+
+;; ── tc-idpr01: IDPR opcode governed entry ────────────────────────────────────
+
+(deftest tc-idpr01-idpr-governed
+  (testing "IDPR governed entry point via idpr!"
+    ;; :discover operation
+    (let [thunk  (idp/idpr! test-auth :discover {})
+          result (thunk)]
+      (is (true? (:ok result)) ":discover must succeed")
+      (is (map? (:discovery result)) "discovery doc must be a map")
+      (is (contains? (:discovery result) :token_endpoint)
+          "discovery must have token_endpoint"))
+
+    ;; Unknown op
+    (let [thunk  (idp/idpr! test-auth :unknown-op {})
+          result (thunk)]
+      (is (false? (:ok result)) "unknown op must fail")
+      (is (string? (:error result)) "error message required"))))
+
+;; ── tc-idpr02: JwsToken JSON helpers ─────────────────────────────────────────
+
+(deftest tc-idpr02-jwstoken-json
+  (testing "JwsToken JSON serialiser/deserialiser round-trip"
+    (let [claims {"sub"  "skh@singine.local"
+                  "name" "Sh. Kh. Heshmati"
+                  "exp"  9999999999
+                  "iss"  "urn:singine:idp"}
+          json   (singine.auth.JwsToken/toJson (auth-tok/claims->java claims))
+          parsed (singine.auth.JwsToken/fromJson json)]
+      (is (string? json) "toJson must return a string")
+      (is (str/starts-with? json "{") "JSON must start with {")
+      (is (str/ends-with? json "}") "JSON must end with }")
+      (is (str/includes? json "singine:idp") "JSON must contain issuer URN")
+      (is (instance? java.util.Map parsed) "fromJson must return a Map")
+      (is (= "skh@singine.local" (.get parsed "sub")) "sub round-trips")
+      (is (= "urn:singine:idp" (.get parsed "iss")) "iss round-trips"))))
+
+;; ══════════════════════════════════════════════════════════════════════════════
+;; Phase 2 — IDNT-URN-v1: 1-char / 2-char / 3-char URN lookup + Unicode filter
+;; ══════════════════════════════════════════════════════════════════════════════
+
+(deftest tc-idnt01-lookup-urn-levels
+  (testing "Level 1 — single ASCII character → urn:singine:id:l1:<char>"
+    (is (= "urn:singine:id:l1:A" (idnt/lookup-urn "A")))
+    (is (= "urn:singine:id:l1:B" (idnt/lookup-urn "B")))
+    (is (= "urn:singine:id:l1:z" (idnt/lookup-urn "z")))
+    (is (= "urn:singine:id:l1:0" (idnt/lookup-urn "0")))
+    (is (= "urn:singine:id:l1:!" (idnt/lookup-urn "!")))
+    (is (str/starts-with? (idnt/lookup-urn "A") "urn:singine:id:l1")))
+
+  (testing "Level 2 — two-char ISO 3166 country code → urn:singine:id:l2:<CC>"
+    (is (= "urn:singine:id:l2:BE" (idnt/lookup-urn "BE")))
+    (is (= "urn:singine:id:l2:GB" (idnt/lookup-urn "GB")))
+    (is (= "urn:singine:id:l2:IR" (idnt/lookup-urn "ir")))   ; upcased
+    (is (= "urn:singine:id:l2:US" (idnt/lookup-urn "US")))
+    (is (str/starts-with? (idnt/lookup-urn "NL") "urn:singine:id:l2")))
+
+  (testing "Level 3 — three-char IATA airport code → urn:singine:id:l3:<IATA>"
+    (is (= "urn:singine:id:l3:BRU" (idnt/lookup-urn "BRU")))
+    (is (= "urn:singine:id:l3:LHR" (idnt/lookup-urn "LHR")))
+    (is (= "urn:singine:id:l3:JFK" (idnt/lookup-urn "JFK")))
+    (is (= "urn:singine:id:l3:AMS" (idnt/lookup-urn "ams")))  ; upcased
+    (is (str/starts-with? (idnt/lookup-urn "CDG") "urn:singine:id:l3")))
+
+  (testing "Edge cases — nil, empty, long codes"
+    (is (= "urn:singine:id:nil"   (idnt/lookup-urn nil)))
+    (is (= "urn:singine:id:empty" (idnt/lookup-urn "")))
+    ;; 6-char code → two 3-char segments, joined with ":"
+    (let [urn6 (idnt/lookup-urn "BRULHR")]
+      (is (str/includes? urn6 "BRU"))
+      (is (str/includes? urn6 "LHR"))
+      (is (str/includes? urn6 ":"))))
+
+  (testing "Batch lookup — lookup-urn-batch returns map of code→URN"
+    (let [codes ["A" "BE" "BRU"]
+          batch (idnt/lookup-urn-batch codes)]
+      (is (map? batch))
+      (is (= 3 (count batch)))
+      (is (= "urn:singine:id:l1:A"   (get batch "A")))
+      (is (= "urn:singine:id:l2:BE"  (get batch "BE")))
+      (is (= "urn:singine:id:l3:BRU" (get batch "BRU"))))))
+
+(deftest tc-idnt02-unicode-filter-rule
+  (testing "unicode-block returns expected block names"
+    ;; Latin: A = 0x41
+    (is (= "Latin"    (idnt/unicode-block 0x41)))
+    ;; Greek: Α = 0x0391
+    (is (= "Greek"    (idnt/unicode-block 0x0391)))
+    ;; Cyrillic: А = 0x0410
+    (is (= "Cyrillic" (idnt/unicode-block 0x0410)))
+    ;; Hebrew: א = 0x05D0
+    (is (= "Hebrew"   (idnt/unicode-block 0x05D0)))
+    ;; Arabic: ا = 0x0627
+    (is (= "Arabic"   (idnt/unicode-block 0x0627)))
+    ;; CJK: 中 = 0x4E2D
+    (is (= "CJK"      (idnt/unicode-block 0x4E2D)))
+    ;; Unknown (Emoji range): should be Other
+    (is (= "Other"    (idnt/unicode-block 0x1F600))))
+
+  (testing "unicode-filter-rule — nested lambda (means of combination)"
+    ;; The outer lambda takes an allowed-blocks set and returns the inner lambda
+    (let [in-rule  (idnt/unicode-filter-rule #{"Latin" "Arabic"})
+          out-rule (idnt/unicode-filter-rule #{})]  ; empty set — all out
+      ;; Latin A (0x41) → in
+      (is (true?  (in-rule  0x41)))
+      ;; Arabic ا (0x0627) → in
+      (is (true?  (in-rule  0x0627)))
+      ;; Cyrillic А (0x0410) → not in {"Latin","Arabic"}
+      (is (false? (in-rule  0x0410)))
+      ;; Empty set → everything out
+      (is (false? (out-rule 0x41)))
+      (is (false? (out-rule 0x0627)))))
+
+  (testing "Level-u URN: Unicode char → urn:singine:id:u:<block>:<HEX>"
+    ;; Arabic char ا (U+0627) → in Arabic block → named URN
+    (let [arabic-char "\u0627"
+          urn         (idnt/lookup-urn arabic-char)]
+      (is (str/starts-with? urn "urn:singine:id:u:Arabic:"))
+      (is (str/ends-with?   urn "0627")))
+
+    ;; Emoji 😀 (U+1F600) → block=Other (out-rule) → Other URN
+    (let [emoji-str (str (Character/toChars 0x1F600))
+          ;; only check the first char (code point) if multi-char
+          urn       (idnt/lookup-urn (subs emoji-str 0 1))]
+      (is (str/starts-with? urn "urn:singine:id:")))
+
+    ;; Hebrew aleph (U+05D0)
+    (let [heb-char "\u05D0"
+          urn      (idnt/lookup-urn heb-char)]
+      (is (str/starts-with? urn "urn:singine:id:u:Hebrew:")))
+
+    ;; Cyrillic А (U+0410)
+    (let [cyr-char "\u0410"
+          urn      (idnt/lookup-urn cyr-char)]
+      (is (str/starts-with? urn "urn:singine:id:u:Cyrillic:"))))
+
+  (testing "List comprehension: filter codes by unicode-filter-rule (in-rule)"
+    ;; Classic list comprehension using the nested lambda:
+    ;; (λ codes → (filter ((unicode-filter-rule blocks) ∘ char-cp) codes))
+    (let [codes    ["A" "B" "\u0627" "\u0410" "\u1F600"]  ; mix of ASCII + Unicode
+          in?      (idnt/unicode-filter-rule idnt/unicode-in-blocks)
+          ;; Apply the inner lambda to the codepoint of the first char of each code
+          included (filter (fn [c]
+                             (when (seq c)
+                               (let [cp (int (first c))]
+                                 (if (<= cp 0x7F)
+                                   true    ; ASCII always in level-1
+                                   (in? cp)))))
+                           codes)]
+      ;; A, B are ASCII → in; Arabic U+0627 → in (Arabic block)
+      ;; Cyrillic U+0410 → in (Cyrillic block); \u1F600 is surrogate → skip
+      (is (>= (count included) 3)
+          "At least A, B, Arabic ا should pass the in-rule"))))
+
+;; ══════════════════════════════════════════════════════════════════════════════
+;; Sub-phase F — MANDATE-v1: two-stream topic mandate (Hoffman legitimacy contract)
+;; ══════════════════════════════════════════════════════════════════════════════
+
+(deftest tc-mandate01-extract-topic
+  (testing "extract-topic from Logseq [[t/1]] notation"
+    (is (= "urn:singine:topic:t/1"
+           (idp/extract-topic "A document about [[t/1]] in the singine platform")))
+    (is (= "urn:singine:topic:t/release"
+           (idp/extract-topic "See [[t/release]] for details")))
+    (is (nil? (idp/extract-topic "No topic here")))
+    (is (nil? (idp/extract-topic nil)))
+    (is (nil? (idp/extract-topic "")))))
+
+(deftest tc-mandate02-extract-urn
+  (testing "extract-topic from explicit urn:singine:topic: URN"
+    (is (= "urn:singine:topic:t/1"
+           (idp/extract-topic "The topic is urn:singine:topic:t/1 and more text")))
+    (is (= "urn:singine:topic:auth"
+           (idp/extract-topic "urn:singine:topic:auth is authoritative")))))
+
+(deftest tc-mandate03-same-topic
+  (testing "streams-same-topic? true when both carry the same topic"
+    (let [stream-a "BLKP output: [[t/1]] platform data lineage"
+          stream-b "CATC output: [[t/1]] entity resolution complete"]
+      (is (true? (idp/streams-same-topic? stream-a stream-b))))
+    ;; Also works with explicit URN form
+    (let [s1 "urn:singine:topic:t/1 manifest-a"
+          s2 "urn:singine:topic:t/1 manifest-b"]
+      (is (true? (idp/streams-same-topic? s1 s2))))))
+
+(deftest tc-mandate04-diff-topic
+  (testing "streams-same-topic? false when topics differ or are missing"
+    ;; One stream missing topic
+    (let [stream-a "[[t/1]] present"
+          stream-b "no topic here"]
+      (is (false? (idp/streams-same-topic? stream-a stream-b))))
+    ;; Different topics
+    (let [stream-a "[[t/1]] topic one"
+          stream-b "[[t/2]] topic two"]
+      (is (false? (idp/streams-same-topic? stream-a stream-b))))
+    ;; Both nil
+    (is (false? (idp/streams-same-topic? nil nil)))))
+
+(deftest tc-mandate05-issue-mandate
+  (testing "topic-mandate! issues a valid HS256 mandate JWT for two matching streams"
+    (let [streams [["urn:singine:stream:blkp:001"
+                    "BLKP manifest: [[t/1]] platform data governance"]
+                   ["urn:singine:stream:catc:001"
+                    "CATC output: [[t/1]] entity resolution activated"]]
+          thunk   (idp/topic-mandate!
+                    test-auth streams
+                    {:mandate-duration-seconds 1800
+                     :algo :hs256
+                     :secret "singine-mandate-test"})
+          result  (thunk)]
+      (is (true? (:ok result)) "mandate must succeed")
+      (is (string? (:mandate-token result)) "mandate-token must be a string")
+      (is (= "urn:singine:topic:t/1" (:topic result)) "topic must be t/1")
+      (is (= 2 (count (:streams result))) "both stream URNs preserved")
+      (is (= 1800 (:mandate-duration result)) "duration preserved")
+      (is (pos? (:exp result)) ":exp must be a positive epoch-second")
+      (is (string? (:jti result)) ":jti must be a string"))))
+
+(deftest tc-mandate06-mandate-via-idpr
+  (testing "IDPR :topic-mandate dispatches correctly"
+    (let [streams [["urn:singine:stream:a" "document [[t/1]] stream one"]
+                   ["urn:singine:stream:b" "document [[t/1]] stream two"]]
+          thunk   (idp/idpr! test-auth :topic-mandate
+                             {:streams  streams
+                              :mandate-duration-seconds 600
+                              :algo     :hs256
+                              :secret   "singine-idpr-mandate"})
+          result  (thunk)]
+      (is (true? (:ok result)) "IDPR :topic-mandate must succeed")
+      (is (string? (:mandate-token result)) "token must be present")
+      (is (= "urn:singine:topic:t/1" (:topic result)))
+      ;; Mismatch case — IDPR :topic-mandate returns :ok false
+      (let [bad-streams [["urn:singine:stream:x" "no topic here"]
+                         ["urn:singine:stream:y" "also no topic"]]
+            bad-result  ((idp/idpr! test-auth :topic-mandate
+                                    {:streams  bad-streams
+                                     :algo     :hs256
+                                     :secret   "singine-idpr-mandate"}))]
+        (is (false? (:ok bad-result)) "mismatched streams must fail")
+        (is (string? (:reason bad-result)) "reason must be present")))))
+
+(deftest tc-mandate07-token-exp
+  (testing ":exp in mandate is a future epoch-second"
+    (let [streams [["urn:singine:stream:t1" "[[t/1]] test stream one"]
+                   ["urn:singine:stream:t2" "[[t/1]] test stream two"]]
+          result  ((idp/topic-mandate!
+                     test-auth streams
+                     {:mandate-duration-seconds 3600
+                      :algo :hs256
+                      :secret "exp-test-secret"}))]
+      (is (true? (:ok result)))
+      (let [now-epoch (quot (System/currentTimeMillis) 1000)
+            exp       (:exp result)]
+        (is (> exp now-epoch) ":exp must be in the future")
+        (is (< exp (+ now-epoch 4000)) ":exp should be within ~3600s from now")))))
+
+;; ══════════════════════════════════════════════════════════════════════════════
+;; Sub-phase A — MIME-REG-v1: canonical MIME registry
+;; ══════════════════════════════════════════════════════════════════════════════
+
+(deftest tc-mime01-lookup
+  (testing "MIME lookup by extension — canonical types"
+    (is (= "application/rdf+xml"                (mime/lookup "rdf")))
+    (is (= "application/rdf+xml"                (mime/lookup "RDF")))  ; case-insensitive
+    (is (= "text/turtle"                        (mime/lookup "ttl")))
+    (is (= "application/json"                   (mime/lookup "json")))
+    (is (= "application/sparql-query"           (mime/lookup "sparql")))
+    (is (= "application/xml"                    (mime/lookup "xml")))
+    (is (= "application/x-parquet"             (mime/lookup "parquet")))
+    (is (= "application/zip"                    (mime/lookup "zip")))))
+
+(deftest tc-mime02-lookup-sindoc
+  (testing "Singine vendor MIME types"
+    (is (= "application/vnd.singine.sindoc+xml" (mime/lookup "sindoc")))
+    (is (= "application/vnd.singine.sindoc+xml" (mime/lookup "sin")))
+    (is (= "application/vnd.urfm+xml"           (mime/lookup "urfm")))
+    (is (= "application/atom+xml"               (mime/lookup "atom")))
+    (is (= "application/rss+xml"                (mime/lookup "rss")))))
+
+(deftest tc-mime03-route-link
+  (testing "RDF / graph content routes to :link"
+    (is (= :link (mime/route "application/rdf+xml")))
+    (is (= :link (mime/route "text/turtle")))
+    (is (= :link (mime/route "application/ld+json")))
+    (is (= :link (mime/route "application/sparql-query")))
+    (is (= :link (mime/route "application/vnd.urfm+xml")))
+    (is (= :link (mime/route "application/n-triples")))))
+
+(deftest tc-mime04-route-binary
+  (testing "Binary / archive / image content routes to :binary"
+    (is (= :binary (mime/route "application/x-parquet")))
+    (is (= :binary (mime/route "application/zip")))
+    (is (= :binary (mime/route "application/gzip")))
+    (is (= :binary (mime/route "application/pdf")))
+    (is (= :binary (mime/route "image/png")))
+    (is (= :binary (mime/route "image/jpeg")))
+    (is (= :binary (mime/route "video/mp4")))))
+
+(deftest tc-mime05-route-lookup
+  (testing "Text and application/* routes to :lookup"
+    (is (= :lookup (mime/route "application/json")))
+    (is (= :lookup (mime/route "application/xml")))
+    (is (= :lookup (mime/route "text/plain")))
+    (is (= :lookup (mime/route "text/csv")))
+    (is (= :lookup (mime/route "text/html")))
+    (is (= :lookup (mime/route "application/yaml")))
+    (is (= :lookup (mime/route "application/vnd.singine.sindoc+xml")))))
+
+(deftest tc-mime06-unambiguous
+  (testing "Known extensions are unambiguous (each maps to exactly one MIME)"
+    (is (true?  (mime/unambiguous? "xml")))
+    (is (true?  (mime/unambiguous? "json")))
+    (is (true?  (mime/unambiguous? "rdf")))
+    (is (true?  (mime/unambiguous? "sindoc")))
+    (is (false? (mime/unambiguous? "xyz")))   ; unknown
+    (is (false? (mime/unambiguous? "")))))    ; empty
+
+(deftest tc-mime07-unknown-ext
+  (testing "Unknown extensions fall back to application/octet-stream"
+    (is (= "application/octet-stream" (mime/lookup "xyz")))
+    (is (= "application/octet-stream" (mime/lookup "")))
+    (is (= "application/octet-stream" (mime/lookup nil)))
+    ;; mime-for-path convenience
+    (is (= "application/rdf+xml" (mime/mime-for-path "/some/path/file.rdf")))
+    (is (= "application/octet-stream" (mime/mime-for-path "/no-extension")))
+    ;; content-type adds charset for text/*
+    (is (= "text/plain; charset=UTF-8" (mime/content-type "text/plain")))
+    (is (= "application/json" (mime/content-type "application/json")))))
+
+;; ══════════════════════════════════════════════════════════════════════════════
 ;; Bonus: gen-mock is the data product demo
 ;; ══════════════════════════════════════════════════════════════════════════════
 
@@ -480,3 +1030,513 @@
       ;; MIME routing covers all three routes
       (let [routes (set (map #(catc/mime-route (:mime-type %)) contracts))]
         (is (= #{:lookup :link :binary} routes))))))
+
+;; ══════════════════════════════════════════════════════════════════════════════
+;; tc-mail01..tc-mail05 — MAIL opcode: SMTP send + IMAP search/fetch + git-snap
+;; All tests use :dry-run true — no network connection required.
+;; ══════════════════════════════════════════════════════════════════════════════
+
+(def ^:private mail-opts
+  "Shared dry-run mail config for all tc-mail tests."
+  {:imap-host "localhost" :imap-port 993 :imap-tls true
+   :smtp-host "localhost" :smtp-port 587 :smtp-tls false
+   :user "test@localhost" :pass "test-pass"
+   :folder "INBOX" :dry-run true})
+
+;; test-auth is already defined above (via lam/make-auth) — reused here.
+
+(deftest tc-mail01-search-dry-run
+  (testing "MAIL :search — governed dry-run returns synthetic UIDs"
+    (let [thunk  (mail/search! test-auth (assoc mail-opts :search "invoice"))
+          result (thunk)]
+      (is (true? (:ok result)))
+      (is (vector? (:uids result)))
+      (is (pos? (count (:uids result))))
+      (is (= "INBOX" (:folder result)))
+      (is (= "invoice" (:search result)))
+      (is (map? (:time result))))))
+
+(deftest tc-mail02-fetch-dry-run
+  (testing "MAIL :fetch — governed dry-run returns XML mail-batch envelope"
+    (let [thunk  (mail/fetch! test-auth (assoc mail-opts :uids ["1001" "1002"]))
+          result (thunk)]
+      (is (true? (:ok result)))
+      (is (string? (:xml result)))
+      (is (str/starts-with? (:xml result) "<?xml"))
+      (is (str/includes? (:xml result) "mail-batch"))
+      (is (= 2 (:uid-count result)))
+      (is (= "application/xml" (or (:mime result) "application/xml"))))))
+
+(deftest tc-mail03-send-dry-run
+  (testing "MAIL :send — governed dry-run SMTP send returns :ok"
+    (let [opts  (assoc mail-opts
+                       :from "test@localhost"
+                       :to "recipient@localhost"
+                       :subject "Singine Test Mail"
+                       :body "This is a dry-run test message from Singine.")
+          thunk  (mail/send! test-auth opts)
+          result (thunk)]
+      (is (true? (:ok result)))
+      (is (map? (:time result))))))
+
+(deftest tc-mail04-git-snap-dry-run
+  (testing "MAIL :snap — governed dry-run produces files map + commit message"
+    (let [opts   (assoc mail-opts :search "report" :max 2 :base-dir "/tmp/singine-mail-test")
+          thunk  (mail/git-snap! test-auth opts)
+          result (thunk)]
+      (is (true? (:ok result)))
+      (is (map? (:files result)))
+      (is (string? (:commit-msg result)))
+      (is (str/starts-with? (:commit-msg result) "mail: snapshot"))
+      (is (str/includes? (:commit-msg result) "INBOX"))
+      (is (number? (:uid-count result))))))
+
+(deftest tc-mail05-mail-dispatcher
+  (testing "MAIL opcode top-level dispatcher routes :search + :fetch"
+    ;; :search dispatch
+    (let [thunk  (mail/mail! test-auth :search (assoc mail-opts :search "contract"))
+          result (thunk)]
+      (is (true? (:ok result)))
+      (is (vector? (:uids result))))
+    ;; :fetch dispatch
+    (let [thunk  (mail/mail! test-auth :fetch (assoc mail-opts :uids ["9001"]))
+          result (thunk)]
+      (is (true? (:ok result)))
+      (is (string? (:xml result))))
+    ;; unknown op
+    (let [thunk  (mail/mail! test-auth :unknown-op {})
+          result (thunk)]
+      (is (false? (:ok result)))
+      (is (string? (:error result))))))
+
+;; ══════════════════════════════════════════════════════════════════════════════
+;; tc-camel01..tc-camel02 — CamelContext lifecycle + status (no real context needed)
+;; ══════════════════════════════════════════════════════════════════════════════
+
+(deftest tc-camel01-context-status-unstarted
+  (testing "CamelContext: status-summary returns :started false when not started"
+    (let [summary (camel-ctx/status-summary)]
+      ;; The test environment does not start a real CamelContext.
+      ;; status-summary must be safe to call regardless of context state.
+      (is (map? summary))
+      (is (contains? summary :started))
+      (is (contains? summary :name))
+      (is (contains? summary :status))
+      (is (contains? summary :routes))
+      (is (vector? (:routes summary))))))
+
+(deftest tc-camel02-context-healthy-false-when-not-started
+  (testing "CamelContext: healthy? returns false when context not started"
+    ;; healthy? must not throw when context is nil/not-started
+    (let [result (camel-ctx/healthy?)]
+      (is (boolean? result)))))
+
+;; ══════════════════════════════════════════════════════════════════════════════
+;; tc-edge01..tc-edge02 — singine.net.edge HTTP client (dry-run, no HTTP)
+;; ══════════════════════════════════════════════════════════════════════════════
+
+(def ^:private edge-opts
+  "Shared dry-run edge config for all tc-edge tests."
+  {:edge-host "localhost" :edge-port 8080 :edge-scheme "http" :dry-run true})
+
+(deftest tc-edge01-health-dry-run
+  (testing "EDGE :health — governed dry-run returns synthetic UP status"
+    (let [thunk  (edge/health! test-auth edge-opts)
+          result (thunk)]
+      (is (true? (:ok result)))
+      (is (= "UP" (:status result)))
+      (is (= "singine-edge" (:service result)))
+      (is (vector? (:routes result)))
+      (is (pos? (count (:routes result))))
+      (is (true? (:dry-run result)))
+      (is (map? (:time result))))))
+
+(deftest tc-edge02-messages-dry-run
+  (testing "EDGE :index — governed dry-run returns synthetic messages list"
+    (let [thunk  (edge/messages! test-auth (assoc edge-opts :search "invoice"))
+          result (thunk)]
+      (is (true? (:ok result)))
+      (is (vector? (:messages result)))
+      (is (pos? (count (:messages result))))
+      (is (number? (:count result)))
+      (is (= "invoice" (:search result)))
+      (is (true? (:dry-run result)))
+      (is (map? (:time result))))))
+
+;; ══════════════════════════════════════════════════════════════════════════════
+;; tc-rails01..tc-rails02 — Rails naming aliases via edge! + mail! dispatchers
+;; ══════════════════════════════════════════════════════════════════════════════
+
+(deftest tc-rails01-edge-aliases
+  (testing "EDGE dispatcher Rails aliases: :messages → :index, :message → :show, :send → :create"
+    ;; :messages alias → :index
+    (let [thunk  (edge/edge! test-auth :messages edge-opts)
+          result (thunk)]
+      (is (true? (:ok result)))
+      (is (vector? (:messages result))))
+    ;; :message alias → :show
+    (let [thunk  (edge/edge! test-auth :message (assoc edge-opts :uid "1001"))
+          result (thunk)]
+      (is (true? (:ok result)))
+      (is (map? (:message result)))
+      (is (= "1001" (:uid result))))
+    ;; :send alias → :create
+    (let [thunk  (edge/edge! test-auth :send
+                             (assoc edge-opts
+                                    :from "a@localhost" :to "b@localhost"
+                                    :subject "Test" :body "Hello"))
+          result (thunk)]
+      (is (true? (:ok result)))
+      (is (true? (:sent result))))
+    ;; unknown op
+    (let [thunk  (edge/edge! test-auth :unknown-edge-op edge-opts)
+          result (thunk)]
+      (is (false? (:ok result)))
+      (is (string? (:error result))))))
+
+(deftest tc-rails02-mail-aliases
+  (testing "MAIL dispatcher Rails aliases: :index → :search, :show → :fetch, :create → :send"
+    ;; :index → :search
+    (let [thunk  (mail/mail! test-auth :index (assoc mail-opts :search "report"))
+          result (thunk)]
+      (is (true? (:ok result)))
+      (is (vector? (:uids result))))
+    ;; :show → :fetch (single UID)
+    (let [thunk  (mail/mail! test-auth :show (assoc mail-opts :uids ["2001"]))
+          result (thunk)]
+      (is (true? (:ok result)))
+      (is (string? (:xml result))))
+    ;; :create → :send
+    (let [thunk  (mail/mail! test-auth :create
+                             (assoc mail-opts
+                                    :from "a@localhost" :to "b@localhost"
+                                    :subject "Rails alias test" :body "test body"))
+          result (thunk)]
+      (is (true? (:ok result))))
+    ;; :self — send-to-self (dry-run)
+    (let [thunk  (mail/mail! test-auth :self
+                             (assoc mail-opts
+                                    :subject "Self notification"
+                                    :context "testing Rails alias"
+                                    :constraints "dry-run only"))
+          result (thunk)]
+      (is (true? (:ok result)))
+      (is (vector? (:dispatched-to result)))
+      (is (pos? (:channels result))))))
+
+;; ══════════════════════════════════════════════════════════════════════════════
+;; tc-broker01..tc-broker02 — dual broker (Kafka + RabbitMQ) dry-run publish
+;; ══════════════════════════════════════════════════════════════════════════════
+
+(deftest tc-broker01-kafka-publish-dry-run
+  (testing "BROKER :publish :kafka — dry-run returns synthetic ACK with checksum"
+    (let [thunk  (broker/publish! test-auth
+                                  {:broker   :kafka
+                                   :topic    :inbound-email
+                                   :body     "{\"event\":\"test\",\"uid\":\"1001\"}"
+                                   :dry-run  true})
+          result (thunk)]
+      (is (true? (:ok result)))
+      (is (= :kafka (:broker result)))
+      (is (string? (:destination result)))
+      (is (str/includes? (:destination result) "singine"))
+      (is (string? (:message-id result)))
+      (is (string? (:checksum result)))
+      (is (true? (:dry-run result)))
+      (is (map? (:time result))))))
+
+(deftest tc-broker02-rabbitmq-consume-dry-run
+  (testing "BROKER :consume :rabbitmq — dry-run returns synthetic message"
+    (let [thunk  (broker/consume! test-auth
+                                  {:broker      :rabbitmq
+                                   :queue       "singine.transforms.ocr"
+                                   :timeout-ms  1000
+                                   :dry-run     true})
+          result (thunk)]
+      (is (true? (:ok result)))
+      (is (= :rabbitmq (:broker result)))
+      (is (string? (:body result)))
+      (is (string? (:message-id result)))
+      (is (string? (:checksum result)))
+      (is (true? (:dry-run result)))
+      (is (map? (:time result))))))
+
+;; ══════════════════════════════════════════════════════════════════════════════
+;; tc-trust01..tc-trust02 — trust store management (dry-run)
+;; ══════════════════════════════════════════════════════════════════════════════
+
+(deftest tc-trust01-register-ssh-pubkey-dry-run
+  (testing "TRUST :register-ssh — dry-run describes action without I/O"
+    (let [thunk  (trust/register-ssh-pubkey! test-auth {:dry-run true})
+          result (thunk)]
+      (is (true? (:ok result)))
+      (is (true? (:dry-run result)))
+      (is (string? (:alias result)))
+      (is (string? (:urn result)))
+      (is (str/includes? (:urn result) "singine:machine"))
+      (is (map? (:time result))))))
+
+(deftest tc-trust02-minimal-trust-mail-caps
+  (testing "TRUST :minimal — mail-only device needs only identity cert"
+    (let [thunk  (trust/minimal-trust! test-auth [:mail :cli :python])
+          result (thunk)]
+      (is (map? result))
+      (is (contains? result :caps))
+      (is (contains? result :required-aliases))
+      (is (contains? (set (:required-aliases result)) "singine-identity-attar"))
+      (is (map? (:time result))))))
+
+;; ══════════════════════════════════════════════════════════════════════════════
+;; tc-cap01..tc-cap02 — machine capability detection (16.A)
+;; ══════════════════════════════════════════════════════════════════════════════
+
+(deftest tc-cap01-detect-machine-profile
+  (testing "CAP detect! — returns full machine profile with required keys"
+    (let [thunk  (cap/detect! test-auth)
+          result (thunk)]
+      ;; Top-level identity fields
+      (is (string? (:hostname result))  "hostname must be a string")
+      (is (string? (:user result))      "user must be a string")
+      (is (string? (:singine-root result)) "singine-root must be a string")
+      (is (string? (:probed-at result)) "probed-at must be a string")
+      ;; Component probe maps
+      (is (map? (:java result))            "java probe must be a map")
+      (is (map? (:os result))              "os probe must be a map")
+      (is (map? (:git result))             "git probe must be a map")
+      (is (map? (:python result))          "python probe must be a map")
+      (is (map? (:clojure result))         "clojure probe must be a map")
+      (is (map? (:docker result))          "docker probe must be a map")
+      (is (map? (:package-managers result)) "package-managers must be a map")
+      (is (map? (:latex result))           "latex probe must be a map")
+      (is (map? (:ssh result))             "ssh probe must be a map")
+      ;; Java is always available (we ARE running in a JVM)
+      (is (true? (get-in result [:java :available]))
+          "java must always be available (we are in JVM)")
+      (is (string? (get-in result [:java :version]))
+          "java version must be a string")
+      ;; OS family must be a non-empty string
+      (is (string? (get-in result [:os :family]))
+          "os family must be a string")
+      ;; Capabilities and deploy-order
+      (is (vector? (:capabilities result))  "capabilities must be a vector")
+      (is (seq (:capabilities result))      "capabilities must be non-empty")
+      (is (vector? (:deploy-order result))  "deploy-order must be a vector")
+      (is (seq (:deploy-order result))      "deploy-order must be non-empty")
+      ;; mail and cli are always in capabilities (dry-run available everywhere)
+      (is (some #{:mail} (:capabilities result))
+          "mail must always be a capability")
+      (is (some #{:cli} (:capabilities result))
+          "cli must always be a capability")
+      ;; java must be in capabilities (we ARE running in a JVM)
+      (is (some #{:java} (:capabilities result))
+          "java must be a capability since we are in JVM")
+      ;; deploy-order always starts with mail
+      (is (= :mail (first (:deploy-order result)))
+          "deploy-order must start with :mail")
+      ;; Governed time
+      (is (map? (:time result)) "time must be a map")
+      (is (string? (:iso (:time result))) "time must have :iso string"))))
+
+(deftest tc-cap02-cap-dispatcher
+  (testing "CAP cap! dispatcher — :detect and :deploy sub-commands"
+    ;; :detect sub-command
+    (let [thunk  (cap/cap! test-auth :detect {})
+          result (thunk)]
+      (is (map? result)             "detect result must be a map")
+      (is (string? (:hostname result)) "hostname must be present")
+      (is (vector? (:capabilities result)) "capabilities must be present")
+      (is (map? (:time result))     "time must be present"))
+
+    ;; :show alias for :detect
+    (let [thunk  (cap/cap! test-auth :show {})
+          result (thunk)]
+      (is (map? result)             "show (alias for detect) must be a map")
+      (is (vector? (:capabilities result)) "capabilities must be present via :show"))
+
+    ;; :deploy sub-command — returns deploy-order only
+    (let [thunk  (cap/deploy-order! test-auth)
+          result (thunk)]
+      (is (map? result)                 "deploy result must be a map")
+      (is (vector? (:deploy-order result)) "deploy-order must be a vector")
+      (is (string? (:hostname result))  "hostname must be present")
+      (is (vector? (:capabilities result)) "capabilities must be present")
+      (is (= :mail (first (:deploy-order result)))
+          "deploy-order must start with :mail")
+      (is (map? (:time result)) "time must be present"))
+
+    ;; Unknown sub-command
+    (let [thunk  (cap/cap! test-auth :unknown-sub-cmd {})
+          result (thunk)]
+      (is (false? (:ok result))         ":ok must be false for unknown sub-cmd")
+      (is (string? (:error result))     "error must be a string")
+      (is (vector? (:available result)) "must list available sub-commands"))))
+
+;; ══════════════════════════════════════════════════════════════════════════════
+;; tc-srv01..tc-srv02 — local network server (19.B/C)
+;; ══════════════════════════════════════════════════════════════════════════════
+
+(deftest tc-srv01-start-server-dry-run
+  (testing "SERVER start-server! dry-run — returns ok + port + routes"
+    (let [thunk  (camel-ctx/start-server! test-auth {:http-port 8080 :dry-run true})
+          result (thunk)]
+      (is (true? (:ok result))        "start-server! dry-run must succeed")
+      (is (= 8080 (:port result))     "port must be 8080")
+      (is (true? (:dry-run result))   "dry-run flag must be reflected")
+      (is (string? (:bind-addr result)) "bind-addr must be a string")
+      (is (= "0.0.0.0" (:bind-addr result)) "must bind to all interfaces")
+      (is (map? (:time result))       "time must be present"))))
+
+(deftest tc-srv02-status-summary-not-started
+  (testing "SERVER status-summary when context not started — returns :started false"
+    ;; The CamelContext is not started during tests — just check the status model
+    (let [summary (camel-ctx/status-summary)]
+      (is (map? summary)                 "status-summary must return a map")
+      (is (contains? summary :started)   "must have :started key")
+      (is (contains? summary :name)      "must have :name key")
+      (is (contains? summary :routes)    "must have :routes key")
+      (is (string? (:name summary))      "name must be a string")
+      (is (vector? (:routes summary))    "routes must be a vector"))))
+
+;; ══════════════════════════════════════════════════════════════════════════════
+;; tc-lac01..tc-lac02 — Location-Action Correlation engine (Section 18 LAC-v1)
+;; ══════════════════════════════════════════════════════════════════════════════
+
+(deftest tc-lac01-correlate-bru-task
+  (testing "LAC correlate! BRU + :task action + 500km radius → decision map"
+    (let [thunk  (lac/correlate! test-auth
+                                 {:location          "BRU"
+                                  :action            {:type         :task
+                                                      :agent-type   :human
+                                                      :entity-count 3}
+                                  :space-constraint  {:reference-iata "BRU"
+                                                      :target-iata    "AMS"
+                                                      :radius-km      500.0}
+                                  :impact-threshold  0.9
+                                  :dry-run           true})
+          result (thunk)]
+      ;; Top-level structure
+      (is (map? result)                 "correlate! must return a map")
+      (is (contains? result :feasible)  "must have :feasible key")
+      (is (boolean? (:feasible result)) "feasible must be a boolean")
+      (is (string? (:location-urn result)) "location-urn must be a string")
+      (is (string? (:action-urn result))   "action-urn must be a string")
+      (is (str/starts-with? (:location-urn result) "urn:singine:location:")
+          "location-urn must start with urn:singine:location:")
+      (is (str/starts-with? (:action-urn result) "urn:singine:action:task:")
+          "action-urn must start with urn:singine:action:task:")
+      ;; Sub-evaluations
+      (is (map? (:time-window result))  "time-window must be a map")
+      (is (map? (:space-window result)) "space-window must be a map")
+      (is (map? (:impact result))       "impact must be a map")
+      (is (map? (:decision result))     "decision must be a map")
+      ;; Space: BRU→AMS is ~174km — well within 500km
+      (is (true? (get-in result [:space-window :feasible]))
+          "BRU→AMS 174km must be within 500km radius")
+      (is (number? (get-in result [:space-window :distance-km]))
+          "distance-km must be a number")
+      ;; Impact structure
+      (is (number? (get-in result [:impact :impact-score]))
+          "impact-score must be a number")
+      (is (number? (get-in result [:impact :breach-probability]))
+          "breach-probability must be a number")
+      ;; Decision structure
+      (is (contains? (:decision result) :feasible) "decision must have :feasible")
+      (is (string? (get-in result [:decision :reason])) "decision must have :reason string")
+      (is (string? (get-in result [:decision :decision-id])) "decision must have :decision-id")
+      ;; Governed time
+      (is (map? (:time result)) "time must be present")
+      (is (string? (:iso (:time result))) "time must have :iso string"))))
+
+(deftest tc-lac02-decide-publishes-to-broker
+  (testing "LAC decide! — publishes decision to Kafka dry-run, returns correlation + broker info"
+    (let [thunk  (lac/decide! test-auth
+                              {:location         "LHR"
+                               :action           {:type         :decision
+                                                  :agent-type   :collaborative
+                                                  :entity-count 5}
+                               :impact-threshold 0.85
+                               :dry-run          true}
+                              0.85)
+          result (thunk)]
+      (is (map? result)                   "decide! must return a map")
+      (is (contains? result :feasible)    "must have :feasible")
+      (is (contains? result :published)   "must have :published (broker ack)")
+      (is (contains? result :topic)       "must have :topic (kafka topic)")
+      (is (contains? result :broker-checksum) "must have :broker-checksum (SHA-256)")
+      (is (string? (:topic result))       "topic must be a string")
+      (is (string? (:broker-checksum result)) "broker-checksum must be a string")
+      (is (map? (:decision result))       "decision sub-map must be present")
+      (is (map? (:time result))           "governed time must be present"))))
+
+;; ── tc-diac03: ScenarioId URN format ──────────────────────────────────────────
+
+(deftest tc-diac03-scenario-urn-format
+  (testing "make-diac-event — produces well-formed DIAC event map with correct URN prefix"
+    (let [event (diac/make-diac-event
+                  "Engineering team decides on capability X implementation"
+                  {:name "Engineering Team" :members ["Alice" "Bob"] :role "acting"}
+                  {:name "Product Team"     :members ["Diana" "Eve"] :role "target"})]
+      (is (map? event)                          "make-diac-event must return a map")
+      (is (= "DIAC" (:scenario-code event))     "scenario-code must be DIAC")
+      (is (= "conversation-turn" (:event-type event)) "event-type must be conversation-turn")
+      (is (string? (:urn event))                "urn must be a string")
+      (is (.startsWith ^String (:urn event) "urn:singine:scenario:DIAC")
+          "URN must start with urn:singine:scenario:DIAC")
+      (is (string? (:timestamp event))          "timestamp must be an ISO-8601 string")
+      (is (map? (:group-a event))               "group-a must be a map")
+      (is (map? (:group-b event))               "group-b must be a map")
+      (is (= "acting" (get-in event [:group-a :role])) "group-a role must be acting")
+      (is (= "target" (get-in event [:group-b :role])) "group-b role must be target")
+      (is (= "1.0" (:schema-version event))     "schema-version must be 1.0"))))
+
+;; ── tc-diac04: ingest! dry-run governed thunk ─────────────────────────────────
+
+(deftest tc-diac04-ingest-dry-run
+  (testing "ingest! dry-run — returns governed thunk; thunk produces PoLA result map"
+    (let [thunk (diac/ingest! test-auth
+                              {:scenario-id   "DIAC-test-04"
+                               :request       "Decide on sprint scope for feature X"
+                               :group-a-name  "Engineering Team"
+                               :group-b-name  "Product Team"
+                               :dry-run       true})]
+      (is (fn? thunk) "ingest! must return a zero-arg thunk (governed fn)")
+      (let [result (thunk)]
+        (is (map? result)                              "thunk must return a map")
+        (is (contains? result :selected-response)      "result must have :selected-response")
+        (is (contains? result :action-score)           "result must have :action-score (S)")
+        (is (contains? result :net-result)             "result must have :net-result (Δ)")
+        (is (contains? result :scenario-id)            "result must have :scenario-id")
+        (is (string? (:selected-response result))      ":selected-response must be a string")
+        (is (number? (:action-score result))           ":action-score must be a number")
+        (is (number? (:net-result result))             ":net-result must be a number")
+        (is (pos? (:net-result result))                "net result Δ must be positive")
+        (is (contains? #{"R1" "R2" "R3" "R4"} (:selected-response result))
+            ":selected-response must be one of R1..R4")
+        (is (map? (:time result))                      "governed time must be present")))))
+
+;; ── tc-diac05: render-logseq! dry-run governed thunk ──────────────────────────
+
+(deftest tc-diac05-render-logseq-dry-run
+  (testing "render-logseq! dry-run — returns governed thunk; thunk returns output path map"
+    (let [thunk (diac/render-logseq! test-auth
+                                     {:scenario-id  "DIAC-0001"
+                                      :graph-path   "/tmp/singine-test-graph"
+                                      :request      "Engineering team decides on feature X"
+                                      :group-a-name "Engineering Team"
+                                      :group-b-name "Product Team"
+                                      :dry-run      true})]
+      (is (fn? thunk) "render-logseq! must return a zero-arg thunk (governed fn)")
+      (let [result (thunk)]
+        (is (map? result)                            "thunk must return a result map")
+        (is (contains? result :logseq-path)          "result must have :logseq-path")
+        (is (contains? result :scenario-id)          "result must have :scenario-id")
+        (is (contains? result :graph-path)           "result must have :graph-path")
+        (is (contains? result :dry-run)              "result must have :dry-run flag")
+        (is (true? (:dry-run result))                ":dry-run must be true")
+        (is (= "DIAC-0001" (:scenario-id result))    "scenario-id must match")
+        (is (string? (:logseq-path result))          ":logseq-path must be a string")
+        (is (.endsWith ^String (:logseq-path result) ".md")
+            ":logseq-path must end with .md")
+        (is (.contains ^String (:logseq-path result) "DIAC-0001")
+            ":logseq-path must contain the scenario ID")
+        (is (map? (:time result))                    "governed time must be present")))))

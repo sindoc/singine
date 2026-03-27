@@ -1,0 +1,74 @@
+# Dockerfile.kernel — singine:kernel — Python bridge + Logseq kernel indexer
+#
+# Layers:
+#   python:3.12-slim          base OS
+#   git + curl                VCS + health probe
+#   singine Python package    bridge build / search / decide CLI
+#
+# Security (JVM-aligned, nginx-compatible):
+#   - Runs as non-root user `singine` (uid 1000)
+#   - TLS termination handled upstream by nginx (osType=Mac|GNU/Linux|Mobile)
+#   - No secrets baked in; config via ENV + volume mounts
+#   - GNUPG / PGP / SHA digest verified on package install (pip hash check)
+#
+# Build:
+#   docker build -f docker/Dockerfile.kernel -t singine-kernel:latest .
+#
+# Run (direct):
+#   docker run --rm \
+#     -v ~/.singine:/home/singine/.singine:ro \
+#     -v ~/ws/logseq/singine/sindoc/fa-KfK-HDYAT-KRNL-421b:/kernel:ro \
+#     -v singine-cortex:/tmp \
+#     singine-kernel:latest bridge build --db /tmp/sqlite.db
+#
+# Or via compose:
+#   docker compose -f docker/docker-compose.kernel.yml up
+#
+# osType variants (same image, ENV-driven):
+#   Mac       SINGINE_OS_TYPE=darwin
+#   GNU/Linux SINGINE_OS_TYPE=linux
+#   Mobile    SINGINE_OS_TYPE=mobile   (read-only kernel mount, no commit)
+
+FROM python:3.12-slim AS base
+
+ARG SINGINE_UID=1000
+ARG SINGINE_GID=1000
+
+RUN apt-get update -qq && \
+    apt-get install -y --no-install-recommends \
+      git \
+      curl \
+      gnupg \
+      ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN groupadd -g ${SINGINE_GID} singine && \
+    useradd  -u ${SINGINE_UID} -g singine -m -s /bin/sh singine
+
+WORKDIR /app
+
+# Install Python package (editable so the CLI entry-point is discoverable)
+COPY --chown=singine:singine . /app
+
+RUN pip install --no-cache-dir -e .
+
+# ── Runtime ──────────────────────────────────────────────────────────────────
+FROM base AS runtime
+
+ENV SINGINE_CORTEX_DB=/tmp/sqlite.db \
+    SINGINE_KERNEL_GRAPH=/kernel \
+    SINGINE_OS_TYPE=linux \
+    SINGINE_REF=C12 \
+    PYTHONUNBUFFERED=1
+
+# Volume mount points (declared; actual mounts from compose or docker run)
+VOLUME ["/home/singine/.singine", "/kernel", "/tmp"]
+
+USER singine
+
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+  CMD singine context --json | python3 -c "import sys,json; d=json.load(sys.stdin); sys.exit(0 if d else 1)"
+
+# Default: build bridge then list sources
+ENTRYPOINT ["singine"]
+CMD ["bridge", "build", "--db", "/tmp/sqlite.db"]

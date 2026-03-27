@@ -1,0 +1,81 @@
+# Dockerfile.mail — singine:mail — Postfix (SMTP) + Dovecot (IMAP4rev1)
+# Pattern: tool baked into image, volume mount for persistence, ENV for config.
+# Reference: ~/ws/today/Dockerfile.timez.snippet
+#
+# Build (via docker-compose.mail.yml, or manually):
+#   docker build -f docker/Dockerfile.mail -t singine-mail:latest .
+#
+# Ports (as mapped by docker-compose.mail.yml):
+#   1025 → 25   Postfix SMTP
+#   1587 → 587  Postfix Submission (ESMTP AUTH)
+#   1143 → 143  Dovecot IMAP (plain)
+#   1993 → 993  Dovecot IMAPS (TLS) — self-signed cert in container
+#
+# Volume mounts:
+#   /var/mail          — mailbox spool (persistent)
+#   /etc/singine/mail  — singine mail config (from host .loc/etc/)
+#
+# ENV:
+#   MAIL_DOMAIN      — default: localhost
+#   MAIL_USER        — IMAP/SMTP user  (default: singine)
+#   MAIL_PASS        — plain-text pass (default: singinepass)
+#   IMAP_FOLDER      — default: INBOX
+#
+# MailClient.java (in singine core) talks to:
+#   SMTP: host=localhost port=1587 tls=false
+#   IMAP: host=localhost port=1143 tls=false (plain connection inside Docker net)
+
+FROM debian:stable-slim
+
+LABEL org.opencontainers.image.title="singine-mail"
+LABEL org.opencontainers.image.description="singine mail server — Postfix SMTP + Dovecot IMAP4rev1"
+LABEL org.opencontainers.image.source="https://github.com/sindoc/singine"
+LABEL singine.uri="urn:singine:mail:server"
+LABEL singine.opcode="MAIL"
+
+# ── ENV defaults ─────────────────────────────────────────────────────────────
+ENV MAIL_DOMAIN=localhost \
+    MAIL_USER=singine \
+    MAIL_PASS=singinepass \
+    IMAP_FOLDER=INBOX \
+    DEBIAN_FRONTEND=noninteractive
+
+# ── Install Postfix + Dovecot ─────────────────────────────────────────────────
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      postfix \
+      dovecot-imapd \
+      dovecot-pop3d \
+      ca-certificates \
+      openssl \
+      procmail \
+      mailutils \
+      && rm -rf /var/lib/apt/lists/*
+
+# ── Postfix minimal config ────────────────────────────────────────────────────
+# main.cf: accept mail for $MAIL_DOMAIN, deliver to /var/mail/$user
+COPY docker/conf/postfix-main.cf   /etc/postfix/main.cf.template
+COPY docker/conf/postfix-master.cf /etc/postfix/master.cf
+
+# ── Dovecot minimal config ────────────────────────────────────────────────────
+# Single user via passwd-file; no SSL required for plain-text dev IMAP
+COPY docker/conf/dovecot.conf      /etc/dovecot/dovecot.conf
+COPY docker/conf/dovecot-auth.conf /etc/dovecot/conf.d/10-auth.conf
+COPY docker/conf/dovecot-mail.conf /etc/dovecot/conf.d/10-mail.conf
+
+# ── Self-signed TLS cert (Dovecot IMAPS port 993) ─────────────────────────────
+RUN openssl req -new -x509 -days 3650 -nodes \
+      -subj "/CN=singine-mail/O=Singine/C=BE" \
+      -keyout /etc/dovecot/private/dovecot.key \
+      -out    /etc/dovecot/dovecot.pem \
+    && chmod 600 /etc/dovecot/private/dovecot.key
+
+# ── Entrypoint: configure from ENV + start Postfix + Dovecot ──────────────────
+COPY docker/conf/mail-entrypoint.sh /usr/local/bin/mail-entrypoint.sh
+RUN  chmod +x /usr/local/bin/mail-entrypoint.sh
+
+# ── Volume: mailbox spool + singine mail config ───────────────────────────────
+VOLUME ["/var/mail", "/etc/singine/mail"]
+
+EXPOSE 25 587 143 993
+
+ENTRYPOINT ["/usr/local/bin/mail-entrypoint.sh"]

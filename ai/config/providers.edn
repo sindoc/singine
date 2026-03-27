@@ -1,0 +1,53 @@
+;; singine/ai/config/providers.edn
+;;
+;; Registry of AI providers accessible through the singine governance layer.
+;;
+;; Rules:
+;;   - Credentials are NEVER stored here.  Use :credential/source references.
+;;   - This file is git-managed; all changes are auditable.
+;;   - To add a provider, add an entry here and create its config file.
+;;   - Provider availability is checked with: singine ai status
+;;
+;; Credential source formats:
+;;   "env:VAR_NAME"        — environment variable
+;;   "file:~/.singine/auth/{provider}.json"  — local auth file (not git-tracked)
+;;   "keystore:{alias}"    — JVM keystore entry
+;; ------------------------------------------------------------------
+
+{:providers/registry-version "1.0.0"
+ :providers/updated          "2026-03-15"
+
+ :providers/list
+
+ [{:provider/id       "claude"
+   :provider/type     :CLAUDE
+   :provider/name     "Anthropic Claude"
+   :provider/endpoint "https://api.anthropic.com/v1"
+   :provider/version  "claude-sonnet-4-6"
+   :provider/config   "singine/ai/config/claude.edn"
+   :provider/enabled  true}
+
+  {:provider/id       "collibra"
+   :provider/type     :COLLIBRA
+   :provider/name     "Collibra Data Governance Center"
+   :provider/endpoint ""
+   :provider/version  "2025.09"
+   :provider/config   "singine/ai/config/collibra.edn"
+   :provider/enabled  true
+   :provider/role     [:provider :mandate-grantor]}
+
+  {:provider/id       "openai"
+   :provider/type     :OPENAI
+   :provider/name     "OpenAI (Codex / GPT-4o)"
+   :provider/endpoint "https://api.openai.com/v1"
+   :provider/version  "gpt-4o"
+   :provider/config   "singine/ai/config/openai.edn"
+   :provider/enabled  false}
+
+  {:provider/id       "local"
+   :provider/type     :LOCAL
+   :provider/name     "Local / Offline Provider"
+   :provider/endpoint "http://localhost:11434"
+   :provider/version  "ollama"
+   :provider/config   "singine/ai/config/local.edn"
+   :provider/enabled  false}]}

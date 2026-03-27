@@ -1,0 +1,6 @@
+{
+  "scenario_id": "TC-ME-001",
+  "module": "singine.multilingual_emotion",
+  "factory": "scenario_fixture",
+  "description": "Multilingual Farsi-English-French emotional greeting bundle for Singine integration tests."
+}

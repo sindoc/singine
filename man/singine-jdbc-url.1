@@ -1,0 +1,23 @@
+.TH SINGINE-JDBC-URL 1 "2026-03-13" "singine 0.2.0" "User Commands"
+.SH NAME
+singine-jdbc-url \- print the JDBC URL for a Singine SQLite bridge database
+.SH SYNOPSIS
+.B singine jdbc-url
+[\fB--db\fR \fIPATH\fR]
+.SH DESCRIPTION
+Prints the
+.B jdbc:sqlite:
+URL corresponding to the selected bridge database path.
+.SH OPTIONS
+.TP
+.B --db \fIPATH\fR
+SQLite database path. Default is
+.IR /tmp/sqlite.db .
+.SH EXAMPLES
+.nf
+singine jdbc-url
+singine jdbc-url --db /tmp/sqlite.db
+.fi
+.SH SEE ALSO
+.BR singine (1),
+.BR singine-bridge (1)

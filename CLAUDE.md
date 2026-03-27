@@ -554,6 +554,139 @@ docker exec -it kafka kafka-topics --list --bootstrap-server localhost:9092
 
 ---
 
-**Last Updated**: 2026-02-07
+---
+
+## 15. Activity Taxonomy
+
+### Java Interface Package: `singine.activity`
+
+Located at `core/java/singine/activity/`.  Compiled automatically by
+`ant compile` (the compile target uses `find ... -name '*.java'`).
+
+| Class/Interface | Role |
+|-----------------|------|
+| `Activity` | Template interface: defines what is to be done |
+| `Policy` | Execution algorithm: governs how an action runs |
+| `Action` | Runtime instance: follows a Policy against an Activity |
+| `Outcome` | Measurement: usage value + business value − platform cost |
+| `Taxonomy` | Classification node: domain → category → subcategory |
+| `ActivityStatus` | Enum: PENDING, RUNNING, COMPLETED, FAILED, CANCELLED, DEFERRED |
+| `OutcomeType` | Enum: SUCCESS, FAILURE, PARTIAL, SKIPPED, DEFERRED |
+| `ActivityTemplate` | Abstract base: default XML/EDN serialisation |
+| `BaseAction` | Default Action with atomic status and policy application |
+| `BaseOutcome` | Immutable Outcome with ultimate-metric components |
+
+### Ultimate Metric
+
+```
+usage_cost_benefit_score = usage_value + business_value - platform_cost
+```
+
+### EDN Taxonomy (canonical source)
+
+`core/resources/singine/activity/taxonomy.edn`
+
+This file is the single source of truth for generating:
+XML, LaTeX, SVG, HTML (SilkPage), GraphQL, SPARQL, Logseq queries.
+
+```bash
+make activity-edn            # print the taxonomy
+singine activity list        # list all activities
+singine activity inspect ID  # inspect a single activity (--xml, --edn, --json)
+singine activity run ID      # run an activity and get an Outcome
+```
+
+### DP(DP) — Data Production Definition Protocol
+
+The `data-production` taxonomy domain documents the meta-concept:
+the activity taxonomy is itself a data product governed by an activity.
+Logo: `sina.khakbaz.com/img/dpdp-logo.svg`
+
+### Man Page
+
+`man singine-activity` — see `man/singine-activity.1`.
+
+### Published Docs
+
+`sina.khakbaz.com/docs/activity/` — SilkPage pages documenting the model.
+
+---
+
+## 16. singine collibra Commands
+
+The `singine collibra` command family provides live Collibra REST operations
+plus full lifecycle management for the Collibra edge stack, contract IDs,
+data contracts, the ORM/SBVR pipeline, and the id-gen HTTP server.
+
+### Architecture
+
+```
+singine collibra <component> <command> [options]
+```
+
+- **Edge stack** (`singine collibra edge`): delegates to `singine/edge.py`
+  (`add_edge_parser` is reused with `name="edge"` under the collibra subparser).
+- **id/contract/server**: dynamically imported from the `singine_collibra`
+  Python package located in the collibra repo
+  (`~/ws/git/github/sindoc/collibra` or `$COLLIBRA_DIR`).
+
+### glue module: `singine/collibra_idgen.py`
+
+Adds `singine_collibra` package root to `sys.path` at runtime, then calls
+`singine_collibra.command.add_collibra_subcommands(collibra_sub)`.
+If the package is missing, a clear error is printed and exit code 1 is
+returned — the rest of the `singine` CLI is unaffected.
+
+### Command Reference
+
+```bash
+# Core REST (always available)
+singine collibra env
+singine collibra fetch community|domain|asset-type|view|workflow
+singine collibra search <query>
+
+# Edge stack (requires singine edge stack in collibra repo)
+singine collibra edge build [--target base|collibra-edge|cdn|all]
+singine collibra edge up [--detach]
+singine collibra edge down
+singine collibra edge status [--json]
+singine collibra edge logs [--service cdn] [--follow]
+singine collibra edge agent run --task "..."
+
+# Contract ID generation (requires collibra repo id-gen/)
+singine collibra id gen [--ns c|a|b] [--project P] [--kind K]
+singine collibra id gen-topic [--project P]
+singine collibra id import --uuid UUID --kind KIND
+singine collibra id tags
+singine collibra id push-tags
+singine collibra id detect-conflicts
+singine collibra id resolve-conflicts [--strategy COLLIBRA_WINS]
+
+# Data contract lifecycle
+singine collibra contract new [--project P] [--kind DataContract]
+singine collibra contract list
+singine collibra contract status <id> <STATUS>
+singine collibra contract pipeline [--id ID]
+singine collibra contract step N [--id ID]
+singine collibra contract advance [--id ID]
+singine collibra contract progress [--all] [--json]
+
+# id-gen HTTP server
+singine collibra server start [--port 7331] [--mode net|dmz]
+singine collibra server stop
+singine collibra server status
+singine collibra server dmz [--port 7331]
+```
+
+### Environment
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `COLLIBRA_DIR` | `~/ws/git/github/sindoc/collibra` | Collibra repo root |
+| `COLLIBRA_EDGE_DIR` | `$COLLIBRA_DIR/edge` | Edge stack directory |
+
+---
+
+**Last Updated**: 2026-03-15
 **Project Status**: Alpha (v0.2.0) -- Transitioning from Python to Clojure
 **Primary Developer**: skh

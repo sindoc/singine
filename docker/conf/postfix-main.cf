@@ -1,0 +1,29 @@
+# Postfix main.cf — singine mail server
+# Template: ${MAIL_DOMAIN} is substituted by mail-entrypoint.sh
+smtpd_banner = singine ESMTP (Postfix)
+biff = no
+append_dot_mydomain = no
+readme_directory = no
+
+# Network
+inet_interfaces = all
+inet_protocols = ipv4
+myhostname = singine-mail
+mydomain = ${MAIL_DOMAIN}
+myorigin = ${MAIL_DOMAIN}
+mydestination = ${MAIL_DOMAIN}, localhost, localhost.localdomain
+mynetworks = 127.0.0.0/8 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16
+
+# Delivery to local mailbox (Maildir format — Dovecot reads this)
+home_mailbox = Maildir/
+mailbox_command =
+
+# SMTP AUTH (plain, no TLS for dev on port 587)
+smtpd_sasl_auth_enable = yes
+smtpd_sasl_type = dovecot
+smtpd_sasl_path = private/auth
+smtpd_sasl_security_options = noanonymous
+smtpd_recipient_restrictions = permit_sasl_authenticated, permit_mynetworks, reject_unauth_destination
+
+# Relay: no external relay by default
+relayhost =

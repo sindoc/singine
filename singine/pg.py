@@ -41,6 +41,12 @@ def _emit_json(payload: Dict[str, Any]) -> int:
     return 0 if payload.get("ok") else 1
 
 
+def _print_lines(values: Iterable[str]) -> int:
+    for value in values:
+        print(value)
+    return 0
+
+
 def _quote_ident(name: str) -> str:
     return '"' + name.replace('"', '""') + '"'
 
@@ -301,6 +307,38 @@ def _psql(args: argparse.Namespace, dbname: str, sql: str) -> subprocess.Complet
     )
 
 
+def _psql_json(args: argparse.Namespace, dbname: str, sql: str) -> Tuple[bool, Any, str]:
+    result = _run(
+        [
+            "docker",
+            "exec",
+            "-i",
+            args.container,
+            "psql",
+            "-v",
+            "ON_ERROR_STOP=1",
+            "-t",
+            "-A",
+            "-U",
+            args.user,
+            "-d",
+            dbname,
+        ],
+        text=True,
+        input_data=sql,
+        capture=True,
+    )
+    if result.returncode != 0:
+        return False, None, result.stderr.strip() or "psql failed"
+    text = (result.stdout or "").strip()
+    if not text:
+        return True, None, ""
+    try:
+        return True, json.loads(text), ""
+    except json.JSONDecodeError as exc:
+        return False, None, f"invalid JSON from psql: {exc}"
+
+
 def _copy_table(args: argparse.Namespace, dbname: str, table: Table, db_path: Path) -> Tuple[bool, str, int]:
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
@@ -472,6 +510,198 @@ def cmd_pg_create_database_from_sqlite(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_pg_list_databases(args: argparse.Namespace) -> int:
+    ok, detail = _ensure_container(args)
+    if not ok:
+        if args.json:
+            return _emit_json({"ok": False, "command": "pg list databases", "error": detail})
+        print(detail, file=sys.stderr)
+        return 1
+
+    ok, detail = _wait_ready(args)
+    if not ok:
+        if args.json:
+            return _emit_json({"ok": False, "command": "pg list databases", "error": detail})
+        print(detail, file=sys.stderr)
+        return 1
+
+    sql = (
+        "select coalesce(json_agg(datname order by datname), '[]'::json)::text "
+        "from pg_database where datistemplate = false;"
+    )
+    ok, payload, error = _psql_json(args, "postgres", sql)
+    if not ok:
+        if args.json:
+            return _emit_json({"ok": False, "command": "pg list databases", "error": error})
+        print(error, file=sys.stderr)
+        return 1
+
+    databases = payload or []
+    if args.json:
+        return _emit_json({"ok": True, "command": "pg list databases", "databases": databases})
+    return _print_lines(databases)
+
+
+def cmd_pg_list_schemas(args: argparse.Namespace) -> int:
+    ok, detail = _ensure_container(args)
+    if not ok:
+        if args.json:
+            return _emit_json({"ok": False, "command": "pg list schemas", "error": detail})
+        print(detail, file=sys.stderr)
+        return 1
+
+    ok, detail = _wait_ready(args)
+    if not ok:
+        if args.json:
+            return _emit_json({"ok": False, "command": "pg list schemas", "error": detail})
+        print(detail, file=sys.stderr)
+        return 1
+
+    sql = (
+        "select coalesce(json_agg(schema_name order by schema_name), '[]'::json)::text "
+        "from information_schema.schemata "
+        "where schema_name not like 'pg_%' and schema_name <> 'information_schema';"
+    )
+    ok, payload, error = _psql_json(args, args.db_name, sql)
+    if not ok:
+        if args.json:
+            return _emit_json(
+                {"ok": False, "command": "pg list schemas", "database": args.db_name, "error": error}
+            )
+        print(error, file=sys.stderr)
+        return 1
+
+    schemas = payload or []
+    if args.json:
+        return _emit_json(
+            {"ok": True, "command": "pg list schemas", "database": args.db_name, "schemas": schemas}
+        )
+    return _print_lines(schemas)
+
+
+def cmd_pg_list_tables(args: argparse.Namespace) -> int:
+    ok, detail = _ensure_container(args)
+    if not ok:
+        if args.json:
+            return _emit_json({"ok": False, "command": "pg list tables", "error": detail})
+        print(detail, file=sys.stderr)
+        return 1
+
+    ok, detail = _wait_ready(args)
+    if not ok:
+        if args.json:
+            return _emit_json({"ok": False, "command": "pg list tables", "error": detail})
+        print(detail, file=sys.stderr)
+        return 1
+
+    sql = (
+        "select coalesce("
+        "json_agg(json_build_object('schema', table_schema, 'table', table_name) "
+        "order by table_schema, table_name), '[]'::json)::text "
+        "from information_schema.tables "
+        "where table_type = 'BASE TABLE' and table_schema = "
+        + _quote_literal(args.schema)
+        + ";"
+    )
+    ok, payload, error = _psql_json(args, args.db_name, sql)
+    if not ok:
+        if args.json:
+            return _emit_json(
+                {
+                    "ok": False,
+                    "command": "pg list tables",
+                    "database": args.db_name,
+                    "schema": args.schema,
+                    "error": error,
+                }
+            )
+        print(error, file=sys.stderr)
+        return 1
+
+    tables = payload or []
+    if args.json:
+        return _emit_json(
+            {
+                "ok": True,
+                "command": "pg list tables",
+                "database": args.db_name,
+                "schema": args.schema,
+                "tables": tables,
+            }
+        )
+    return _print_lines(f"{item['schema']}.{item['table']}" for item in tables)
+
+
+def cmd_pg_list_columns(args: argparse.Namespace) -> int:
+    ok, detail = _ensure_container(args)
+    if not ok:
+        if args.json:
+            return _emit_json({"ok": False, "command": "pg list columns", "error": detail})
+        print(detail, file=sys.stderr)
+        return 1
+
+    ok, detail = _wait_ready(args)
+    if not ok:
+        if args.json:
+            return _emit_json({"ok": False, "command": "pg list columns", "error": detail})
+        print(detail, file=sys.stderr)
+        return 1
+
+    sql = (
+        "select coalesce("
+        "json_agg("
+        "json_build_object("
+        "'schema', table_schema, "
+        "'table', table_name, "
+        "'column', column_name, "
+        "'position', ordinal_position, "
+        "'type', data_type, "
+        "'nullable', is_nullable, "
+        "'default', column_default"
+        ") "
+        "order by table_schema, table_name, ordinal_position"
+        "), '[]'::json)::text "
+        "from information_schema.columns "
+        "where table_schema = "
+        + _quote_literal(args.schema)
+        + " and table_name = "
+        + _quote_literal(args.table)
+        + ";"
+    )
+    ok, payload, error = _psql_json(args, args.db_name, sql)
+    if not ok:
+        if args.json:
+            return _emit_json(
+                {
+                    "ok": False,
+                    "command": "pg list columns",
+                    "database": args.db_name,
+                    "schema": args.schema,
+                    "table": args.table,
+                    "error": error,
+                }
+            )
+        print(error, file=sys.stderr)
+        return 1
+
+    columns = payload or []
+    if args.json:
+        return _emit_json(
+            {
+                "ok": True,
+                "command": "pg list columns",
+                "database": args.db_name,
+                "schema": args.schema,
+                "table": args.table,
+                "columns": columns,
+            }
+        )
+    return _print_lines(
+        f"{item['position']}. {item['column']}  {item['type']}  nullable={item['nullable']}  default={item['default']}"
+        for item in columns
+    )
+
+
 def add_pg_parser(sub: argparse._SubParsersAction) -> None:
     pg_parser = sub.add_parser(
         "pg",
@@ -483,6 +713,10 @@ def add_pg_parser(sub: argparse._SubParsersAction) -> None:
     create_parser = pg_sub.add_parser("create", help="Create PostgreSQL resources")
     create_parser.set_defaults(func=lambda a: (create_parser.print_help(), 1)[1])
     create_sub = create_parser.add_subparsers(dest="pg_create_subject")
+
+    list_parser = pg_sub.add_parser("list", help="List PostgreSQL databases, schemas, tables, and columns")
+    list_parser.set_defaults(func=lambda a: (list_parser.print_help(), 1)[1])
+    list_sub = list_parser.add_subparsers(dest="pg_list_subject")
 
     create_database = create_sub.add_parser("database", help="Create a PostgreSQL database")
     create_database.set_defaults(func=lambda a: (create_database.print_help(), 1)[1])
@@ -502,3 +736,45 @@ def add_pg_parser(sub: argparse._SubParsersAction) -> None:
     from_sqlite.add_argument("--replace", action="store_true", help="Drop and recreate the target PostgreSQL database when it already exists")
     from_sqlite.add_argument("--json", action="store_true", help="Emit JSON")
     from_sqlite.set_defaults(func=cmd_pg_create_database_from_sqlite)
+
+    list_databases = list_sub.add_parser("databases", help="List databases in the local PostgreSQL container")
+    list_databases.add_argument("--container", default="singine-pg", help="Docker container name (default: singine-pg)")
+    list_databases.add_argument("--image", default="postgres:16-alpine", help="PostgreSQL Docker image (default: postgres:16-alpine)")
+    list_databases.add_argument("--host-port", type=int, default=55432, help="Local host port to expose PostgreSQL on (default: 55432)")
+    list_databases.add_argument("--user", default="singine", help="PostgreSQL login name (default: singine)")
+    list_databases.add_argument("--password", default="singine", help="PostgreSQL password (default: singine)")
+    list_databases.add_argument("--json", action="store_true", help="Emit JSON")
+    list_databases.set_defaults(func=cmd_pg_list_databases)
+
+    list_schemas = list_sub.add_parser("schemas", help="List schemas in a PostgreSQL database")
+    list_schemas.add_argument("--db-name", default="singine_bridge", help="Target PostgreSQL database (default: singine_bridge)")
+    list_schemas.add_argument("--container", default="singine-pg", help="Docker container name (default: singine-pg)")
+    list_schemas.add_argument("--image", default="postgres:16-alpine", help="PostgreSQL Docker image (default: postgres:16-alpine)")
+    list_schemas.add_argument("--host-port", type=int, default=55432, help="Local host port to expose PostgreSQL on (default: 55432)")
+    list_schemas.add_argument("--user", default="singine", help="PostgreSQL login name (default: singine)")
+    list_schemas.add_argument("--password", default="singine", help="PostgreSQL password (default: singine)")
+    list_schemas.add_argument("--json", action="store_true", help="Emit JSON")
+    list_schemas.set_defaults(func=cmd_pg_list_schemas)
+
+    list_tables = list_sub.add_parser("tables", help="List tables in a PostgreSQL schema")
+    list_tables.add_argument("--db-name", default="singine_bridge", help="Target PostgreSQL database (default: singine_bridge)")
+    list_tables.add_argument("--schema", default="public", help="Schema name (default: public)")
+    list_tables.add_argument("--container", default="singine-pg", help="Docker container name (default: singine-pg)")
+    list_tables.add_argument("--image", default="postgres:16-alpine", help="PostgreSQL Docker image (default: postgres:16-alpine)")
+    list_tables.add_argument("--host-port", type=int, default=55432, help="Local host port to expose PostgreSQL on (default: 55432)")
+    list_tables.add_argument("--user", default="singine", help="PostgreSQL login name (default: singine)")
+    list_tables.add_argument("--password", default="singine", help="PostgreSQL password (default: singine)")
+    list_tables.add_argument("--json", action="store_true", help="Emit JSON")
+    list_tables.set_defaults(func=cmd_pg_list_tables)
+
+    list_columns = list_sub.add_parser("columns", help="List columns in a PostgreSQL table")
+    list_columns.add_argument("--db-name", default="singine_bridge", help="Target PostgreSQL database (default: singine_bridge)")
+    list_columns.add_argument("--schema", default="public", help="Schema name (default: public)")
+    list_columns.add_argument("--table", required=True, help="Table name")
+    list_columns.add_argument("--container", default="singine-pg", help="Docker container name (default: singine-pg)")
+    list_columns.add_argument("--image", default="postgres:16-alpine", help="PostgreSQL Docker image (default: postgres:16-alpine)")
+    list_columns.add_argument("--host-port", type=int, default=55432, help="Local host port to expose PostgreSQL on (default: 55432)")
+    list_columns.add_argument("--user", default="singine", help="PostgreSQL login name (default: singine)")
+    list_columns.add_argument("--password", default="singine", help="PostgreSQL password (default: singine)")
+    list_columns.add_argument("--json", action="store_true", help="Emit JSON")
+    list_columns.set_defaults(func=cmd_pg_list_columns)
