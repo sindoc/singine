@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE catalog PUBLIC "-//OASIS//DTD XML Catalogs V1.1//EN"
+  "http://www.oasis-open.org/committees/entity/release/1.1/catalog.dtd">
+<!--
+  singine/schema/catalog.xml — Master OASIS XML Catalog v1.1
+  ────────────────────────────────────────────────────────────
+  Canonical namespace resolver for the singine ecosystem.
+  Aggregates: singine, knowyourai, DOAP, SKOS, DCAT 3.0, Atom,
+              RSS 1.0, URFM, RDF/XML, OWL, PROV-O, Dublin Core.
+
+  Resolver usage
+  ──────────────
+  Saxon / Calabash:
+    -catalog:schema/catalog.xml
+  xmlresolver (Java system property):
+    -Dxmlresolver.catalog=schema/catalog.xml
+    -Dxml.catalog.files=schema/catalog.xml
+  xmllint:
+    XML_CATALOG_FILES=schema/catalog.xml xmllint …
+  Ant xmlcatalog task:
+    <xmlcatalog file="schema/catalog.xml"/>
+
+  Delegation chain
+  ────────────────
+  singine (this catalog)
+    → collibra id-gen catalog  (W3C core: RDF, OWL, SKOS, DCAT, ODRL, PROV)
+    → silkpage catalog         (DocBook, RSS 1.0, Atom RELAX NG)
+    → local overrides          (catalog-local.xml, created by developer if needed)
+
+  Path convention
+  ───────────────
+  All paths are relative to THIS file.
+  Assumes the canonical ~/ws layout:
+    git/github/sindoc/singine/   (this repo, symlinked to ~/ws/singine)
+    git/github/sindoc/collibra/
+    git/github/sindoc/silkpage/
+
+  Norman Walsh / xmlresolver:
+    https://xmlresolver.org
+    https://norm.walsh.name
+
+  OASIS Catalog spec: OASIS XML Catalogs V1.1
+    https://www.oasis-open.org/committees/entity/spec.html
+-->
+<catalog xmlns="urn:oasis:names:tc:entity:xmlns:xml:catalog"
+         prefer="public">
+
+  <!-- ── singine core schemas ─────────────────────────────────────────── -->
+
+  <!--
+    singine.dtd  — top-level singine repository document type
+    URN: urn:singine:dtd:1.0
+    Public ID mirrors the DOCTYPE declaration in singine repo XML files.
+  -->
+  <public publicId="-//SINDOC//DTD Singine Repository 1.0//EN"
+          uri="singine.dtd"/>
+  <uri    name="urn:singine:dtd:1.0"
+          uri="singine.dtd"/>
+
+  <!--
+    singine.rnc — RELAX NG Compact schema for singine documents.
+    singine.sch — ISO Schematron business rules.
+  -->
+  <uri name="urn:singine:schema:rnc:1.0"    uri="singine.rnc"/>
+  <uri name="urn:singine:schema:sch:1.0"    uri="singine.sch"/>
+
+  <!--
+    singine persistence schema (from collibra uniWork v003).
+    Maps the URN used in schema.xml namespace declarations.
+  -->
+  <uri name="urn:singine:schema:v1"
+       uri="../../collibra/uniWork/persistence/schema/schema.xml"/>
+
+  <!-- ── knowyourai vocabulary ────────────────────────────────────────── -->
+
+  <!--
+    KnowYourAI SKOS/OWL vocabulary.
+    Namespace: urn:knowyourai:vocab#
+    Master format: Turtle (TTL).
+    Used in Atom/RSS feed annotations (kya:humanLed, kya:requiresHumanPresence)
+    and governance decisions (kya:GovernanceDecision).
+  -->
+  <uri name="urn:knowyourai:vocab#"       uri="../vocab/knowyourai.ttl"/>
+  <uri name="urn:knowyourai:vocab"        uri="../vocab/knowyourai.ttl"/>
+  <uri name="urn:knowyourai:ontology"
+       uri="../../knowyourai-framework/ontology.owl"/>
+  <uri name="urn:knowyourai:rdf"
+       uri="../../knowyourai-framework/ai-human-relationships.rdf"/>
+
+  <!-- ── singine namespace map (from urn_map.json) ────────────────────── -->
+
+  <!--
+    These URN prefixes are defined in collibra/uniWork/persistence/schema/urn_map.json.
+    They are re-declared here so catalog-aware processors resolve them
+    without network access.
+  -->
+  <uri name="urn:singine:cat:"   uri="../../collibra/uniWork/persistence/schema/schema.xml"/>
+  <uri name="urn:singine:lin:"   uri="../../collibra/uniWork/persistence/schema/schema.xml"/>
+  <uri name="urn:singine:env:"   uri="../../collibra/uniWork/persistence/schema/schema.xml"/>
+  <uri name="urn:singine:entity:" uri="../../collibra/uniWork/persistence/schema/schema.xml"/>
+
+  <!-- ── sinedge API OpenAPI schema ───────────────────────────────────── -->
+
+  <uri name="urn:singine:api:sinedge:v1"  uri="sinedge-api.yaml"/>
+
+  <!-- ── URFM — Universal Resource File Manifest ──────────────────────── -->
+
+  <!--
+    URFM is a sindoc-authored RDF vocabulary for file manifests.
+    Placeholder: the TTL file lives in sindoc/vocab when the vocab
+    repo is created.  Until then this entry is a forward declaration.
+  -->
+  <uri name="urn:urfm:vocab#"    uri="urfm.ttl"/>
+  <uri name="urn:urfm:vocab"     uri="urfm.ttl"/>
+
+  <!-- ── Collibra CHIP and id-gen OpenAPI ─────────────────────────────── -->
+
+  <uri name="urn:singine:api:collibra-io:v1"
+       uri="../../collibra/schema/singine-collibra-io-api.json"/>
+
+  <!-- ── Delegation: collibra id-gen catalog ──────────────────────────── -->
+  <!--
+    The collibra catalog maps all W3C core vocabularies:
+      RDF, RDFS, OWL, XSD, SKOS, DCAT, ODRL, PROV-O,
+      Dublin Core, SHACL, SBVR, Atom, DocBook, XProc, XHTML, BPMN.
+    See: collibra/id-gen/deploy/catalog/catalog.xml
+  -->
+  <nextCatalog catalog="../../collibra/id-gen/deploy/catalog/catalog.xml"/>
+
+  <!-- ── Delegation: silkpage catalog ─────────────────────────────────── -->
+  <!--
+    The silkpage catalog maps:
+      DocBook XSL, silkpage.markupware.com site URIs,
+      Norman Walsh website XSL, Atom RELAX NG.
+    See: silkpage/core/cfg/catalog.xml
+  -->
+  <nextCatalog catalog="../../silkpage/core/cfg/catalog.xml"/>
+
+  <!-- ── Local overrides (developer-created, git-ignored) ─────────────── -->
+  <!--
+    Create schema/catalog-local.xml to override any entry in this catalog
+    or to add local schema paths without modifying this file.
+    Typically used for:
+      - Downloaded W3C schema files
+      - Alternate local Saxon installation
+      - Developer-specific paths
+  -->
+  <nextCatalog catalog="catalog-local.xml"/>
+
+</catalog>

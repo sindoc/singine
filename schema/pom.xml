@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  singine/schema/pom.xml — Maven POM for XProc 3.0 schema pipelines
+  ──────────────────────────────────────────────────────────────────
+  Processor: XML Calabash 3.0.42 (Norman Walsh, XProc 3.0)
+  XSLT:      Saxon-HE 12.9 (transitive dep of Calabash)
+  Catalog:   xmlresolver 6.0.21 (Norman Walsh, OASIS XML Catalogs V1.1)
+
+  Quick start
+  ───────────
+    mvn exec:exec -Dpipeline=pipelines/hello.xpl
+    mvn exec:exec -Dpipeline=pipelines/vocab-validate.xpl
+    mvn exec:exec -Dpipeline=pipelines/hello.xpl -Dxpl.args="-verbose"
+
+  Or via the Makefile:
+    make test
+    make validate
+
+  Catalog resolution
+  ──────────────────
+  The xmlresolver.catalog system property is set in the exec plugin
+  configuration below.  All p:load and XSLT document() calls in the
+  XProc pipelines resolve through schema/catalog.xml.
+
+  Upgrading Calabash
+  ──────────────────
+  Change <calabash.version> below.  Check available versions:
+    https://repo1.maven.org/maven2/com/xmlcalabash/app/maven-metadata.xml
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+                             http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>com.sindoc.singine</groupId>
+  <artifactId>singine-schema-pipelines</artifactId>
+  <version>0.1.0</version>
+  <packaging>pom</packaging>
+
+  <name>singine schema pipelines</name>
+  <description>
+    XProc 3.0 pipelines for singine schema validation, vocabulary export,
+    and cross-repo sync.  Driven by Norm Walsh's XML Calabash 3 and Saxon-HE.
+  </description>
+
+  <!-- ── Properties ──────────────────────────────────────────────────── -->
+  <properties>
+    <calabash.version>3.0.42</calabash.version>
+    <!-- Default pipeline; override with -Dpipeline=pipelines/vocab-validate.xpl -->
+    <pipeline>pipelines/hello.xpl</pipeline>
+    <!-- Extra Calabash arguments; override with -Dxpl.args="-verbose" -->
+    <xpl.args></xpl.args>
+    <!-- Catalog path; relative to ${project.basedir} -->
+    <catalog.file>${project.basedir}/catalog.xml</catalog.file>
+    <!-- Output directory for pipeline results -->
+    <output.dir>${project.basedir}/output</output.dir>
+  </properties>
+
+  <!-- ── Dependencies ────────────────────────────────────────────────── -->
+  <dependencies>
+    <!--
+      com.xmlcalabash:app:3.0.42
+      The Calabash 3.x CLI entry point artifact.
+      Main-Class: com.xmlcalabash.app.Main
+      Pulls in xmlcalabash, Saxon-HE 12.9, xmlresolver 6.0.21,
+      Kotlin stdlib, Jackson, Apache Jena 5.x, and more as transitive deps.
+    -->
+    <dependency>
+      <groupId>com.xmlcalabash</groupId>
+      <artifactId>app</artifactId>
+      <version>${calabash.version}</version>
+    </dependency>
+  </dependencies>
+
+  <!-- ── Build ────────────────────────────────────────────────────────── -->
+  <build>
+    <plugins>
+
+      <!--
+        exec-maven-plugin — run XProc 3.0 pipelines via Calabash.
+
+        exec:exec forks a new JVM so that:
+          • Saxon-HE loads cleanly (no static initialization conflicts)
+          • Catalog system properties take effect before any XML parsing
+          • Pipeline output goes to stdout without Maven log prefix noise
+
+        Usage:
+          mvn exec:java                              # runs ${pipeline}
+          mvn exec:java -Dpipeline=pipelines/vocab-validate.xpl
+      -->
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>exec-maven-plugin</artifactId>
+        <version>3.4.1</version>
+        <configuration>
+          <!-- exec:java runs in-process: Maven classpath includes all transitive deps -->
+          <mainClass>com.xmlcalabash.app.Main</mainClass>
+          <workingDirectory>${project.basedir}</workingDirectory>
+          <!-- Catalog resolution via system properties (set before Saxon initializes) -->
+          <systemProperties>
+            <systemProperty>
+              <key>xmlresolver.catalog</key>
+              <value>${catalog.file}</value>
+            </systemProperty>
+            <systemProperty>
+              <key>xml.catalog.files</key>
+              <value>${catalog.file}</value>
+            </systemProperty>
+          </systemProperties>
+          <!-- Pipeline to run; extra args appended after pipeline path -->
+          <arguments>
+            <argument>${pipeline}</argument>
+          </arguments>
+        </configuration>
+      </plugin>
+
+      <!--
+        maven-dependency-plugin — inspect the resolved dependency tree.
+        Usage:
+          mvn dependency:tree      # full dep tree
+          mvn dependency:list      # flat list of resolved JARs
+      -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-dependency-plugin</artifactId>
+        <version>3.7.1</version>
+      </plugin>
+
+    </plugins>
+  </build>
+
+</project>
