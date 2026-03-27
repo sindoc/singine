@@ -4273,6 +4273,32 @@ def cmd_collibra_search(args: argparse.Namespace) -> int:
         return _collibra_err(exc)
 
 
+def cmd_wikipedia_contrib(args: argparse.Namespace) -> int:
+    from .wikipedia_contrib import wikipedia_contrib_collibra
+
+    if args.topic != "collibra":
+        payload = {
+            "ok": False,
+            "topic": args.topic,
+            "error": f"unsupported topic: {args.topic}",
+        }
+        if getattr(args, "json", False):
+            print_json(payload)
+        else:
+            print(payload["error"], file=sys.stderr)
+        return 1
+
+    payload = wikipedia_contrib_collibra(
+        repo_root=Path(args.repo_root),
+        action=args.action,
+    )
+    if getattr(args, "json", False):
+        print_json(payload)
+    else:
+        print_json(payload)
+    return 0 if payload.get("ok") else 1
+
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -5934,6 +5960,48 @@ def build_parser() -> argparse.ArgumentParser:
     # singine collibra edge — full edge stack (reuses singine.edge handlers)
     add_edge_parser(collibra_sub)
 
+    # singine collibra id / contract / server — loaded from collibra repo
+    try:
+        from .collibra_idgen import add_collibra_subcommands
+        add_collibra_subcommands(collibra_sub)
+    except (ImportError, Exception):
+        pass
+
+    # ── wikipedia — repository-backed Wikipedia contribution workflows ───────
+    wikipedia_parser = sub.add_parser(
+        "wikipedia",
+        help="Repository-backed Wikipedia contribution workflows",
+    )
+    wikipedia_sub = wikipedia_parser.add_subparsers(dest="wikipedia_subcommand")
+    wikipedia_parser.set_defaults(func=lambda a: (wikipedia_parser.print_help(), 1)[1])
+
+    wikipedia_contrib = wikipedia_sub.add_parser(
+        "contrib",
+        help="Run a documented Wikipedia contribution workflow",
+    )
+    wikipedia_contrib.add_argument("topic", choices=["collibra"])
+    wikipedia_contrib.add_argument(
+        "--repo-root",
+        default="/Users/skh/ws/git/github/sindoc/datatech-wiki-kg",
+        help="Path to the standalone repository backing the workflow",
+    )
+    wikipedia_contrib.add_argument(
+        "--action",
+        default="status",
+        choices=[
+            "status",
+            "refresh",
+            "kernel-sync",
+            "visualize",
+            "test-case",
+            "install-hooks",
+            "preview-mail",
+            "send-mail",
+        ],
+        help="Workflow action to run",
+    )
+    wikipedia_contrib.add_argument("--json", action="store_true")
+    wikipedia_contrib.set_defaults(func=cmd_wikipedia_contrib)
     # singine collibra io — governed Collibra I/O workflows
     from .collibra_io import add_collibra_io_parser
     add_collibra_io_parser(collibra_sub)
@@ -6191,6 +6259,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=cmd_mcp_call)
 
     mcp_parser.set_defaults(func=lambda args: mcp_parser.print_help() or 0)
+
+    # ── Lutino commands ───────────────────────────────────────────────────────
+    try:
+        from .lutino import add_lutino_parser
+        add_lutino_parser(sub)
+    except ImportError:
+        pass
 
     return parser
 
