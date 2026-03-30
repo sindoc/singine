@@ -54,6 +54,7 @@ def wikipedia_contrib_collibra(
     actions = {
         "status": None,
         "refresh": ["python3", "scripts/refresh_repo.py"],
+        "ingest-live": ["python3", "scripts/ingest_wikipedia_changes.py"],
         "kernel-sync": ["python3", "scripts/sync_kernel_views.py"],
         "test-case": ["python3", "scripts/test_case.py"],
         "install-hooks": ["python3", "scripts/install_hooks.py"],

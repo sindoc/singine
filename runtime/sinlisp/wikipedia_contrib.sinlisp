@@ -12,6 +12,10 @@
       (argv "singine" "wikipedia" "contrib" "collibra" "--action" "refresh" "--json")
       (reads "content/markdown/Collibra.md" "docs/process.md")
       (writes "content/org/Collibra.org" "content/logseq/pages/Collibra.md" "graph/collibra-support.jsonld" "feeds/datatech-collibra.atom" "feeds/datatech-collibra.rss" "notifications/pending-update.json"))
+    (command "ingest-live"
+      (argv "singine" "wikipedia" "contrib" "collibra" "--action" "ingest-live" "--json")
+      (reads "config/project.json" "build/wikipedia/Collibra.wikitext" "build/wikipedia/templates/Template-Data-technology.wikitext")
+      (writes "data/wikipedia-ingest/manifest.json" "build/wikipedia/live-sync-report.md"))
     (command "kernel-sync"
       (argv "singine" "wikipedia" "contrib" "collibra" "--action" "kernel-sync" "--json")
       (reads "docs/plan.md" "docs/backlog.md" "docs/roadmap.md")

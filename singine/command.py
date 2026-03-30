@@ -8,6 +8,7 @@ access, and a POSIX-friendly install flow.
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timedelta, timezone
 import json
 import os
 import secrets
@@ -4299,6 +4300,29 @@ def cmd_wikipedia_contrib(args: argparse.Namespace) -> int:
     return 0 if payload.get("ok") else 1
 
 
+def cmd_time(args: argparse.Namespace) -> int:
+    moment = datetime.now(timezone.utc) + timedelta(days=getattr(args, "offset_days", 0))
+    if getattr(args, "date_only", False):
+        text = moment.strftime("%Y-%m-%d")
+    else:
+        text = moment.replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+    payload = {
+        "ok": True,
+        "command": "time",
+        "subcommand": "date",
+        "offset_days": getattr(args, "offset_days", 0),
+        "iso_date": moment.strftime("%Y-%m-%d"),
+        "iso_datetime": moment.replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+        "text": text,
+    }
+    if getattr(args, "json", False):
+        print_json(payload)
+    else:
+        print(text)
+    return 0
+
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -5990,6 +6014,7 @@ def build_parser() -> argparse.ArgumentParser:
         choices=[
             "status",
             "refresh",
+            "ingest-live",
             "kernel-sync",
             "visualize",
             "test-case",
@@ -6001,6 +6026,22 @@ def build_parser() -> argparse.ArgumentParser:
     )
     wikipedia_contrib.add_argument("--json", action="store_true")
     wikipedia_contrib.set_defaults(func=cmd_wikipedia_contrib)
+
+    time_parser = sub.add_parser(
+        "time",
+        help="Emit ISO dates and datetimes through Singine's CLI surface",
+    )
+    time_sub = time_parser.add_subparsers(dest="time_subcommand")
+    time_parser.set_defaults(func=lambda a: (time_parser.print_help(), 1)[1])
+
+    time_date = time_sub.add_parser(
+        "date",
+        help="Print an ISO date or datetime with an optional day offset",
+    )
+    time_date.add_argument("--offset-days", type=int, default=0)
+    time_date.add_argument("--date-only", action="store_true")
+    time_date.add_argument("--json", action="store_true")
+    time_date.set_defaults(func=cmd_time)
     # ------------------------------------------------------------------ web
     web_parser = sub.add_parser(
         "web",

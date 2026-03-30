@@ -110,6 +110,7 @@
             "enum": [
               "status",
               "refresh",
+              "ingest-live",
               "kernel-sync",
               "visualize",
               "test-case",
@@ -172,6 +173,7 @@
             "enum": [
               "status",
               "refresh",
+              "ingest-live",
               "kernel-sync",
               "visualize",
               "test-case",

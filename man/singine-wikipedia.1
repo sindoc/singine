@@ -34,6 +34,12 @@ Run
 inside the standalone repository to regenerate derived artifacts such as Org,
 Logseq, JSON-LD, Atom, RSS, and the pending notification manifest.
 .TP
+.B ingest-live
+Run
+.B python3 scripts/ingest_wikipedia_changes.py
+to pull live MediaWiki revisions, talk-page activity, compare output, and
+repo-local diffs into tracked ingest artifacts.
+.TP
 .B kernel-sync
 Run
 .B python3 scripts/sync_kernel_views.py
@@ -66,6 +72,7 @@ Path to the standalone Wikipedia-support repository.
 Workflow action to run. Supported values:
 .BR status ,
 .BR refresh ,
+.BR ingest-live ,
 .BR kernel-sync ,
 .BR visualize ,
 .BR test-case ,
@@ -81,6 +88,7 @@ Emit a JSON payload describing the workflow result.
 singine wikipedia contrib collibra
 singine wikipedia contrib collibra --json
 singine wikipedia contrib collibra --action refresh
+singine wikipedia contrib collibra --action ingest-live
 singine wikipedia contrib collibra --action kernel-sync
 singine wikipedia contrib collibra --action visualize
 singine wikipedia contrib collibra --action test-case
@@ -98,6 +106,9 @@ Canonical process payload used to derive the visual workflow.
 .TP
 .I /Users/skh/ws/git/github/sindoc/datatech-wiki-kg/visuals/wikipedia-contrib-process.mmd
 Derived Mermaid diagram for the contributor-facing process.
+.TP
+.I /Users/skh/ws/git/github/sindoc/datatech-wiki-kg/data/wikipedia-ingest/
+Tracked ingest snapshots for the live article, talk page, and template surfaces.
 .TP
 .I /Users/skh/ws/git/github/sindoc/singine/schema/singine-wikipedia-api.json
 OpenAPI description of the local HTTP interaction model for this workflow.
