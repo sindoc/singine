@@ -10,6 +10,7 @@ Provide one command family that can:
 
 - report current repository and campaign state
 - refresh derived knowledge-graph and feed artifacts
+- ingest live MediaWiki article, talk-page, and template changes back into the repo
 - synchronize the visual Logseq working surface
 - render a user-friendly process diagram from a standards-based XML protocol
 - run one end-to-end command-line test case
@@ -27,6 +28,7 @@ singine wikipedia contrib collibra [--repo-root PATH] [--action ACTION] [--json]
 |---|---|---|
 | `status` | Return workflow metadata without modifying files | none |
 | `refresh` | Rebuild derived repository artifacts | `python3 scripts/refresh_repo.py` |
+| `ingest-live` | Pull live MediaWiki revisions, diffs, and talk-page changes into repo artifacts | `python3 scripts/ingest_wikipedia_changes.py` |
 | `kernel-sync` | Project working material into the Singine kernel Logseq graph | `python3 scripts/sync_kernel_views.py` |
 | `visualize` | Render the Mermaid process diagram from the XML protocol payload | `python3 scripts/render_process_visual.py` |
 | `test-case` | Run the end-to-end verification flow | `python3 scripts/test_case.py` |
@@ -39,6 +41,7 @@ singine wikipedia contrib collibra [--repo-root PATH] [--action ACTION] [--json]
 ```bash
 singine wikipedia contrib collibra --json
 singine wikipedia contrib collibra --action refresh --json
+singine wikipedia contrib collibra --action ingest-live --json
 singine wikipedia contrib collibra --action kernel-sync --json
 singine wikipedia contrib collibra --action visualize --json
 singine wikipedia contrib collibra --action test-case --json
@@ -61,6 +64,7 @@ singine wikipedia contrib collibra --action preview-mail --json
 - `site/src/xml/en/` contains the public SilkPage-style XML publication source
 - `graph/collibra-support.jsonld` is the generated JSON-LD graph
 - `feeds/datatech-collibra.atom` and `feeds/datatech-collibra.rss` are the generated update feeds
+- `data/wikipedia-ingest/` stores live article, talk-page, and template snapshots pulled from MediaWiki
 
 ## Testing
 
@@ -81,3 +85,11 @@ python3 -m unittest py.tests.test_wikipedia_docs_surface -v
 ## Interaction model
 
 The CLI wrapper is the executable surface. The OpenAPI document describes a matching local HTTP interaction model for test harnesses and service adapters. The SinLisp file captures the same action inventory in a compact rule-oriented form for command generation and test planning.
+
+The default cutoff used by the live-ingest workflow is generated via:
+
+```bash
+singine time date --offset-days -2 --json
+```
+
+That keeps the repository-side ingest aligned with the broader Singine temporal surface instead of hard-coding a date in the wrapper.

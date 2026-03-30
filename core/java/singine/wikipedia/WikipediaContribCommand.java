@@ -33,6 +33,9 @@ public interface WikipediaContribCommand {
     /** Refresh derived repository artifacts such as Org, Logseq, JSON-LD, Atom, and RSS. */
     String ACTION_REFRESH = "refresh";
 
+    /** Ingest live MediaWiki article, talk-page, and template changes into repo artifacts. */
+    String ACTION_INGEST_LIVE = "ingest-live";
+
     /** Synchronize selected repository content into the Singine kernel Logseq graph. */
     String ACTION_KERNEL_SYNC = "kernel-sync";
 

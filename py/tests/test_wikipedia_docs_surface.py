@@ -11,6 +11,7 @@ class WikipediaDocsSurfaceTest(unittest.TestCase):
         self.actions = [
             "status",
             "refresh",
+            "ingest-live",
             "kernel-sync",
             "visualize",
             "test-case",
