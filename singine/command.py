@@ -24,6 +24,7 @@ from typing import Any, Dict, List, Optional, Sequence
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_PREFIX = Path.home() / ".local"
 DEFAULT_GLOSSARY_ROOT = Path("/Users/skh/ws/today/00-WORK/morning_glossary_package")
+GIT_REPO_REGISTRY = REPO_ROOT / "data" / "git-repos.json"
 
 
 def _read_text(path: Path) -> str:
@@ -381,6 +382,156 @@ def _git_capture(args: Sequence[str], *, cwd: Path, check: bool = True, timeout:
         check=check,
         timeout=timeout,
     )
+
+
+def _load_git_repo_registry() -> Dict[str, Any]:
+    registry_path = Path(os.environ.get("SINGINE_GIT_REPO_REGISTRY", str(GIT_REPO_REGISTRY))).expanduser()
+    payload = json.loads(_read_text(registry_path))
+    return payload
+
+
+def _git_repo_entries() -> List[Dict[str, Any]]:
+    payload = _load_git_repo_registry()
+    return list(payload.get("repos", []))
+
+
+def _find_repo_entry(repo: str | None = None, repo_root: Path | None = None) -> Dict[str, Any]:
+    entries = _git_repo_entries()
+    for entry in entries:
+        entry_path = Path(entry["path"]).expanduser().resolve()
+        aliases = {entry["id"], entry_path.name, str(entry_path)}
+        if repo and repo in aliases:
+            return entry
+        if repo_root and repo_root.resolve() == entry_path:
+            return entry
+    raise ValueError(f"no registered Singine git repository matches repo={repo!r} repo_root={str(repo_root) if repo_root else None!r}")
+
+
+def _render_hook_script(event: str) -> str:
+    launcher = REPO_ROOT
+    return f"""#!/bin/sh
+set -eu
+repo_root=$(git rev-parse --show-toplevel)
+if [ -n "${{PYTHONPATH:-}}" ]; then
+  export PYTHONPATH="{launcher}:$PYTHONPATH"
+else
+  export PYTHONPATH="{launcher}"
+fi
+exec python3 -m singine.command git hooks run --event {event} --repo-root "$repo_root"
+"""
+
+
+def _write_hook(path: Path, content: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+    path.chmod(path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+
+
+def cmd_git_repos_list(args: argparse.Namespace) -> int:
+    payload = {"ok": True, "repos": _git_repo_entries()}
+    if args.json:
+        print_json(payload)
+    else:
+        for entry in payload["repos"]:
+            print(f"{entry['id']}: {entry['path']} ({entry.get('archetype', 'unknown')})")
+    return 0
+
+
+def cmd_git_hooks_install(args: argparse.Namespace) -> int:
+    entries = _git_repo_entries()
+    if not args.all:
+        entries = [_find_repo_entry(repo=args.repo)]
+    installed: List[Dict[str, Any]] = []
+    for entry in entries:
+        repo_root = Path(entry["path"]).expanduser()
+        hooks_dir = repo_root / ".git" / "hooks"
+        written: List[str] = []
+        for event in ["pre-commit", "post-commit", "post-merge"]:
+            target = hooks_dir / event
+            _write_hook(target, _render_hook_script(event))
+            written.append(str(target))
+        installed.append(
+            {
+                "id": entry["id"],
+                "path": str(repo_root),
+                "hooks": written,
+            }
+        )
+    payload = {"ok": True, "installed": installed}
+    if args.json:
+        print_json(payload)
+    else:
+        for entry in installed:
+            print(f"{entry['id']}:")
+            for hook in entry["hooks"]:
+                print(f"  {hook}")
+    return 0
+
+
+def cmd_git_hooks_run(args: argparse.Namespace) -> int:
+    repo_root = Path(args.repo_root).expanduser().resolve()
+    entry = _find_repo_entry(repo_root=repo_root)
+    event = args.event
+    hook_cfg = ((entry.get("hooks") or {}).get(event) or {})
+    commands = [list(cmd) for cmd in hook_cfg.get("commands", [])]
+    results: List[Dict[str, Any]] = []
+    exit_code = 0
+    for command in commands:
+        proc = subprocess.run(command, cwd=repo_root, capture_output=True, text=True)
+        item = {
+            "command": command,
+            "returncode": proc.returncode,
+            "stdout": proc.stdout,
+            "stderr": proc.stderr,
+        }
+        results.append(item)
+        if proc.returncode != 0 and exit_code == 0:
+            exit_code = proc.returncode
+    payload = {
+        "ok": exit_code == 0,
+        "repo": entry["id"],
+        "repo_root": str(repo_root),
+        "event": event,
+        "commands": commands,
+        "results": results,
+        "trigger_command": f"singine git hooks run --event {event} --repo-root {repo_root}",
+    }
+    if args.json:
+        print_json(payload)
+    else:
+        print(f"[singine git hooks run] repo={entry['id']} event={event}")
+        for command in commands:
+            print("command:", " ".join(shlex.quote(part) for part in command))
+        for item in results:
+            if item["stdout"].strip():
+                print(item["stdout"].rstrip())
+            if item["stderr"].strip():
+                print(item["stderr"].rstrip(), file=sys.stderr)
+    return exit_code
+
+
+def cmd_git_hooks_graph(args: argparse.Namespace) -> int:
+    entries = _git_repo_entries()
+    if args.format == "json":
+        print_json({"ok": True, "repos": entries})
+        return 0
+    lines = ["graph TD"]
+    for entry in entries:
+        repo_id = entry["id"].replace("-", "_")
+        lines.append(f"  repo_{repo_id}[{entry['id']}]")
+        for event in ["pre-commit", "post-commit", "post-merge"]:
+            event_id = f"{repo_id}_{event.replace('-', '_')}"
+            lines.append(f"  repo_{repo_id} --> {event_id}[{event}]")
+            commands = ((entry.get("hooks") or {}).get(event) or {}).get("commands", [])
+            if not commands:
+                lines.append(f"  {event_id} --> {event_id}_noop[singine git hooks run]")
+                continue
+            for index, command in enumerate(commands, start=1):
+                command_id = f"{event_id}_{index}"
+                display = " ".join(command)
+                lines.append(f"  {event_id} --> {command_id}[{display}]")
+    print("\n".join(lines))
+    return 0
 
 
 def _normalize_public_dir(raw_path: str) -> str:
@@ -4926,6 +5077,30 @@ def build_parser() -> argparse.ArgumentParser:
     git_rm_public_dir.add_argument("--execute", action="store_true", help="Run git-filter-repo locally after planning")
     git_rm_public_dir.add_argument("--json", action="store_true", help="Emit the plan as JSON")
     git_rm_public_dir.set_defaults(func=cmd_git_rm_public_dir)
+
+    git_repos = git_sub.add_parser("repos", help="List the main Git repositories registered in Singine")
+    git_repos.add_argument("--json", action="store_true", help="Emit JSON")
+    git_repos.set_defaults(func=cmd_git_repos_list)
+
+    git_hooks = git_sub.add_parser("hooks", help="Install and run shared Singine-managed Git hooks")
+    git_hooks_sub = git_hooks.add_subparsers(dest="git_hooks_subcommand")
+    git_hooks.set_defaults(func=lambda a: (git_hooks.print_help(), 1)[1])
+
+    git_hooks_install = git_hooks_sub.add_parser("install", help="Install shared hooks into one or more registered repositories")
+    git_hooks_install.add_argument("repo", nargs="?", help="Registered repo id")
+    git_hooks_install.add_argument("--all", action="store_true", help="Install hooks into every registered repository")
+    git_hooks_install.add_argument("--json", action="store_true", help="Emit JSON")
+    git_hooks_install.set_defaults(func=cmd_git_hooks_install)
+
+    git_hooks_run = git_hooks_sub.add_parser("run", help="Internal hook runner invoked by installed hook scripts")
+    git_hooks_run.add_argument("--event", required=True, choices=["pre-commit", "post-commit", "post-merge"])
+    git_hooks_run.add_argument("--repo-root", required=True)
+    git_hooks_run.add_argument("--json", action="store_true", help="Emit JSON")
+    git_hooks_run.set_defaults(func=cmd_git_hooks_run)
+
+    git_hooks_graph = git_hooks_sub.add_parser("graph", help="Render the registered hook topology")
+    git_hooks_graph.add_argument("--format", choices=["mermaid", "json"], default="mermaid")
+    git_hooks_graph.set_defaults(func=cmd_git_hooks_graph)
 
     template_parser = sub.add_parser("template", help="Generate Singine-aware project templates")
     template_sub = template_parser.add_subparsers(dest="template_command")

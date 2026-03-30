@@ -1,0 +1,96 @@
+{
+  "version": 1,
+  "repos": [
+    {
+      "id": "datatech-wiki-kg",
+      "label": "DataTech Wikipedia Support KG",
+      "path": "/Users/skh/ws/git/github/sindoc/datatech-wiki-kg",
+      "archetype": "wikipedia-content",
+      "hooks": {
+        "pre-commit": {
+          "commands": [
+            [
+              "python3",
+              "scripts/check_wikipedia_quality.py"
+            ]
+          ]
+        },
+        "post-commit": {
+          "commands": [
+            [
+              "python3",
+              "scripts/refresh_repo.py"
+            ]
+          ]
+        },
+        "post-merge": {
+          "commands": [
+            [
+              "python3",
+              "scripts/refresh_repo.py"
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "id": "singine",
+      "label": "Singine",
+      "path": "/Users/skh/ws/git/github/sindoc/singine",
+      "archetype": "orchestration-runtime",
+      "hooks": {
+        "pre-commit": {
+          "commands": [
+            [
+              "python3",
+              "-m",
+              "py_compile",
+              "singine/command.py",
+              "singine/wikipedia_contrib.py"
+            ]
+          ]
+        },
+        "post-commit": {
+          "commands": []
+        },
+        "post-merge": {
+          "commands": []
+        }
+      }
+    },
+    {
+      "id": "silkpage",
+      "label": "SilkPage",
+      "path": "/Users/skh/ws/git/github/sindoc/silkpage",
+      "archetype": "semantic-publishing-engine",
+      "hooks": {
+        "pre-commit": {
+          "commands": []
+        },
+        "post-commit": {
+          "commands": []
+        },
+        "post-merge": {
+          "commands": []
+        }
+      }
+    },
+    {
+      "id": "collibra",
+      "label": "Collibra",
+      "path": "/Users/skh/ws/git/github/sindoc/collibra",
+      "archetype": "collibra-platform",
+      "hooks": {
+        "pre-commit": {
+          "commands": []
+        },
+        "post-commit": {
+          "commands": []
+        },
+        "post-merge": {
+          "commands": []
+        }
+      }
+    }
+  ]
+}
