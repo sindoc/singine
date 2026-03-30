@@ -16,12 +16,7 @@
           ]
         },
         "post-commit": {
-          "commands": [
-            [
-              "python3",
-              "scripts/refresh_repo.py"
-            ]
-          ]
+          "commands": []
         },
         "post-merge": {
           "commands": [
