@@ -1,0 +1,269 @@
+{
+  "generated_at": "2026-05-23T13:20:57.642174+00:00",
+  "generator": "cleanup/collect.py",
+  "result_sets": {
+    "disk": {
+      "scanned_at": "2026-05-23T13:20:57.639080+00:00",
+      "os": "windows",
+      "home_dir": "C:\\Users\\jhe",
+      "items": [
+        {
+          "id": "jetbrains-idea2020-all",
+          "label": "IntelliJ IDEA 2020.2 — full system directory",
+          "path": "~/AppData/Local/JetBrains/IntelliJIdea2020.2",
+          "abs_path": "C:\\Users\\jhe\\AppData\\Local\\JetBrains\\IntelliJIdea2020.2",
+          "size_bytes": 57455444149,
+          "size_human": "53.5 GB",
+          "category": "ide-cache",
+          "risk": "review",
+          "singine_cmd": "singine runtime exec-external bin/scan delete --path \"C:\\Users\\jhe\\AppData\\Local\\JetBrains\\IntelliJIdea2020.2\"",
+          "shell_cmd": "powershell.exe -Command \"Remove-Item -Recurse -Force 'C:\\Users\\jhe\\AppData\\Local\\JetBrains\\IntelliJIdea2020.2'\"",
+          "win_cmd": "Remove-Item -Recurse -Force 'C:\\Users\\jhe\\AppData\\Local\\JetBrains\\IntelliJIdea2020.2'",
+          "notes": "Safe to delete if you no longer use IntelliJ 2020.2."
+        },
+        {
+          "id": "jetbrains-idea2020-tomcat",
+          "label": "IntelliJ IDEA 2020.2 — Tomcat server cache",
+          "path": "~/AppData/Local/JetBrains/IntelliJIdea2020.2/tomcat",
+          "abs_path": "C:\\Users\\jhe\\AppData\\Local\\JetBrains\\IntelliJIdea2020.2\\tomcat",
+          "size_bytes": 55889415916,
+          "size_human": "52.1 GB",
+          "category": "ide-cache",
+          "risk": "safe",
+          "singine_cmd": "singine runtime exec-external bin/scan delete --path \"C:\\Users\\jhe\\AppData\\Local\\JetBrains\\IntelliJIdea2020.2\\tomcat\"",
+          "shell_cmd": "powershell.exe -Command \"Remove-Item -Recurse -Force 'C:\\Users\\jhe\\AppData\\Local\\JetBrains\\IntelliJIdea2020.2\\tomcat'\"",
+          "win_cmd": "Remove-Item -Recurse -Force 'C:\\Users\\jhe\\AppData\\Local\\JetBrains\\IntelliJIdea2020.2\\tomcat'",
+          "notes": "Tomcat runtime output from a 2020 IntelliJ install."
+        },
+        {
+          "id": "claude-desktop-cache",
+          "label": "Claude desktop app — LocalCache",
+          "path": "~/AppData/Local/Packages/Claude_pzs8sxrjxfjjc/LocalCache",
+          "abs_path": "C:\\Users\\jhe\\AppData\\Local\\Packages\\Claude_pzs8sxrjxfjjc\\LocalCache",
+          "size_bytes": 12773258181,
+          "size_human": "11.9 GB",
+          "category": "app-cache",
+          "risk": "review",
+          "singine_cmd": "singine runtime exec-external bin/scan delete --path \"C:\\Users\\jhe\\AppData\\Local\\Packages\\Claude_pzs8sxrjxfjjc\\LocalCache\"",
+          "shell_cmd": "powershell.exe -Command \"Remove-Item -Recurse -Force 'C:\\Users\\jhe\\AppData\\Local\\Packages\\Claude_pzs8sxrjxfjjc\\LocalCache'\"",
+          "win_cmd": "Remove-Item -Recurse -Force 'C:\\Users\\jhe\\AppData\\Local\\Packages\\Claude_pzs8sxrjxfjjc\\LocalCache'",
+          "notes": "Conversation cache. Clears chat history from the desktop app."
+        },
+        {
+          "id": "dropbox-backup-2020-mar",
+          "label": "Dropbox — full user backup 2020-03",
+          "path": "~/Dropbox/backup/20200315T195649_Jay_Users.tar.gz",
+          "abs_path": "C:\\Users\\jhe\\Dropbox\\backup\\20200315T195649_Jay_Users.tar.gz",
+          "size_bytes": 12376923008,
+          "size_human": "11.5 GB",
+          "category": "backup",
+          "risk": "review",
+          "singine_cmd": "singine runtime exec-external bin/scan delete --path \"C:\\Users\\jhe\\Dropbox\\backup\\20200315T195649_Jay_Users.tar.gz\"",
+          "shell_cmd": "powershell.exe -Command \"Remove-Item -Recurse -Force 'C:\\Users\\jhe\\Dropbox\\backup\\20200315T195649_Jay_Users.tar.gz'\"",
+          "win_cmd": "Remove-Item -Recurse -Force 'C:\\Users\\jhe\\Dropbox\\backup\\20200315T195649_Jay_Users.tar.gz'",
+          "notes": "6-year-old full user backup. Verify newer backup exists first."
+        },
+        {
+          "id": "dropbox-backup-2020-jan",
+          "label": "Dropbox — full user backup 2020-01",
+          "path": "~/Dropbox/backup/20200126T184105_Jay_Users.tar.gz",
+          "abs_path": "C:\\Users\\jhe\\Dropbox\\backup\\20200126T184105_Jay_Users.tar.gz",
+          "size_bytes": 10686315643,
+          "size_human": "10.0 GB",
+          "category": "backup",
+          "risk": "review",
+          "singine_cmd": "singine runtime exec-external bin/scan delete --path \"C:\\Users\\jhe\\Dropbox\\backup\\20200126T184105_Jay_Users.tar.gz\"",
+          "shell_cmd": "powershell.exe -Command \"Remove-Item -Recurse -Force 'C:\\Users\\jhe\\Dropbox\\backup\\20200126T184105_Jay_Users.tar.gz'\"",
+          "win_cmd": "Remove-Item -Recurse -Force 'C:\\Users\\jhe\\Dropbox\\backup\\20200126T184105_Jay_Users.tar.gz'",
+          "notes": "6-year-old full user backup."
+        },
+        {
+          "id": "tibco-zip-library",
+          "label": "TIBCO BW 6.3.1 zip — local duplicate (Dropbox copy is canonical)",
+          "path": "~/Library/Articles/TIBCO/TIBCO DocAndBinaries/TIB_BW-dev_6.3.1_win_x86_64.zip",
+          "abs_path": "C:\\Users\\jhe\\Library\\Articles\\TIBCO\\TIBCO DocAndBinaries\\TIB_BW-dev_6.3.1_win_x86_64.zip",
+          "size_bytes": 1206308315,
+          "size_human": "1.1 GB",
+          "category": "duplicate",
+          "risk": "safe",
+          "singine_cmd": "singine runtime exec-external bin/scan delete --path \"C:\\Users\\jhe\\Library\\Articles\\TIBCO\\TIBCO DocAndBinaries\\TIB_BW-dev_6.3.1_win_x86_64.zip\"",
+          "shell_cmd": "powershell.exe -Command \"Remove-Item -Recurse -Force 'C:\\Users\\jhe\\Library\\Articles\\TIBCO\\TIBCO DocAndBinaries\\TIB_BW-dev_6.3.1_win_x86_64.zip'\"",
+          "win_cmd": "Remove-Item -Recurse -Force 'C:\\Users\\jhe\\Library\\Articles\\TIBCO\\TIBCO DocAndBinaries\\TIB_BW-dev_6.3.1_win_x86_64.zip'",
+          "notes": "Identical copy lives in Dropbox/Library."
+        },
+        {
+          "id": "dropbox-installer-idea",
+          "label": "Dropbox/Downloads — IntelliJ IDEA 2020.3.1 installer",
+          "path": "~/Dropbox/Downloads/ideaIU-2020.3.1.exe",
+          "abs_path": "C:\\Users\\jhe\\Dropbox\\Downloads\\ideaIU-2020.3.1.exe",
+          "size_bytes": 750247912,
+          "size_human": "715.5 MB",
+          "category": "installer",
+          "risk": "safe",
+          "singine_cmd": "singine runtime exec-external bin/scan delete --path \"C:\\Users\\jhe\\Dropbox\\Downloads\\ideaIU-2020.3.1.exe\"",
+          "shell_cmd": "powershell.exe -Command \"Remove-Item -Recurse -Force 'C:\\Users\\jhe\\Dropbox\\Downloads\\ideaIU-2020.3.1.exe'\"",
+          "win_cmd": "Remove-Item -Recurse -Force 'C:\\Users\\jhe\\Dropbox\\Downloads\\ideaIU-2020.3.1.exe'",
+          "notes": "Already installed."
+        },
+        {
+          "id": "logseq-old-version",
+          "label": "Logseq — old app version 0.10.15",
+          "path": "~/AppData/Local/Logseq/app-0.10.15",
+          "abs_path": "C:\\Users\\jhe\\AppData\\Local\\Logseq\\app-0.10.15",
+          "size_bytes": 625044702,
+          "size_human": "596.1 MB",
+          "category": "app-cache",
+          "risk": "review",
+          "singine_cmd": "singine runtime exec-external bin/scan delete --path \"C:\\Users\\jhe\\AppData\\Local\\Logseq\\app-0.10.15\"",
+          "shell_cmd": "powershell.exe -Command \"Remove-Item -Recurse -Force 'C:\\Users\\jhe\\AppData\\Local\\Logseq\\app-0.10.15'\"",
+          "win_cmd": "Remove-Item -Recurse -Force 'C:\\Users\\jhe\\AppData\\Local\\Logseq\\app-0.10.15'",
+          "notes": ""
+        },
+        {
+          "id": "oracle-adf-zip-library",
+          "label": "Oracle ADF training zip — local duplicate",
+          "path": "~/Library/Articles/Oracle/training/adf/oracle-adf-training.zip",
+          "abs_path": "C:\\Users\\jhe\\Library\\Articles\\Oracle\\training\\adf\\oracle-adf-training.zip",
+          "size_bytes": 464995680,
+          "size_human": "443.5 MB",
+          "category": "duplicate",
+          "risk": "safe",
+          "singine_cmd": "singine runtime exec-external bin/scan delete --path \"C:\\Users\\jhe\\Library\\Articles\\Oracle\\training\\adf\\oracle-adf-training.zip\"",
+          "shell_cmd": "powershell.exe -Command \"Remove-Item -Recurse -Force 'C:\\Users\\jhe\\Library\\Articles\\Oracle\\training\\adf\\oracle-adf-training.zip'\"",
+          "win_cmd": "Remove-Item -Recurse -Force 'C:\\Users\\jhe\\Library\\Articles\\Oracle\\training\\adf\\oracle-adf-training.zip'",
+          "notes": "Identical copy lives in Dropbox/Library."
+        },
+        {
+          "id": "claude-cli-old-2149",
+          "label": "Claude CLI — old version 2.1.149",
+          "path": "~/.local/share/claude/versions/2.1.149",
+          "abs_path": "C:\\Users\\jhe\\.local\\share\\claude\\versions\\2.1.149",
+          "size_bytes": 234249376,
+          "size_human": "223.4 MB",
+          "category": "old-binary",
+          "risk": "safe",
+          "singine_cmd": "singine runtime exec-external bin/scan delete --path \"C:\\Users\\jhe\\.local\\share\\claude\\versions\\2.1.149\"",
+          "shell_cmd": "powershell.exe -Command \"Remove-Item -Recurse -Force 'C:\\Users\\jhe\\.local\\share\\claude\\versions\\2.1.149'\"",
+          "win_cmd": "Remove-Item -Recurse -Force 'C:\\Users\\jhe\\.local\\share\\claude\\versions\\2.1.149'",
+          "notes": "Superseded by 2.1.150."
+        },
+        {
+          "id": "claude-cli-old-2148",
+          "label": "Claude CLI — old version 2.1.148",
+          "path": "~/.local/share/claude/versions/2.1.148",
+          "abs_path": "C:\\Users\\jhe\\.local\\share\\claude\\versions\\2.1.148",
+          "size_bytes": 232827552,
+          "size_human": "222.0 MB",
+          "category": "old-binary",
+          "risk": "safe",
+          "singine_cmd": "singine runtime exec-external bin/scan delete --path \"C:\\Users\\jhe\\.local\\share\\claude\\versions\\2.1.148\"",
+          "shell_cmd": "powershell.exe -Command \"Remove-Item -Recurse -Force 'C:\\Users\\jhe\\.local\\share\\claude\\versions\\2.1.148'\"",
+          "win_cmd": "Remove-Item -Recurse -Force 'C:\\Users\\jhe\\.local\\share\\claude\\versions\\2.1.148'",
+          "notes": "Superseded by 2.1.150."
+        },
+        {
+          "id": "dropbox-installer-nitro",
+          "label": "Dropbox/Downloads — Nitro Pro 13 MSI",
+          "path": "~/Dropbox/Downloads/nitro_pro13_ba_x64.msi",
+          "abs_path": "C:\\Users\\jhe\\Dropbox\\Downloads\\nitro_pro13_ba_x64.msi",
+          "size_bytes": 220766208,
+          "size_human": "210.5 MB",
+          "category": "installer",
+          "risk": "safe",
+          "singine_cmd": "singine runtime exec-external bin/scan delete --path \"C:\\Users\\jhe\\Dropbox\\Downloads\\nitro_pro13_ba_x64.msi\"",
+          "shell_cmd": "powershell.exe -Command \"Remove-Item -Recurse -Force 'C:\\Users\\jhe\\Dropbox\\Downloads\\nitro_pro13_ba_x64.msi'\"",
+          "win_cmd": "Remove-Item -Recurse -Force 'C:\\Users\\jhe\\Dropbox\\Downloads\\nitro_pro13_ba_x64.msi'",
+          "notes": ""
+        },
+        {
+          "id": "dropbox-installer-deepl",
+          "label": "Dropbox/Downloads — DeepL installer",
+          "path": "~/Dropbox/Downloads/DeepLSetup.exe",
+          "abs_path": "C:\\Users\\jhe\\Dropbox\\Downloads\\DeepLSetup.exe",
+          "size_bytes": 180483696,
+          "size_human": "172.1 MB",
+          "category": "installer",
+          "risk": "safe",
+          "singine_cmd": "singine runtime exec-external bin/scan delete --path \"C:\\Users\\jhe\\Dropbox\\Downloads\\DeepLSetup.exe\"",
+          "shell_cmd": "powershell.exe -Command \"Remove-Item -Recurse -Force 'C:\\Users\\jhe\\Dropbox\\Downloads\\DeepLSetup.exe'\"",
+          "win_cmd": "Remove-Item -Recurse -Force 'C:\\Users\\jhe\\Dropbox\\Downloads\\DeepLSetup.exe'",
+          "notes": ""
+        },
+        {
+          "id": "dropbox-installer-xampp",
+          "label": "Dropbox/Downloads — XAMPP installer",
+          "path": "~/Dropbox/Downloads/xampp-windows-x64-8.0.0-3-VS16-installer.exe",
+          "abs_path": "C:\\Users\\jhe\\Dropbox\\Downloads\\xampp-windows-x64-8.0.0-3-VS16-installer.exe",
+          "size_bytes": 164609680,
+          "size_human": "157.0 MB",
+          "category": "installer",
+          "risk": "safe",
+          "singine_cmd": "singine runtime exec-external bin/scan delete --path \"C:\\Users\\jhe\\Dropbox\\Downloads\\xampp-windows-x64-8.0.0-3-VS16-installer.exe\"",
+          "shell_cmd": "powershell.exe -Command \"Remove-Item -Recurse -Force 'C:\\Users\\jhe\\Dropbox\\Downloads\\xampp-windows-x64-8.0.0-3-VS16-installer.exe'\"",
+          "win_cmd": "Remove-Item -Recurse -Force 'C:\\Users\\jhe\\Dropbox\\Downloads\\xampp-windows-x64-8.0.0-3-VS16-installer.exe'",
+          "notes": ""
+        }
+      ],
+      "total_reclaimable_bytes": 153260890018,
+      "total_reclaimable_human": "142.7 GB"
+    },
+    "governance": {
+      "collected_at": "2026-05-23T13:20:57.639568+00:00",
+      "db_path": "C:\\Users\\jhe\\Documents\\ws\\gh\\sync-logseq\\data\\sync-logseq.db",
+      "db_state": "not_initialized",
+      "rules": [
+        {
+          "id": "GOV-001",
+          "title": "Response Transparency",
+          "applies": "Every time a human selects a response option",
+          "rule": "The selection MUST be recorded in the audit log with actor, timestamp, question ID, and chosen position before any action is dispatched. No action may begin without a confirmed audit entry."
+        },
+        {
+          "id": "GOV-002",
+          "title": "Sync Action Accountability",
+          "applies": "Every synchronous action execution",
+          "rule": "Sync actions execute in the same thread as the response. Result (success or error) MUST be written to audit log and executions table. On failure the session continues; it does not abort remaining sync actions."
+        },
+        {
+          "id": "GOV-003",
+          "title": "Async Action Queuing",
+          "applies": "Every asynchronous action dispatch",
+          "rule": "Async actions are enqueued in SQLite (status=pending). A singine worker polls and executes them independently. The enqueue operation is synchronous; the execution is not. Idempotency keys MUST be set on every async payload."
+        },
+        {
+          "id": "GOV-004",
+          "title": "Human Task Escalation",
+          "applies": "Any action whose type is \"human\"",
+          "rule": "A human_tasks record is created (status=open) and a notification is sent (webhook or email). The session that triggered the task does NOT wait for resolution. Human tasks MUST be resolved within the configured SLA window (default: 48 h). Unresolved tasks after SLA are re-notified."
+        },
+        {
+          "id": "GOV-005",
+          "title": "Logseq Sync Integrity",
+          "applies": "Any push or pull between local state and Logseq",
+          "rule": "A content hash of each page/block is stored before and after sync. On hash mismatch without an explicit commit, the sync is aborted and recorded as a conflict in audit log."
+        },
+        {
+          "id": "GOV-006",
+          "title": "Knowledge Base Immutability",
+          "applies": "Any mutation to questions or response options",
+          "rule": "Questions and responses are versioned, not edited in place. The previous version is retained and marked inactive. All executions reference the version active at the time of the response."
+        },
+        {
+          "id": "GOV-007",
+          "title": "Cost Visibility",
+          "applies": "Any response option with costLevel ≥ \"high\"",
+          "rule": "Before dispatching actions, the CLI MUST display the cost level and list all actions that will be triggered. An explicit confirmation prompt is required. Auto-mode (non-interactive) is not permitted for \"critical\" cost actions without a governance override flag."
+        },
+        {
+          "id": "GOV-008",
+          "title": "silkpage Content Transformation Traceability",
+          "applies": "Any content transformation via silkpage",
+          "rule": "Input and output content hashes, the transformation template name, and silkpage version MUST be logged. Transformed content is stored in a staging area; it does not replace source until a commit step."
+        }
+      ],
+      "tables": {},
+      "summary": {},
+      "note": "Database not yet seeded. Run: cd gh/sync-logseq && npm install && tsx src/cli/index.ts seed"
+    }
+  }
+}

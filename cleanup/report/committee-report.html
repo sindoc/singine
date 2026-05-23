@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Committee Report — Disk + Governance</title>
+  <!-- CDN production assets (overrides inline styles) -->
+  <link rel="stylesheet" href="//cdn.example.org/assets/css/cleanup.css" media="print" onload="this.media='all'"/>
+  <style>
+:root{--safe:#1a7a4a;--review:#b45309;--keep:#374151;--bg:#f9fafb;
+      --border:#e5e7eb;--mono:"JetBrains Mono","Fira Code",ui-monospace,monospace}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);
+     color:#111827;line-height:1.6;font-size:15px}
+header{background:#111827;color:#f9fafb;padding:1.5rem 2rem}
+header h1{font-size:1.4rem;font-weight:700}
+.meta{font-size:.82rem;color:#9ca3af;margin-top:.25rem}
+main{max-width:1300px;margin:0 auto;padding:2rem}
+h2{font-size:1.1rem;font-weight:600;margin:1.75rem 0 .6rem;
+   border-bottom:1px solid var(--border);padding-bottom:.4rem}
+h3{font-size:.95rem;font-weight:600;margin:.75rem 0 .4rem;color:#374151}
+p,li{margin-bottom:.4rem}
+.banner{background:#111827;color:#f9fafb;padding:.65rem 1.1rem;
+        border-radius:5px;margin-bottom:1rem;font-weight:600;font-size:.9rem}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem}
+.card{background:#fff;border:1px solid var(--border);border-radius:6px;padding:1rem}
+.card .val{font-size:2rem;font-weight:700;color:#111827}
+.card .lbl{font-size:.8rem;color:#6b7280;margin-top:.1rem}
+table{width:100%;border-collapse:collapse;font-size:.85rem;margin-bottom:1.5rem}
+th{background:#111827;color:#f9fafb;text-align:left;padding:.55rem .75rem;white-space:nowrap}
+td{padding:.55rem .75rem;border-bottom:1px solid var(--border);vertical-align:top}
+tr:hover td{background:#f3f4f6}
+td.size{font-weight:600;white-space:nowrap}
+td.path code{font-family:var(--mono);font-size:.78rem;color:#374151}
+.badge-safe  {color:var(--safe);font-weight:600}
+.badge-review{color:var(--review);font-weight:600}
+.badge-keep  {color:var(--keep)}
+tr.r-safe   td:first-child{border-left:3px solid var(--safe)}
+tr.r-review td:first-child{border-left:3px solid var(--review)}
+td.cmd{max-width:480px}
+code.sc{display:block;font-family:var(--mono);font-size:.76rem;
+         background:#1f2937;color:#a7f3d0;padding:.3rem .55rem;border-radius:3px;
+         white-space:pre-wrap;word-break:break-all;margin-bottom:.3rem}
+.cp{font-size:.72rem;padding:.18rem .55rem;background:#374151;color:#f9fafb;
+    border:none;border-radius:3px;cursor:pointer;transition:background .15s}
+.cp:hover{background:#111827}
+.cp.ok{background:var(--safe)}
+details summary{font-size:.75rem;color:#6b7280;cursor:pointer}
+code.sh,code.wn{display:block;font-family:var(--mono);font-size:.74rem;
+                background:#f3f4f6;color:#374151;padding:.28rem .45rem;
+                border-radius:3px;white-space:pre-wrap;word-break:break-all;margin-top:.2rem}
+.note{background:#fffbeb;border-left:3px solid #f59e0b;
+      padding:.55rem .85rem;border-radius:0 4px 4px 0;font-size:.83rem;margin:.5rem 0}
+.gov-rule{background:#fff;border:1px solid var(--border);border-radius:5px;
+          padding:.75rem 1rem;margin-bottom:.75rem}
+.gov-rule .gid{font-family:var(--mono);font-weight:700;color:#111827;font-size:.88rem}
+.gov-rule .gtitle{font-weight:600;margin-left:.5rem}
+.gov-rule .gapplies{font-size:.8rem;color:#6b7280;margin-top:.15rem}
+.gov-rule .grule{font-size:.83rem;margin-top:.35rem}
+.empty-db{background:#fff;border:2px dashed var(--border);border-radius:6px;
+          padding:1.5rem;text-align:center;color:#6b7280}
+.empty-db code{font-family:var(--mono);font-size:.82rem;background:#f3f4f6;
+               padding:.25rem .5rem;border-radius:3px}
+footer{text-align:center;padding:1.5rem;color:#6b7280;font-size:.8rem;
+       border-top:1px solid var(--border);margin-top:3rem}
+footer a{color:#374151}
+</style>
+</head>
+<body>
+<header>
+  <h1>Committee Report — Disk Space &amp; Governance State</h1>
+  <p class="meta">Generated 2026-05-23 13:20 UTC · singine cleanup pipeline · <a href="//cdn.example.org" style="color:#9ca3af">cdn.example.org</a></p>
+</header>
+<main>
+  
+<section id="disk">
+  <h2>1 · Disk Space Analysis</h2>
+  <div class="banner">Total reclaimable: 142.7 GB</div>
+  <div class="grid2">
+    <div class="card"><div class="val">9</div><div class="lbl">Safe to delete immediately</div></div>
+    <div class="card"><div class="val">5</div><div class="lbl">Require review before deletion</div></div>
+  </div>
+  <table>
+    <thead><tr>
+      <th>Size</th><th>Label</th><th>Path</th><th>Risk</th><th>singine Command</th>
+    </tr></thead>
+    <tbody>
+    <tr class="r-review">
+      <td class="size">53.5 GB</td>
+      <td class="label">IntelliJ IDEA 2020.2 — full system directory</td>
+      <td class="path"><code>~/AppData/Local/JetBrains/IntelliJIdea2020.2</code></td>
+      <td class="risk"><span class="badge-review">⚠ review</span></td>
+      <td class="cmd">
+        <code class="sc" id="cmd-jetbrains-idea2020-all">singine runtime exec-external bin/scan delete --path &quot;C:\Users\jhe\AppData\Local\JetBrains\IntelliJIdea2020.2&quot;</code>
+        <button class="cp" data-cmd="singine runtime exec-external bin/scan delete --path &quot;C:\Users\jhe\AppData\Local\JetBrains\IntelliJIdea2020.2&quot;" aria-label="Copy singine command">Copy</button>
+        <details><summary>shell / PowerShell</summary>
+          <code class="sh">powershell.exe -Command &quot;Remove-Item -Recurse -Force &#x27;C:\Users\jhe\AppData\Local\JetBrains\IntelliJIdea2020.2&#x27;&quot;</code>
+          <code class="wn">Remove-Item -Recurse -Force &#x27;C:\Users\jhe\AppData\Local\JetBrains\IntelliJIdea2020.2&#x27;</code>
+        </details>
+        <p style="font-size:.78rem;color:#6b7280;margin-top:.3rem">Safe to delete if you no longer use IntelliJ 2020.2.</p>
+      </td>
+    </tr>
+    <tr class="r-safe">
+      <td class="size">52.1 GB</td>
+      <td class="label">IntelliJ IDEA 2020.2 — Tomcat server cache</td>
+      <td class="path"><code>~/AppData/Local/JetBrains/IntelliJIdea2020.2/tomcat</code></td>
+      <td class="risk"><span class="badge-safe">✓ safe</span></td>
+      <td class="cmd">
+        <code class="sc" id="cmd-jetbrains-idea2020-tomcat">singine runtime exec-external bin/scan delete --path &quot;C:\Users\jhe\AppData\Local\JetBrains\IntelliJIdea2020.2\tomcat&quot;</code>
+        <button class="cp" data-cmd="singine runtime exec-external bin/scan delete --path &quot;C:\Users\jhe\AppData\Local\JetBrains\IntelliJIdea2020.2\tomcat&quot;" aria-label="Copy singine command">Copy</button>
+        <details><summary>shell / PowerShell</summary>
+          <code class="sh">powershell.exe -Command &quot;Remove-Item -Recurse -Force &#x27;C:\Users\jhe\AppData\Local\JetBrains\IntelliJIdea2020.2\tomcat&#x27;&quot;</code>
+          <code class="wn">Remove-Item -Recurse -Force &#x27;C:\Users\jhe\AppData\Local\JetBrains\IntelliJIdea2020.2\tomcat&#x27;</code>
+        </details>
+        <p style="font-size:.78rem;color:#6b7280;margin-top:.3rem">Tomcat runtime output from a 2020 IntelliJ install.</p>
+      </td>
+    </tr>
+    <tr class="r-review">
+      <td class="size">11.9 GB</td>
+      <td class="label">Claude desktop app — LocalCache</td>
+      <td class="path"><code>~/AppData/Local/Packages/Claude_pzs8sxrjxfjjc/LocalCache</code></td>
+      <td class="risk"><span class="badge-review">⚠ review</span></td>
+      <td class="cmd">
+        <code class="sc" id="cmd-claude-desktop-cache">singine runtime exec-external bin/scan delete --path &quot;C:\Users\jhe\AppData\Local\Packages\Claude_pzs8sxrjxfjjc\LocalCache&quot;</code>
+        <button class="cp" data-cmd="singine runtime exec-external bin/scan delete --path &quot;C:\Users\jhe\AppData\Local\Packages\Claude_pzs8sxrjxfjjc\LocalCache&quot;" aria-label="Copy singine command">Copy</button>
+        <details><summary>shell / PowerShell</summary>
+          <code class="sh">powershell.exe -Command &quot;Remove-Item -Recurse -Force &#x27;C:\Users\jhe\AppData\Local\Packages\Claude_pzs8sxrjxfjjc\LocalCache&#x27;&quot;</code>
+          <code class="wn">Remove-Item -Recurse -Force &#x27;C:\Users\jhe\AppData\Local\Packages\Claude_pzs8sxrjxfjjc\LocalCache&#x27;</code>
+        </details>
+        <p style="font-size:.78rem;color:#6b7280;margin-top:.3rem">Conversation cache. Clears chat history from the desktop app.</p>
+      </td>
+    </tr>
+    <tr class="r-review">
+      <td class="size">11.5 GB</td>
+      <td class="label">Dropbox — full user backup 2020-03</td>
+      <td class="path"><code>~/Dropbox/backup/20200315T195649_Jay_Users.tar.gz</code></td>
+      <td class="risk"><span class="badge-review">⚠ review</span></td>
+      <td class="cmd">
+        <code class="sc" id="cmd-dropbox-backup-2020-mar">singine runtime exec-external bin/scan delete --path &quot;C:\Users\jhe\Dropbox\backup\20200315T195649_Jay_Users.tar.gz&quot;</code>
+        <button class="cp" data-cmd="singine runtime exec-external bin/scan delete --path &quot;C:\Users\jhe\Dropbox\backup\20200315T195649_Jay_Users.tar.gz&quot;" aria-label="Copy singine command">Copy</button>
+        <details><summary>shell / PowerShell</summary>
+          <code class="sh">powershell.exe -Command &quot;Remove-Item -Recurse -Force &#x27;C:\Users\jhe\Dropbox\backup\20200315T195649_Jay_Users.tar.gz&#x27;&quot;</code>
+          <code class="wn">Remove-Item -Recurse -Force &#x27;C:\Users\jhe\Dropbox\backup\20200315T195649_Jay_Users.tar.gz&#x27;</code>
+        </details>
+        <p style="font-size:.78rem;color:#6b7280;margin-top:.3rem">6-year-old full user backup. Verify newer backup exists first.</p>
+      </td>
+    </tr>
+    <tr class="r-review">
+      <td class="size">10.0 GB</td>
+      <td class="label">Dropbox — full user backup 2020-01</td>
+      <td class="path"><code>~/Dropbox/backup/20200126T184105_Jay_Users.tar.gz</code></td>
+      <td class="risk"><span class="badge-review">⚠ review</span></td>
+      <td class="cmd">
+        <code class="sc" id="cmd-dropbox-backup-2020-jan">singine runtime exec-external bin/scan delete --path &quot;C:\Users\jhe\Dropbox\backup\20200126T184105_Jay_Users.tar.gz&quot;</code>
+        <button class="cp" data-cmd="singine runtime exec-external bin/scan delete --path &quot;C:\Users\jhe\Dropbox\backup\20200126T184105_Jay_Users.tar.gz&quot;" aria-label="Copy singine command">Copy</button>
+        <details><summary>shell / PowerShell</summary>
+          <code class="sh">powershell.exe -Command &quot;Remove-Item -Recurse -Force &#x27;C:\Users\jhe\Dropbox\backup\20200126T184105_Jay_Users.tar.gz&#x27;&quot;</code>
+          <code class="wn">Remove-Item -Recurse -Force &#x27;C:\Users\jhe\Dropbox\backup\20200126T184105_Jay_Users.tar.gz&#x27;</code>
+        </details>
+        <p style="font-size:.78rem;color:#6b7280;margin-top:.3rem">6-year-old full user backup.</p>
+      </td>
+    </tr>
+    <tr class="r-safe">
+      <td class="size">1.1 GB</td>
+      <td class="label">TIBCO BW 6.3.1 zip — local duplicate (Dropbox copy is canonical)</td>
+      <td class="path"><code>~/Library/Articles/TIBCO/TIBCO DocAndBinaries/TIB_BW-dev_6.3.1_win_x86_64.zip</code></td>
+      <td class="risk"><span class="badge-safe">✓ safe</span></td>
+      <td class="cmd">
+        <code class="sc" id="cmd-tibco-zip-library">singine runtime exec-external bin/scan delete --path &quot;C:\Users\jhe\Library\Articles\TIBCO\TIBCO DocAndBinaries\TIB_BW-dev_6.3.1_win_x86_64.zip&quot;</code>
+        <button class="cp" data-cmd="singine runtime exec-external bin/scan delete --path &quot;C:\Users\jhe\Library\Articles\TIBCO\TIBCO DocAndBinaries\TIB_BW-dev_6.3.1_win_x86_64.zip&quot;" aria-label="Copy singine command">Copy</button>
+        <details><summary>shell / PowerShell</summary>
+          <code class="sh">powershell.exe -Command &quot;Remove-Item -Recurse -Force &#x27;C:\Users\jhe\Library\Articles\TIBCO\TIBCO DocAndBinaries\TIB_BW-dev_6.3.1_win_x86_64.zip&#x27;&quot;</code>
+          <code class="wn">Remove-Item -Recurse -Force &#x27;C:\Users\jhe\Library\Articles\TIBCO\TIBCO DocAndBinaries\TIB_BW-dev_6.3.1_win_x86_64.zip&#x27;</code>
+        </details>
+        <p style="font-size:.78rem;color:#6b7280;margin-top:.3rem">Identical copy lives in Dropbox/Library.</p>
+      </td>
+    </tr>
+    <tr class="r-safe">
+      <td class="size">715.5 MB</td>
+      <td class="label">Dropbox/Downloads — IntelliJ IDEA 2020.3.1 installer</td>
+      <td class="path"><code>~/Dropbox/Downloads/ideaIU-2020.3.1.exe</code></td>
+      <td class="risk"><span class="badge-safe">✓ safe</span></td>
+      <td class="cmd">
+        <code class="sc" id="cmd-dropbox-installer-idea">singine runtime exec-external bin/scan delete --path &quot;C:\Users\jhe\Dropbox\Downloads\ideaIU-2020.3.1.exe&quot;</code>
+        <button class="cp" data-cmd="singine runtime exec-external bin/scan delete --path &quot;C:\Users\jhe\Dropbox\Downloads\ideaIU-2020.3.1.exe&quot;" aria-label="Copy singine command">Copy</button>
+        <details><summary>shell / PowerShell</summary>
+          <code class="sh">powershell.exe -Command &quot;Remove-Item -Recurse -Force &#x27;C:\Users\jhe\Dropbox\Downloads\ideaIU-2020.3.1.exe&#x27;&quot;</code>
+          <code class="wn">Remove-Item -Recurse -Force &#x27;C:\Users\jhe\Dropbox\Downloads\ideaIU-2020.3.1.exe&#x27;</code>
+        </details>
+        <p style="font-size:.78rem;color:#6b7280;margin-top:.3rem">Already installed.</p>
+      </td>
+    </tr>
+    <tr class="r-review">
+      <td class="size">596.1 MB</td>
+      <td class="label">Logseq — old app version 0.10.15</td>
+      <td class="path"><code>~/AppData/Local/Logseq/app-0.10.15</code></td>
+      <td class="risk"><span class="badge-review">⚠ review</span></td>
+      <td class="cmd">
+        <code class="sc" id="cmd-logseq-old-version">singine runtime exec-external bin/scan delete --path &quot;C:\Users\jhe\AppData\Local\Logseq\app-0.10.15&quot;</code>
+        <button class="cp" data-cmd="singine runtime exec-external bin/scan delete --path &quot;C:\Users\jhe\AppData\Local\Logseq\app-0.10.15&quot;" aria-label="Copy singine command">Copy</button>
+        <details><summary>shell / PowerShell</summary>
+          <code class="sh">powershell.exe -Command &quot;Remove-Item -Recurse -Force &#x27;C:\Users\jhe\AppData\Local\Logseq\app-0.10.15&#x27;&quot;</code>
+          <code class="wn">Remove-Item -Recurse -Force &#x27;C:\Users\jhe\AppData\Local\Logseq\app-0.10.15&#x27;</code>
+        </details>
+        
+      </td>
+    </tr>
+    <tr class="r-safe">
+      <td class="size">443.5 MB</td>
+      <td class="label">Oracle ADF training zip — local duplicate</td>
+      <td class="path"><code>~/Library/Articles/Oracle/training/adf/oracle-adf-training.zip</code></td>
+      <td class="risk"><span class="badge-safe">✓ safe</span></td>
+      <td class="cmd">
+        <code class="sc" id="cmd-oracle-adf-zip-library">singine runtime exec-external bin/scan delete --path &quot;C:\Users\jhe\Library\Articles\Oracle\training\adf\oracle-adf-training.zip&quot;</code>
+        <button class="cp" data-cmd="singine runtime exec-external bin/scan delete --path &quot;C:\Users\jhe\Library\Articles\Oracle\training\adf\oracle-adf-training.zip&quot;" aria-label="Copy singine command">Copy</button>
+        <details><summary>shell / PowerShell</summary>
+          <code class="sh">powershell.exe -Command &quot;Remove-Item -Recurse -Force &#x27;C:\Users\jhe\Library\Articles\Oracle\training\adf\oracle-adf-training.zip&#x27;&quot;</code>
+          <code class="wn">Remove-Item -Recurse -Force &#x27;C:\Users\jhe\Library\Articles\Oracle\training\adf\oracle-adf-training.zip&#x27;</code>
+        </details>
+        <p style="font-size:.78rem;color:#6b7280;margin-top:.3rem">Identical copy lives in Dropbox/Library.</p>
+      </td>
+    </tr>
+    <tr class="r-safe">
+      <td class="size">223.4 MB</td>
+      <td class="label">Claude CLI — old version 2.1.149</td>
+      <td class="path"><code>~/.local/share/claude/versions/2.1.149</code></td>
+      <td class="risk"><span class="badge-safe">✓ safe</span></td>
+      <td class="cmd">
+        <code class="sc" id="cmd-claude-cli-old-2149">singine runtime exec-external bin/scan delete --path &quot;C:\Users\jhe\.local\share\claude\versions\2.1.149&quot;</code>
+        <button class="cp" data-cmd="singine runtime exec-external bin/scan delete --path &quot;C:\Users\jhe\.local\share\claude\versions\2.1.149&quot;" aria-label="Copy singine command">Copy</button>
+        <details><summary>shell / PowerShell</summary>
+          <code class="sh">powershell.exe -Command &quot;Remove-Item -Recurse -Force &#x27;C:\Users\jhe\.local\share\claude\versions\2.1.149&#x27;&quot;</code>
+          <code class="wn">Remove-Item -Recurse -Force &#x27;C:\Users\jhe\.local\share\claude\versions\2.1.149&#x27;</code>
+        </details>
+        <p style="font-size:.78rem;color:#6b7280;margin-top:.3rem">Superseded by 2.1.150.</p>
+      </td>
+    </tr>
+    <tr class="r-safe">
+      <td class="size">222.0 MB</td>
+      <td class="label">Claude CLI — old version 2.1.148</td>
+      <td class="path"><code>~/.local/share/claude/versions/2.1.148</code></td>
+      <td class="risk"><span class="badge-safe">✓ safe</span></td>
+      <td class="cmd">
+        <code class="sc" id="cmd-claude-cli-old-2148">singine runtime exec-external bin/scan delete --path &quot;C:\Users\jhe\.local\share\claude\versions\2.1.148&quot;</code>
+        <button class="cp" data-cmd="singine runtime exec-external bin/scan delete --path &quot;C:\Users\jhe\.local\share\claude\versions\2.1.148&quot;" aria-label="Copy singine command">Copy</button>
+        <details><summary>shell / PowerShell</summary>
+          <code class="sh">powershell.exe -Command &quot;Remove-Item -Recurse -Force &#x27;C:\Users\jhe\.local\share\claude\versions\2.1.148&#x27;&quot;</code>
+          <code class="wn">Remove-Item -Recurse -Force &#x27;C:\Users\jhe\.local\share\claude\versions\2.1.148&#x27;</code>
+        </details>
+        <p style="font-size:.78rem;color:#6b7280;margin-top:.3rem">Superseded by 2.1.150.</p>
+      </td>
+    </tr>
+    <tr class="r-safe">
+      <td class="size">210.5 MB</td>
+      <td class="label">Dropbox/Downloads — Nitro Pro 13 MSI</td>
+      <td class="path"><code>~/Dropbox/Downloads/nitro_pro13_ba_x64.msi</code></td>
+      <td class="risk"><span class="badge-safe">✓ safe</span></td>
+      <td class="cmd">
+        <code class="sc" id="cmd-dropbox-installer-nitro">singine runtime exec-external bin/scan delete --path &quot;C:\Users\jhe\Dropbox\Downloads\nitro_pro13_ba_x64.msi&quot;</code>
+        <button class="cp" data-cmd="singine runtime exec-external bin/scan delete --path &quot;C:\Users\jhe\Dropbox\Downloads\nitro_pro13_ba_x64.msi&quot;" aria-label="Copy singine command">Copy</button>
+        <details><summary>shell / PowerShell</summary>
+          <code class="sh">powershell.exe -Command &quot;Remove-Item -Recurse -Force &#x27;C:\Users\jhe\Dropbox\Downloads\nitro_pro13_ba_x64.msi&#x27;&quot;</code>
+          <code class="wn">Remove-Item -Recurse -Force &#x27;C:\Users\jhe\Dropbox\Downloads\nitro_pro13_ba_x64.msi&#x27;</code>
+        </details>
+        
+      </td>
+    </tr>
+    <tr class="r-safe">
+      <td class="size">172.1 MB</td>
+      <td class="label">Dropbox/Downloads — DeepL installer</td>
+      <td class="path"><code>~/Dropbox/Downloads/DeepLSetup.exe</code></td>
+      <td class="risk"><span class="badge-safe">✓ safe</span></td>
+      <td class="cmd">
+        <code class="sc" id="cmd-dropbox-installer-deepl">singine runtime exec-external bin/scan delete --path &quot;C:\Users\jhe\Dropbox\Downloads\DeepLSetup.exe&quot;</code>
+        <button class="cp" data-cmd="singine runtime exec-external bin/scan delete --path &quot;C:\Users\jhe\Dropbox\Downloads\DeepLSetup.exe&quot;" aria-label="Copy singine command">Copy</button>
+        <details><summary>shell / PowerShell</summary>
+          <code class="sh">powershell.exe -Command &quot;Remove-Item -Recurse -Force &#x27;C:\Users\jhe\Dropbox\Downloads\DeepLSetup.exe&#x27;&quot;</code>
+          <code class="wn">Remove-Item -Recurse -Force &#x27;C:\Users\jhe\Dropbox\Downloads\DeepLSetup.exe&#x27;</code>
+        </details>
+        
+      </td>
+    </tr>
+    <tr class="r-safe">
+      <td class="size">157.0 MB</td>
+      <td class="label">Dropbox/Downloads — XAMPP installer</td>
+      <td class="path"><code>~/Dropbox/Downloads/xampp-windows-x64-8.0.0-3-VS16-installer.exe</code></td>
+      <td class="risk"><span class="badge-safe">✓ safe</span></td>
+      <td class="cmd">
+        <code class="sc" id="cmd-dropbox-installer-xampp">singine runtime exec-external bin/scan delete --path &quot;C:\Users\jhe\Dropbox\Downloads\xampp-windows-x64-8.0.0-3-VS16-installer.exe&quot;</code>
+        <button class="cp" data-cmd="singine runtime exec-external bin/scan delete --path &quot;C:\Users\jhe\Dropbox\Downloads\xampp-windows-x64-8.0.0-3-VS16-installer.exe&quot;" aria-label="Copy singine command">Copy</button>
+        <details><summary>shell / PowerShell</summary>
+          <code class="sh">powershell.exe -Command &quot;Remove-Item -Recurse -Force &#x27;C:\Users\jhe\Dropbox\Downloads\xampp-windows-x64-8.0.0-3-VS16-installer.exe&#x27;&quot;</code>
+          <code class="wn">Remove-Item -Recurse -Force &#x27;C:\Users\jhe\Dropbox\Downloads\xampp-windows-x64-8.0.0-3-VS16-installer.exe&#x27;</code>
+        </details>
+        
+      </td>
+    </tr></tbody>
+  </table>
+  <div class="note">
+    <strong>To execute:</strong>
+    copy a singine command above, then paste it into a terminal where
+    <code>singine</code> is on PATH (<code>npm install -g singine</code>).
+    <em>Review</em> items will trigger GOV-007 confirmation before deletion.
+    All deletions are logged via GOV-001 to <code>report/audit.log</code>.
+  </div>
+</section>
+  
+<section id="governance">
+  <h2>2 · singine Governance State</h2>
+  <h3>Database — <code style="font-size:.85rem">C:\Users\jhe\Documents\ws\gh\sync-logseq\data\sync-logseq.db</code></h3>
+  
+    <div class="empty-db">
+      <p><strong>Database not yet seeded</strong></p>
+      <p>No runtime data to report. Initialize with:</p>
+      <p><code>cd gh/sync-logseq &amp;&amp; npm install &amp;&amp; tsx src/cli/index.ts seed</code></p>
+      <p style="margin-top:.5rem;font-size:.82rem">Database not yet seeded. Run: cd gh/sync-logseq &amp;&amp; npm install &amp;&amp; tsx src/cli/index.ts seed</p>
+    </div>
+  <h3>Active Governance Rules (8)</h3>
+  
+    <div class="gov-rule">
+      <span class="gid">GOV-001</span>
+      <span class="gtitle">Response Transparency</span>
+      <div class="gapplies">Applies: Every time a human selects a response option</div>
+      <div class="grule">The selection MUST be recorded in the audit log with actor, timestamp, question ID, and chosen position before any action is dispatched. No action may begin without a confirmed audit entry.</div>
+    </div>
+    <div class="gov-rule">
+      <span class="gid">GOV-002</span>
+      <span class="gtitle">Sync Action Accountability</span>
+      <div class="gapplies">Applies: Every synchronous action execution</div>
+      <div class="grule">Sync actions execute in the same thread as the response. Result (success or error) MUST be written to audit log and executions table. On failure the session continues; it does not abort remaining sync actions.</div>
+    </div>
+    <div class="gov-rule">
+      <span class="gid">GOV-003</span>
+      <span class="gtitle">Async Action Queuing</span>
+      <div class="gapplies">Applies: Every asynchronous action dispatch</div>
+      <div class="grule">Async actions are enqueued in SQLite (status=pending). A singine worker polls and executes them independently. The enqueue operation is synchronous; the execution is not. Idempotency keys MUST be set on every async payload.</div>
+    </div>
+    <div class="gov-rule">
+      <span class="gid">GOV-004</span>
+      <span class="gtitle">Human Task Escalation</span>
+      <div class="gapplies">Applies: Any action whose type is &quot;human&quot;</div>
+      <div class="grule">A human_tasks record is created (status=open) and a notification is sent (webhook or email). The session that triggered the task does NOT wait for resolution. Human tasks MUST be resolved within the configured SLA window (default: 48 h). Unresolved tasks after SLA are re-notified.</div>
+    </div>
+    <div class="gov-rule">
+      <span class="gid">GOV-005</span>
+      <span class="gtitle">Logseq Sync Integrity</span>
+      <div class="gapplies">Applies: Any push or pull between local state and Logseq</div>
+      <div class="grule">A content hash of each page/block is stored before and after sync. On hash mismatch without an explicit commit, the sync is aborted and recorded as a conflict in audit log.</div>
+    </div>
+    <div class="gov-rule">
+      <span class="gid">GOV-006</span>
+      <span class="gtitle">Knowledge Base Immutability</span>
+      <div class="gapplies">Applies: Any mutation to questions or response options</div>
+      <div class="grule">Questions and responses are versioned, not edited in place. The previous version is retained and marked inactive. All executions reference the version active at the time of the response.</div>
+    </div>
+    <div class="gov-rule">
+      <span class="gid">GOV-007</span>
+      <span class="gtitle">Cost Visibility</span>
+      <div class="gapplies">Applies: Any response option with costLevel ≥ &quot;high&quot;</div>
+      <div class="grule">Before dispatching actions, the CLI MUST display the cost level and list all actions that will be triggered. An explicit confirmation prompt is required. Auto-mode (non-interactive) is not permitted for &quot;critical&quot; cost actions without a governance override flag.</div>
+    </div>
+    <div class="gov-rule">
+      <span class="gid">GOV-008</span>
+      <span class="gtitle">silkpage Content Transformation Traceability</span>
+      <div class="gapplies">Applies: Any content transformation via silkpage</div>
+      <div class="grule">Input and output content hashes, the transformation template name, and silkpage version MUST be logged. Transformed content is stored in a staging area; it does not replace source until a commit step.</div>
+    </div>
+</section>
+</main>
+<footer>
+  Generated by <code>cleanup/collect.py</code> +
+  <code>cleanup/render_committee.py</code> ·
+  singine + silkpage ·
+  <a href="//cdn.example.org/cleanup.html">web view</a>
+</footer>
+<script>
+document.querySelectorAll('.cp[data-cmd]').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    const cmd=btn.dataset.cmd;
+    const copy=txt=>{try{navigator.clipboard.writeText(txt).catch(()=>{})}catch(e){}
+      const ta=document.createElement('textarea');ta.value=txt;
+      ta.style.cssText='position:fixed;opacity:0';document.body.appendChild(ta);
+      ta.select();document.execCommand('copy');document.body.removeChild(ta)};
+    copy(cmd);btn.textContent='Copied!';btn.classList.add('ok');
+    setTimeout(()=>{btn.textContent='Copy';btn.classList.remove('ok')},2000);
+  });
+});
+</script>
+</body>
+</html>

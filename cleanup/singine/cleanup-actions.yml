@@ -1,0 +1,156 @@
+# singine cleanup action manifest
+#
+# Registers disk-cleanup operations as singine-dispatchable actions.
+# Each action runs via: singine runtime exec-external <cmd>
+#
+# Governance constraints (from sync-logseq/governance/PROCESSING_RULES.md):
+#   GOV-001: audit entry written before any action dispatches
+#   GOV-007: high/critical cost actions require explicit CLI confirmation
+#
+# To inspect this manifest:
+#   singine activity inspect cleanup.delete.path
+#
+# To run an action (GOV-007 will prompt):
+#   singine activity run cleanup.delete.path --path "~/.IntelliJIdea2020.2/system/tomcat"
+
+manifest_version: "1.0"
+domain: cleanup
+description: "Disk space reclamation actions for the local workstation"
+
+actions:
+
+  cleanup.scan:
+    label: "Scan disk for reclaimable space"
+    description: >
+      Runs the Go scanner binary and writes report/latest.json and
+      report/cleanup.xml.  Safe — read-only, no files deleted.
+    cost: low
+    governance: []
+    cmd_posix: "bash {script_dir}/scan.sh"
+    cmd_win:   "bash {script_dir}/scan.sh"
+    output: "report/latest.json"
+    singine_invoke: |
+      singine runtime exec-external bash {script_dir}/scan.sh
+
+  cleanup.delete.path:
+    label: "Delete a path"
+    description: >
+      Permanently removes a file or directory.  GOV-007 requires explicit
+      confirmation before this action dispatches.
+    cost: high
+    governance:
+      - GOV-001
+      - GOV-007
+    params:
+      path:
+        type: string
+        required: true
+        description: "Absolute path to delete (expand ~ before passing)"
+    cmd_posix: "rm -rf {path}"
+    cmd_win:   "powershell.exe -Command \"Remove-Item -Recurse -Force '{path}'\""
+    singine_invoke: |
+      singine runtime exec-external bin/scan delete --path "{path}"
+    confirm_template: >
+      This will permanently delete {path} ({size}).
+      This action is logged under GOV-001 and cannot be undone.
+      Type YES to confirm:
+
+  cleanup.uninstall.windows:
+    label: "Uninstall a Windows program"
+    description: >
+      Uninstalls a registered Windows program via PowerShell.
+      GOV-007 requires confirmation.
+    cost: high
+    governance:
+      - GOV-001
+      - GOV-007
+    params:
+      name:
+        type: string
+        required: true
+        description: "Display name as shown in Add/Remove Programs"
+    cmd_win: >
+      powershell.exe -Command
+      "Get-Package -Name '{name}' -ErrorAction Stop |
+       Uninstall-Package -Force"
+    singine_invoke: |
+      singine runtime exec-external powershell.exe -Command "Get-Package -Name '{name}' | Uninstall-Package -Force"
+    confirm_template: >
+      This will uninstall {name}.
+      Proceed? (YES/no):
+
+# ── Known cleanup items (pre-analysed) ───────────────────────────────────────
+#
+# Each entry corresponds to an item in go/scanner/main.go (knownTargets).
+# Copy the singine_cmd from report/latest.json to run a specific item.
+#
+# Example — delete IntelliJ 2020.2 Tomcat cache (~53 GB, safe):
+#
+#   singine runtime exec-external bin/scan delete \
+#     --path "$LOCALAPPDATA/JetBrains/IntelliJIdea2020.2/tomcat"
+#
+# Example — delete old Dropbox backup (~11.8 GB, review):
+#
+#   singine runtime exec-external bin/scan delete \
+#     --path "$HOME/Dropbox/backup/20200315T195649_Jay_Users.tar.gz"
+
+known_items:
+  - id: jetbrains-idea2020-tomcat
+    label: "IntelliJ IDEA 2020.2 — Tomcat cache"
+    est_size: "53 GB"
+    risk: safe
+    action: cleanup.delete.path
+
+  - id: dropbox-backup-2020-mar
+    label: "Dropbox backup 2020-03"
+    est_size: "11.8 GB"
+    risk: review
+    action: cleanup.delete.path
+
+  - id: dropbox-backup-2020-jan
+    label: "Dropbox backup 2020-01"
+    est_size: "10.2 GB"
+    risk: review
+    action: cleanup.delete.path
+
+  - id: claude-desktop-cache
+    label: "Claude desktop app cache"
+    est_size: "12 GB"
+    risk: review
+    action: cleanup.delete.path
+
+  - id: claude-cli-old-2148
+    label: "Claude CLI v2.1.148"
+    est_size: "222 MB"
+    risk: safe
+    action: cleanup.delete.path
+
+  - id: claude-cli-old-2149
+    label: "Claude CLI v2.1.149"
+    est_size: "223 MB"
+    risk: safe
+    action: cleanup.delete.path
+
+  - id: tibco-zip-library
+    label: "TIBCO BW zip — local duplicate"
+    est_size: "1.1 GB"
+    risk: safe
+    action: cleanup.delete.path
+
+  - id: oracle-adf-zip-library
+    label: "Oracle ADF zip — local duplicate"
+    est_size: "443 MB"
+    risk: safe
+    action: cleanup.delete.path
+
+  - id: dropbox-installer-idea
+    label: "IntelliJ IDEA 2020.3.1 installer"
+    est_size: "715 MB"
+    risk: safe
+    action: cleanup.delete.path
+
+  - id: logseq-old-version
+    label: "Logseq app-0.10.15"
+    est_size: "596 MB"
+    risk: review
+    action: cleanup.delete.path

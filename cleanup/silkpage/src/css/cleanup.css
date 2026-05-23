@@ -1,0 +1,157 @@
+/* cleanup.css — served via cdn.example.org/assets/css/cleanup.css */
+
+:root {
+  --color-safe:   #1a7a4a;
+  --color-review: #b45309;
+  --color-keep:   #374151;
+  --color-bg:     #f9fafb;
+  --color-border: #e5e7eb;
+  --font-mono:    "JetBrains Mono", "Fira Code", ui-monospace, monospace;
+  --font-body:    system-ui, -apple-system, sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body.cleanup-report {
+  font-family: var(--font-body);
+  background: var(--color-bg);
+  color: #111827;
+  line-height: 1.6;
+}
+
+header {
+  background: #111827;
+  color: #f9fafb;
+  padding: 1.5rem 2rem;
+}
+header h1 { font-size: 1.5rem; font-weight: 700; }
+.meta      { font-size: 0.85rem; color: #9ca3af; margin-top: 0.25rem; }
+
+main { max-width: 1280px; margin: 0 auto; padding: 2rem; }
+
+section { margin-bottom: 2.5rem; }
+h2 { font-size: 1.2rem; font-weight: 600; margin-bottom: 0.75rem;
+     border-bottom: 1px solid var(--color-border); padding-bottom: 0.5rem; }
+
+p, li { margin-bottom: 0.5rem; }
+ol    { padding-left: 1.5rem; }
+
+.note {
+  background: #fffbeb;
+  border-left: 3px solid #f59e0b;
+  padding: 0.75rem 1rem;
+  border-radius: 0 4px 4px 0;
+}
+
+pre code {
+  display: block;
+  background: #1f2937;
+  color: #d1fae5;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  padding: 0.75rem 1rem;
+  border-radius: 4px;
+  overflow-x: auto;
+  margin: 0.5rem 0;
+}
+
+/* ── Total banner ──────────────────────────────────────────────────────────── */
+.total-banner {
+  background: #111827;
+  color: #f9fafb;
+  padding: 0.75rem 1.25rem;
+  border-radius: 6px;
+  margin-bottom: 1rem;
+  font-weight: 600;
+}
+.total-banner[hidden] { display: none; }
+
+/* ── Cleanup table ─────────────────────────────────────────────────────────── */
+.cleanup-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.cleanup-table th {
+  background: #111827;
+  color: #f9fafb;
+  text-align: left;
+  padding: 0.6rem 0.75rem;
+  white-space: nowrap;
+}
+
+.cleanup-table td {
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid var(--color-border);
+  vertical-align: top;
+}
+
+.cleanup-table tr:hover td { background: #f3f4f6; }
+
+td.size   { font-weight: 600; white-space: nowrap; }
+td.path code { font-family: var(--font-mono); font-size: 0.8rem; color: #374151; }
+
+/* ── Risk badges ─────────────────────────────────────────────────────────── */
+.badge-safe   { color: var(--color-safe);   font-weight: 600; }
+.badge-review { color: var(--color-review); font-weight: 600; }
+.badge-keep   { color: var(--color-keep);   }
+
+tr.risk-safe   td { border-left: 3px solid var(--color-safe); }
+tr.risk-review td { border-left: 3px solid var(--color-review); }
+
+/* ── Command cell ────────────────────────────────────────────────────────── */
+td.cmd { max-width: 520px; }
+
+code.singine-cmd {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  background: #1f2937;
+  color: #a7f3d0;
+  padding: 0.35rem 0.6rem;
+  border-radius: 4px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  margin-bottom: 0.35rem;
+}
+
+.copy-btn {
+  font-size: 0.75rem;
+  padding: 0.2rem 0.6rem;
+  background: #374151;
+  color: #f9fafb;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.copy-btn:hover  { background: #111827; }
+.copy-btn.copied { background: var(--color-safe); }
+
+details.cmd-detail { margin-top: 0.4rem; }
+details summary    { font-size: 0.75rem; color: #6b7280; cursor: pointer; }
+details summary:hover { color: #111827; }
+
+code.shell-cmd, code.win-cmd {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  background: #f3f4f6;
+  color: #374151;
+  padding: 0.3rem 0.5rem;
+  border-radius: 3px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  margin-top: 0.25rem;
+}
+
+footer {
+  text-align: center;
+  padding: 1.5rem;
+  color: #6b7280;
+  font-size: 0.82rem;
+  border-top: 1px solid var(--color-border);
+  margin-top: 3rem;
+}
+footer a { color: #374151; }

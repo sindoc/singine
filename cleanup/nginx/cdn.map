@@ -1,0 +1,23 @@
+# cdn.map — URL rewriting rules for cdn.example.org
+#
+# Used by Nginx map directive or as a reference for CDN origin configuration.
+# Format: <cdn-path>   <local-origin-path>
+#
+# To use with Nginx map module:
+#   map $uri $local_asset {
+#       include /path/to/cleanup/nginx/cdn.map;
+#       default "";
+#   }
+
+# CSS
+/assets/css/cleanup.css         silkpage/src/css/cleanup.css
+
+# JavaScript
+/assets/js/cleanup.js           silkpage/src/js/cleanup.js
+
+# Compiled silkpage HTML output (served as-is)
+/cleanup.html                   output/cleanup.html
+/index.html                     output/index.html
+
+# Report data (dynamic endpoint — not a static file)
+# /api/report  →  handled by nginx location = /api/report block

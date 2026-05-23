@@ -1,0 +1,377 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <id>https://singine.uk/latest/ATOM</id>
+  <title>singine latest — disk cleanup + governance</title>
+  <updated>2026-05-23T13:31:35Z</updated>
+  <author>
+    <name>singine cleanup pipeline</name>
+  </author>
+  <link rel="self" href="https://singine.uk/latest/ATOM" type="application/atom+xml"/>
+  <link rel="alternate" href="https://singine.uk/cleanup.html" type="text/html"/>
+  <link rel="related" href="https://singine.uk/api/report" type="application/json" title="committee-results.json"/>
+  <dc:language>en</dc:language>
+  <dc:publisher>singine.uk</dc:publisher>
+  <dc:rights>lutino.io</dc:rights>
+  <entry>
+    <id>urn:singine:cleanup:session:2026-05-23</id>
+    <title>Cleanup scan 2026-05-23 — 142.7 GB reclaimable, governance: not_initialized</title>
+    <updated>2026-05-23T13:31:35Z</updated>
+    <link rel="alternate" href="https://singine.uk/cleanup.html"/>
+    <link rel="enclosure" href="https://singine.uk/api/report" type="application/json" title="committee-results.json"/>
+    <category term="session"/>
+    <content type="text">Total reclaimable: 142.7 GB
+Items: 14
+Governance DB: not_initialized
+Generator: cleanup/collect.py + cleanup/generate_atom.py
+
+To regenerate:
+  singine runtime exec-external python3 cleanup/collect.py
+  singine runtime exec-external python3 cleanup/generate_atom.py</content>
+  </entry>
+  <entry>
+    <id>urn:singine:cleanup:disk:jetbrains-idea2020-tomcat</id>
+    <title>[SAFE] IntelliJ IDEA 2020.2 — Tomcat server cache</title>
+    <updated>2026-05-23T13:31:35Z</updated>
+    <link rel="alternate" href="https://singine.uk/cleanup.html#jetbrains-idea2020-tomcat"/>
+    <link rel="related" href="https://singine.uk/latest/ATOM"/>
+    <category term="ide-cache"/>
+    <category term="safe"/>
+    <dc:identifier>~/AppData/Local/JetBrains/IntelliJIdea2020.2/tomcat</dc:identifier>
+    <content type="text">Size: 52.1 GB  |  Risk: safe  |  Path: ~/AppData/Local/JetBrains/IntelliJIdea2020.2/tomcat
+
+singine command:
+singine runtime exec-external bin/scan delete --path "C:\Users\jhe\AppData\Local\JetBrains\IntelliJIdea2020.2\tomcat"
+
+Shell:
+powershell.exe -Command "Remove-Item -Recurse -Force 'C:\Users\jhe\AppData\Local\JetBrains\IntelliJIdea2020.2\tomcat'"
+
+Tomcat runtime output from a 2020 IntelliJ install.</content>
+  </entry>
+  <entry>
+    <id>urn:singine:cleanup:disk:tibco-zip-library</id>
+    <title>[SAFE] TIBCO BW 6.3.1 zip — local duplicate (Dropbox copy is canonical)</title>
+    <updated>2026-05-23T13:31:35Z</updated>
+    <link rel="alternate" href="https://singine.uk/cleanup.html#tibco-zip-library"/>
+    <link rel="related" href="https://singine.uk/latest/ATOM"/>
+    <category term="duplicate"/>
+    <category term="safe"/>
+    <dc:identifier>~/Library/Articles/TIBCO/TIBCO DocAndBinaries/TIB_BW-dev_6.3.1_win_x86_64.zip</dc:identifier>
+    <content type="text">Size: 1.1 GB  |  Risk: safe  |  Path: ~/Library/Articles/TIBCO/TIBCO DocAndBinaries/TIB_BW-dev_6.3.1_win_x86_64.zip
+
+singine command:
+singine runtime exec-external bin/scan delete --path "C:\Users\jhe\Library\Articles\TIBCO\TIBCO DocAndBinaries\TIB_BW-dev_6.3.1_win_x86_64.zip"
+
+Shell:
+powershell.exe -Command "Remove-Item -Recurse -Force 'C:\Users\jhe\Library\Articles\TIBCO\TIBCO DocAndBinaries\TIB_BW-dev_6.3.1_win_x86_64.zip'"
+
+Identical copy lives in Dropbox/Library.</content>
+  </entry>
+  <entry>
+    <id>urn:singine:cleanup:disk:dropbox-installer-idea</id>
+    <title>[SAFE] Dropbox/Downloads — IntelliJ IDEA 2020.3.1 installer</title>
+    <updated>2026-05-23T13:31:35Z</updated>
+    <link rel="alternate" href="https://singine.uk/cleanup.html#dropbox-installer-idea"/>
+    <link rel="related" href="https://singine.uk/latest/ATOM"/>
+    <category term="installer"/>
+    <category term="safe"/>
+    <dc:identifier>~/Dropbox/Downloads/ideaIU-2020.3.1.exe</dc:identifier>
+    <content type="text">Size: 715.5 MB  |  Risk: safe  |  Path: ~/Dropbox/Downloads/ideaIU-2020.3.1.exe
+
+singine command:
+singine runtime exec-external bin/scan delete --path "C:\Users\jhe\Dropbox\Downloads\ideaIU-2020.3.1.exe"
+
+Shell:
+powershell.exe -Command "Remove-Item -Recurse -Force 'C:\Users\jhe\Dropbox\Downloads\ideaIU-2020.3.1.exe'"
+
+Already installed.</content>
+  </entry>
+  <entry>
+    <id>urn:singine:cleanup:disk:oracle-adf-zip-library</id>
+    <title>[SAFE] Oracle ADF training zip — local duplicate</title>
+    <updated>2026-05-23T13:31:35Z</updated>
+    <link rel="alternate" href="https://singine.uk/cleanup.html#oracle-adf-zip-library"/>
+    <link rel="related" href="https://singine.uk/latest/ATOM"/>
+    <category term="duplicate"/>
+    <category term="safe"/>
+    <dc:identifier>~/Library/Articles/Oracle/training/adf/oracle-adf-training.zip</dc:identifier>
+    <content type="text">Size: 443.5 MB  |  Risk: safe  |  Path: ~/Library/Articles/Oracle/training/adf/oracle-adf-training.zip
+
+singine command:
+singine runtime exec-external bin/scan delete --path "C:\Users\jhe\Library\Articles\Oracle\training\adf\oracle-adf-training.zip"
+
+Shell:
+powershell.exe -Command "Remove-Item -Recurse -Force 'C:\Users\jhe\Library\Articles\Oracle\training\adf\oracle-adf-training.zip'"
+
+Identical copy lives in Dropbox/Library.</content>
+  </entry>
+  <entry>
+    <id>urn:singine:cleanup:disk:claude-cli-old-2149</id>
+    <title>[SAFE] Claude CLI — old version 2.1.149</title>
+    <updated>2026-05-23T13:31:35Z</updated>
+    <link rel="alternate" href="https://singine.uk/cleanup.html#claude-cli-old-2149"/>
+    <link rel="related" href="https://singine.uk/latest/ATOM"/>
+    <category term="old-binary"/>
+    <category term="safe"/>
+    <dc:identifier>~/.local/share/claude/versions/2.1.149</dc:identifier>
+    <content type="text">Size: 223.4 MB  |  Risk: safe  |  Path: ~/.local/share/claude/versions/2.1.149
+
+singine command:
+singine runtime exec-external bin/scan delete --path "C:\Users\jhe\.local\share\claude\versions\2.1.149"
+
+Shell:
+powershell.exe -Command "Remove-Item -Recurse -Force 'C:\Users\jhe\.local\share\claude\versions\2.1.149'"
+
+Superseded by 2.1.150.</content>
+  </entry>
+  <entry>
+    <id>urn:singine:cleanup:disk:claude-cli-old-2148</id>
+    <title>[SAFE] Claude CLI — old version 2.1.148</title>
+    <updated>2026-05-23T13:31:35Z</updated>
+    <link rel="alternate" href="https://singine.uk/cleanup.html#claude-cli-old-2148"/>
+    <link rel="related" href="https://singine.uk/latest/ATOM"/>
+    <category term="old-binary"/>
+    <category term="safe"/>
+    <dc:identifier>~/.local/share/claude/versions/2.1.148</dc:identifier>
+    <content type="text">Size: 222.0 MB  |  Risk: safe  |  Path: ~/.local/share/claude/versions/2.1.148
+
+singine command:
+singine runtime exec-external bin/scan delete --path "C:\Users\jhe\.local\share\claude\versions\2.1.148"
+
+Shell:
+powershell.exe -Command "Remove-Item -Recurse -Force 'C:\Users\jhe\.local\share\claude\versions\2.1.148'"
+
+Superseded by 2.1.150.</content>
+  </entry>
+  <entry>
+    <id>urn:singine:cleanup:disk:dropbox-installer-nitro</id>
+    <title>[SAFE] Dropbox/Downloads — Nitro Pro 13 MSI</title>
+    <updated>2026-05-23T13:31:35Z</updated>
+    <link rel="alternate" href="https://singine.uk/cleanup.html#dropbox-installer-nitro"/>
+    <link rel="related" href="https://singine.uk/latest/ATOM"/>
+    <category term="installer"/>
+    <category term="safe"/>
+    <dc:identifier>~/Dropbox/Downloads/nitro_pro13_ba_x64.msi</dc:identifier>
+    <content type="text">Size: 210.5 MB  |  Risk: safe  |  Path: ~/Dropbox/Downloads/nitro_pro13_ba_x64.msi
+
+singine command:
+singine runtime exec-external bin/scan delete --path "C:\Users\jhe\Dropbox\Downloads\nitro_pro13_ba_x64.msi"
+
+Shell:
+powershell.exe -Command "Remove-Item -Recurse -Force 'C:\Users\jhe\Dropbox\Downloads\nitro_pro13_ba_x64.msi'"</content>
+  </entry>
+  <entry>
+    <id>urn:singine:cleanup:disk:dropbox-installer-deepl</id>
+    <title>[SAFE] Dropbox/Downloads — DeepL installer</title>
+    <updated>2026-05-23T13:31:35Z</updated>
+    <link rel="alternate" href="https://singine.uk/cleanup.html#dropbox-installer-deepl"/>
+    <link rel="related" href="https://singine.uk/latest/ATOM"/>
+    <category term="installer"/>
+    <category term="safe"/>
+    <dc:identifier>~/Dropbox/Downloads/DeepLSetup.exe</dc:identifier>
+    <content type="text">Size: 172.1 MB  |  Risk: safe  |  Path: ~/Dropbox/Downloads/DeepLSetup.exe
+
+singine command:
+singine runtime exec-external bin/scan delete --path "C:\Users\jhe\Dropbox\Downloads\DeepLSetup.exe"
+
+Shell:
+powershell.exe -Command "Remove-Item -Recurse -Force 'C:\Users\jhe\Dropbox\Downloads\DeepLSetup.exe'"</content>
+  </entry>
+  <entry>
+    <id>urn:singine:cleanup:disk:dropbox-installer-xampp</id>
+    <title>[SAFE] Dropbox/Downloads — XAMPP installer</title>
+    <updated>2026-05-23T13:31:35Z</updated>
+    <link rel="alternate" href="https://singine.uk/cleanup.html#dropbox-installer-xampp"/>
+    <link rel="related" href="https://singine.uk/latest/ATOM"/>
+    <category term="installer"/>
+    <category term="safe"/>
+    <dc:identifier>~/Dropbox/Downloads/xampp-windows-x64-8.0.0-3-VS16-installer.exe</dc:identifier>
+    <content type="text">Size: 157.0 MB  |  Risk: safe  |  Path: ~/Dropbox/Downloads/xampp-windows-x64-8.0.0-3-VS16-installer.exe
+
+singine command:
+singine runtime exec-external bin/scan delete --path "C:\Users\jhe\Dropbox\Downloads\xampp-windows-x64-8.0.0-3-VS16-installer.exe"
+
+Shell:
+powershell.exe -Command "Remove-Item -Recurse -Force 'C:\Users\jhe\Dropbox\Downloads\xampp-windows-x64-8.0.0-3-VS16-installer.exe'"</content>
+  </entry>
+  <entry>
+    <id>urn:singine:cleanup:disk:jetbrains-idea2020-all</id>
+    <title>[REVIEW] IntelliJ IDEA 2020.2 — full system directory</title>
+    <updated>2026-05-23T13:31:35Z</updated>
+    <link rel="alternate" href="https://singine.uk/cleanup.html#jetbrains-idea2020-all"/>
+    <link rel="related" href="https://singine.uk/latest/ATOM"/>
+    <category term="ide-cache"/>
+    <category term="review"/>
+    <dc:identifier>~/AppData/Local/JetBrains/IntelliJIdea2020.2</dc:identifier>
+    <content type="text">Size: 53.5 GB  |  Risk: review  |  Path: ~/AppData/Local/JetBrains/IntelliJIdea2020.2
+
+singine command:
+singine runtime exec-external bin/scan delete --path "C:\Users\jhe\AppData\Local\JetBrains\IntelliJIdea2020.2"
+
+Shell:
+powershell.exe -Command "Remove-Item -Recurse -Force 'C:\Users\jhe\AppData\Local\JetBrains\IntelliJIdea2020.2'"
+
+Safe to delete if you no longer use IntelliJ 2020.2.</content>
+  </entry>
+  <entry>
+    <id>urn:singine:cleanup:disk:claude-desktop-cache</id>
+    <title>[REVIEW] Claude desktop app — LocalCache</title>
+    <updated>2026-05-23T13:31:35Z</updated>
+    <link rel="alternate" href="https://singine.uk/cleanup.html#claude-desktop-cache"/>
+    <link rel="related" href="https://singine.uk/latest/ATOM"/>
+    <category term="app-cache"/>
+    <category term="review"/>
+    <dc:identifier>~/AppData/Local/Packages/Claude_pzs8sxrjxfjjc/LocalCache</dc:identifier>
+    <content type="text">Size: 11.9 GB  |  Risk: review  |  Path: ~/AppData/Local/Packages/Claude_pzs8sxrjxfjjc/LocalCache
+
+singine command:
+singine runtime exec-external bin/scan delete --path "C:\Users\jhe\AppData\Local\Packages\Claude_pzs8sxrjxfjjc\LocalCache"
+
+Shell:
+powershell.exe -Command "Remove-Item -Recurse -Force 'C:\Users\jhe\AppData\Local\Packages\Claude_pzs8sxrjxfjjc\LocalCache'"
+
+Conversation cache. Clears chat history from the desktop app.</content>
+  </entry>
+  <entry>
+    <id>urn:singine:cleanup:disk:dropbox-backup-2020-mar</id>
+    <title>[REVIEW] Dropbox — full user backup 2020-03</title>
+    <updated>2026-05-23T13:31:35Z</updated>
+    <link rel="alternate" href="https://singine.uk/cleanup.html#dropbox-backup-2020-mar"/>
+    <link rel="related" href="https://singine.uk/latest/ATOM"/>
+    <category term="backup"/>
+    <category term="review"/>
+    <dc:identifier>~/Dropbox/backup/20200315T195649_Jay_Users.tar.gz</dc:identifier>
+    <content type="text">Size: 11.5 GB  |  Risk: review  |  Path: ~/Dropbox/backup/20200315T195649_Jay_Users.tar.gz
+
+singine command:
+singine runtime exec-external bin/scan delete --path "C:\Users\jhe\Dropbox\backup\20200315T195649_Jay_Users.tar.gz"
+
+Shell:
+powershell.exe -Command "Remove-Item -Recurse -Force 'C:\Users\jhe\Dropbox\backup\20200315T195649_Jay_Users.tar.gz'"
+
+6-year-old full user backup. Verify newer backup exists first.</content>
+  </entry>
+  <entry>
+    <id>urn:singine:cleanup:disk:dropbox-backup-2020-jan</id>
+    <title>[REVIEW] Dropbox — full user backup 2020-01</title>
+    <updated>2026-05-23T13:31:35Z</updated>
+    <link rel="alternate" href="https://singine.uk/cleanup.html#dropbox-backup-2020-jan"/>
+    <link rel="related" href="https://singine.uk/latest/ATOM"/>
+    <category term="backup"/>
+    <category term="review"/>
+    <dc:identifier>~/Dropbox/backup/20200126T184105_Jay_Users.tar.gz</dc:identifier>
+    <content type="text">Size: 10.0 GB  |  Risk: review  |  Path: ~/Dropbox/backup/20200126T184105_Jay_Users.tar.gz
+
+singine command:
+singine runtime exec-external bin/scan delete --path "C:\Users\jhe\Dropbox\backup\20200126T184105_Jay_Users.tar.gz"
+
+Shell:
+powershell.exe -Command "Remove-Item -Recurse -Force 'C:\Users\jhe\Dropbox\backup\20200126T184105_Jay_Users.tar.gz'"
+
+6-year-old full user backup.</content>
+  </entry>
+  <entry>
+    <id>urn:singine:cleanup:disk:logseq-old-version</id>
+    <title>[REVIEW] Logseq — old app version 0.10.15</title>
+    <updated>2026-05-23T13:31:35Z</updated>
+    <link rel="alternate" href="https://singine.uk/cleanup.html#logseq-old-version"/>
+    <link rel="related" href="https://singine.uk/latest/ATOM"/>
+    <category term="app-cache"/>
+    <category term="review"/>
+    <dc:identifier>~/AppData/Local/Logseq/app-0.10.15</dc:identifier>
+    <content type="text">Size: 596.1 MB  |  Risk: review  |  Path: ~/AppData/Local/Logseq/app-0.10.15
+
+singine command:
+singine runtime exec-external bin/scan delete --path "C:\Users\jhe\AppData\Local\Logseq\app-0.10.15"
+
+Shell:
+powershell.exe -Command "Remove-Item -Recurse -Force 'C:\Users\jhe\AppData\Local\Logseq\app-0.10.15'"</content>
+  </entry>
+  <entry>
+    <id>urn:singine:cleanup:gov:gov-001</id>
+    <title>GOV-001 — Response Transparency</title>
+    <updated>2026-05-23T13:31:35Z</updated>
+    <link rel="alternate" href="https://singine.uk/cleanup.html#governance"/>
+    <category term="governance"/>
+    <category term="gov-001"/>
+    <content type="text">Applies: Every time a human selects a response option
+
+Rule: The selection MUST be recorded in the audit log with actor, timestamp, question ID, and chosen position before any action is dispatched. No action may begin without a confirmed audit entry.</content>
+  </entry>
+  <entry>
+    <id>urn:singine:cleanup:gov:gov-002</id>
+    <title>GOV-002 — Sync Action Accountability</title>
+    <updated>2026-05-23T13:31:35Z</updated>
+    <link rel="alternate" href="https://singine.uk/cleanup.html#governance"/>
+    <category term="governance"/>
+    <category term="gov-002"/>
+    <content type="text">Applies: Every synchronous action execution
+
+Rule: Sync actions execute in the same thread as the response. Result (success or error) MUST be written to audit log and executions table. On failure the session continues; it does not abort remaining sync actions.</content>
+  </entry>
+  <entry>
+    <id>urn:singine:cleanup:gov:gov-003</id>
+    <title>GOV-003 — Async Action Queuing</title>
+    <updated>2026-05-23T13:31:35Z</updated>
+    <link rel="alternate" href="https://singine.uk/cleanup.html#governance"/>
+    <category term="governance"/>
+    <category term="gov-003"/>
+    <content type="text">Applies: Every asynchronous action dispatch
+
+Rule: Async actions are enqueued in SQLite (status=pending). A singine worker polls and executes them independently. The enqueue operation is synchronous; the execution is not. Idempotency keys MUST be set on every async payload.</content>
+  </entry>
+  <entry>
+    <id>urn:singine:cleanup:gov:gov-004</id>
+    <title>GOV-004 — Human Task Escalation</title>
+    <updated>2026-05-23T13:31:35Z</updated>
+    <link rel="alternate" href="https://singine.uk/cleanup.html#governance"/>
+    <category term="governance"/>
+    <category term="gov-004"/>
+    <content type="text">Applies: Any action whose type is "human"
+
+Rule: A human_tasks record is created (status=open) and a notification is sent (webhook or email). The session that triggered the task does NOT wait for resolution. Human tasks MUST be resolved within the configured SLA window (default: 48 h). Unresolved tasks after SLA are re-notified.</content>
+  </entry>
+  <entry>
+    <id>urn:singine:cleanup:gov:gov-005</id>
+    <title>GOV-005 — Logseq Sync Integrity</title>
+    <updated>2026-05-23T13:31:35Z</updated>
+    <link rel="alternate" href="https://singine.uk/cleanup.html#governance"/>
+    <category term="governance"/>
+    <category term="gov-005"/>
+    <content type="text">Applies: Any push or pull between local state and Logseq
+
+Rule: A content hash of each page/block is stored before and after sync. On hash mismatch without an explicit commit, the sync is aborted and recorded as a conflict in audit log.</content>
+  </entry>
+  <entry>
+    <id>urn:singine:cleanup:gov:gov-006</id>
+    <title>GOV-006 — Knowledge Base Immutability</title>
+    <updated>2026-05-23T13:31:35Z</updated>
+    <link rel="alternate" href="https://singine.uk/cleanup.html#governance"/>
+    <category term="governance"/>
+    <category term="gov-006"/>
+    <content type="text">Applies: Any mutation to questions or response options
+
+Rule: Questions and responses are versioned, not edited in place. The previous version is retained and marked inactive. All executions reference the version active at the time of the response.</content>
+  </entry>
+  <entry>
+    <id>urn:singine:cleanup:gov:gov-007</id>
+    <title>GOV-007 — Cost Visibility</title>
+    <updated>2026-05-23T13:31:35Z</updated>
+    <link rel="alternate" href="https://singine.uk/cleanup.html#governance"/>
+    <category term="governance"/>
+    <category term="gov-007"/>
+    <content type="text">Applies: Any response option with costLevel ≥ "high"
+
+Rule: Before dispatching actions, the CLI MUST display the cost level and list all actions that will be triggered. An explicit confirmation prompt is required. Auto-mode (non-interactive) is not permitted for "critical" cost actions without a governance override flag.</content>
+  </entry>
+  <entry>
+    <id>urn:singine:cleanup:gov:gov-008</id>
+    <title>GOV-008 — silkpage Content Transformation Traceability</title>
+    <updated>2026-05-23T13:31:35Z</updated>
+    <link rel="alternate" href="https://singine.uk/cleanup.html#governance"/>
+    <category term="governance"/>
+    <category term="gov-008"/>
+    <content type="text">Applies: Any content transformation via silkpage
+
+Rule: Input and output content hashes, the transformation template name, and silkpage version MUST be logged. Transformed content is stored in a staging area; it does not replace source until a commit step.</content>
+  </entry>
+</feed>

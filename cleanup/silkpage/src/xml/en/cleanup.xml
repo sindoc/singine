@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  cleanup.xml — silkpage content page: Disk Space Cleanup Report
+  Transformed by src/xsl/cleanup.xsl → output/cleanup.html
+  Served statically via Nginx / cdn.example.org
+
+  Dynamic data is fetched at runtime from /api/report (latest.json).
+  The static fallback table is rendered from the embedded <item> elements.
+-->
+<webpage id="cleanup-report">
+  <config param="cdn"     value="//cdn.example.org"/>
+  <config param="api"     value="/api/report"/>
+  <config param="version" value="1.0"/>
+
+  <head>
+    <title>Disk Space Cleanup Report</title>
+    <summary>Identify reclaimable disk space and copy singine cleanup commands.</summary>
+    <keywords>disk space, cleanup, singine, silkpage</keywords>
+  </head>
+
+  <!-- ── Static summary (rendered by XSL into the page header) ── -->
+  <section id="summary">
+    <title>Summary</title>
+    <para>
+      The table below lists disk-space consumers on this machine, ranked by
+      size.  For each item the <emphasis>singine command</emphasis> that would
+      delete or uninstall it is shown — click the copy button to place it on
+      the clipboard, then paste it into a terminal.
+    </para>
+    <para>
+      Commands are executed via <code>singine runtime exec-external</code>.
+      High-cost actions (risk = <emphasis>review</emphasis>) will prompt for
+      GOV-007 confirmation before dispatching.
+    </para>
+    <note>
+      <para>
+        The <emphasis>Safe</emphasis> items can be deleted immediately.
+        <emphasis>Review</emphasis> items should be verified before deletion.
+        <emphasis>Keep</emphasis> items are listed for visibility only.
+      </para>
+    </note>
+  </section>
+
+  <!-- ── Static fallback items (populated at build time from latest.json) ── -->
+  <!-- XSL renders these; JavaScript replaces them with live data if available -->
+  <section id="items">
+    <title>Reclaimable Items</title>
+    <cleanup-items src="@api@">
+      <!-- Items inserted here by scan.sh → report/cleanup.xml via Go scanner  -->
+      <!-- XSL will include report/cleanup.xml at build time via xi:include    -->
+    </cleanup-items>
+  </section>
+
+  <section id="howto">
+    <title>Running a Cleanup Command</title>
+    <para>To execute a cleanup command:</para>
+    <orderedlist>
+      <listitem><para>Copy the singine command from the table above.</para></listitem>
+      <listitem>
+        <para>
+          Paste it into a terminal where <code>singine</code> is on the PATH:
+        </para>
+        <programlisting>npm install -g singine   # first time only</programlisting>
+      </listitem>
+      <listitem>
+        <para>
+          For <emphasis>review</emphasis> items, singine will apply GOV-007
+          and prompt for confirmation before deleting.
+        </para>
+      </listitem>
+      <listitem>
+        <para>
+          Run the scanner again after deletion to update the report:
+        </para>
+        <programlisting>singine runtime exec-external bash cleanup/scan.sh</programlisting>
+      </listitem>
+    </orderedlist>
+  </section>
+</webpage>

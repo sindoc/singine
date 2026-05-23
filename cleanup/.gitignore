@@ -1,0 +1,12 @@
+bin/
+report/latest.json
+report/cleanup.xml
+report/audit.log
+output/
+*.exe
+# Committee artefacts committed for sharing + ATOM feed serving
+!report/committee-results.json
+!report/committee-report.html
+!output/
+!output/latest/
+!output/latest/ATOM

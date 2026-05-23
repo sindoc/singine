@@ -17,8 +17,11 @@ from __future__ import annotations
 
 import json
 import os
-import pwd
 import subprocess
+try:
+    import pwd as _pwd
+except ImportError:
+    _pwd = None
 import sys
 import xml.etree.ElementTree as ET
 from itertools import count
@@ -387,13 +390,13 @@ def _resolve_user_path(raw_path: str) -> Path:
     if raw_path == "~" or raw_path.startswith("~/"):
         home = os.environ.get("HOME")
         if not home:
-            home = pwd.getpwuid(os.getuid()).pw_dir
+            home = _pwd.getpwuid(os.getuid()).pw_dir if _pwd else str(Path.home())
         suffix = raw_path[2:] if raw_path.startswith("~/") else ""
         return Path(home) / suffix
 
     user_part, _, remainder = raw_path[1:].partition("/")
     try:
-        home = pwd.getpwnam(user_part).pw_dir
+        home = _pwd.getpwnam(user_part).pw_dir if _pwd else str(Path.home())
     except KeyError:
         return Path(raw_path)
     return Path(home) / remainder
