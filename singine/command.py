@@ -1036,9 +1036,24 @@ def cmd_realm_read_atom(args: argparse.Namespace) -> int:
 
 
 def cmd_man(args: argparse.Namespace) -> int:
-    page = man_dir() / f"{args.topic}.1"
+    topic = getattr(args, "topic", "singine") or "singine"
+    # Dispatch generate/seed/migrate/flc/citizen subcommands to man_gen module
+    if topic in ("generate", "seed", "migrate", "flc", "citizen"):
+        from singine import man_gen as _mg
+        dispatch = {
+            "generate": _mg.cmd_man_generate,
+            "seed":     _mg.cmd_man_seed,
+            "migrate":  _mg.cmd_man_migrate,
+        }
+        if topic == "flc":
+            flc_cmd = getattr(args, "flc_cmd", "list")
+            return (_mg.cmd_man_flc_show if flc_cmd == "show" else _mg.cmd_man_flc_list)(args)
+        if topic == "citizen":
+            return _mg.cmd_man_citizen_register(args)
+        return dispatch[topic](args)
+    page = man_dir() / f"{topic}.1"
     if not page.exists():
-        print(f"Unknown manpage topic: {args.topic}", file=sys.stderr)
+        print(f"Unknown manpage topic: {topic}", file=sys.stderr)
         return 1
     if args.raw:
         print(page)
@@ -1047,7 +1062,7 @@ def cmd_man(args: argparse.Namespace) -> int:
     if man_bin:
         env = dict(os.environ)
         env["MANPATH"] = str(man_dir()) + os.pathsep + env.get("MANPATH", "")
-        return subprocess.call([man_bin, args.topic], env=env)
+        return subprocess.call([man_bin, topic], env=env)
     print(_read_text(page))
     return 0
 
@@ -4896,9 +4911,29 @@ def build_parser() -> argparse.ArgumentParser:
     realm_read.add_argument("--json", action="store_true", help="Emit JSON")
     realm_read.set_defaults(func=cmd_realm_read_atom)
 
-    man_parser = sub.add_parser("man", help="Open or print Singine manpages")
-    man_parser.add_argument("topic", nargs="?", default="singine")
-    man_parser.add_argument("--raw", action="store_true", help="Print the file path instead of opening man")
+    man_parser = sub.add_parser("man", help="Open, generate, or manage Singine manpages")
+    man_parser.add_argument(
+        "topic", nargs="?", default="singine",
+        help="Manpage topic to open, or: generate|seed|migrate|flc|citizen",
+    )
+    man_parser.add_argument("--raw", action="store_true", help="Print file path instead of opening man")
+    # --- generate subcommand args ---
+    man_parser.add_argument("--page",          default="all",    dest="man_page",    help="[generate] Silkpage page id or 'all'")
+    man_parser.add_argument("--db",            default=None,     dest="man_db",      help="[generate|seed|migrate] SQLite DB path")
+    man_parser.add_argument("--silkpage-root", default=None,     help="[seed] Silkpage XML root directory")
+    man_parser.add_argument("--layout",        default=None,     help="[seed] layout.xml path")
+    man_parser.add_argument("--out-dir",       default=None,     dest="man_out_dir", help="[generate] Man page output directory")
+    man_parser.add_argument("--pg",            action="store_true", dest="man_pg",   help="[generate] Mark db_source as pg")
+    man_parser.add_argument("--pg-url",        default=None,     help="[migrate] PostgreSQL connection URL")
+    man_parser.add_argument("--tables",        default="all",    help="[migrate] Tables to migrate (comma-sep or 'all')")
+    man_parser.add_argument("--flc-code",      default="MANP",   dest="flc_code",    help="[flc show] FLC code to display")
+    man_parser.add_argument("--flc-cmd",       default="list",   help="[flc] list|show")
+    man_parser.add_argument("--citizen-id",    default=None,     dest="citizen_id",  help="[citizen|generate] Data citizen public ID")
+    man_parser.add_argument("--citizen-label", default=None,     dest="citizen_label",help="[citizen register] Display label")
+    man_parser.add_argument("--citizen-email", default=None,     dest="citizen_email",help="[citizen register] Email address")
+    man_parser.add_argument("--community",     default="sindoc", help="[citizen register] Community name")
+    man_parser.add_argument("--profile-url",   default=None,     dest="profile_url", help="[citizen register] Public profile URL")
+    man_parser.add_argument("--flc-mandate",   default="MANP,SIDM,DCTZ", help="[citizen register] Comma-sep FLC codes")
     man_parser.set_defaults(func=cmd_man)
 
     install_parser = sub.add_parser("install", help="Install singine or selected local tool dependencies")

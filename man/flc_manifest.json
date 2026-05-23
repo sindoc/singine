@@ -1,0 +1,201 @@
+{
+  "$id": "c.flc-manifest.singine-man-pipeline.v1",
+  "description": "Collibra Four Letter Code (FLC) manifest for the singine man page pipeline. Governs silkpage sidebar metadata extraction, man page generation, PostgreSQL migration, and Mule→SpringBoot service migration. 1-year mandate contract.",
+  "contract_id": "c.contract.man-pipeline-1yr",
+  "contract_kind": "GovernanceContract",
+  "mandate_start": "2026-01-01",
+  "mandate_end": "2026-12-31",
+  "collibra_community": "0193febe-98bd-78ba-9301-7199dcb1607a",
+  "collibra_base_url": "https://api-vlab.collibra.com",
+  "sbvr_rule": "Every Man Page must be traceable to exactly one Sidebar Metadata entry governed by a Four Letter Code from this manifest.",
+
+  "flc_codes": [
+    {
+      "code": "MANP",
+      "label": "Man Page",
+      "description": "Generated roff man page sourced from silkpage sidebar metadata. Published under man/singine-*.1.",
+      "asset_type": "Publication Asset",
+      "sbvr": "odrl:Agreement",
+      "dw_system": "singine",
+      "orm_facts": [
+        "Man Page is sourced from exactly one Sidebar Metadata",
+        "Man Page has one or more Data Citizens as contributors",
+        "Man Page is governed by exactly one Governance Contract"
+      ]
+    },
+    {
+      "code": "SIDM",
+      "label": "Sidebar Metadata",
+      "description": "Silkpage XML navigation entry (<tocentry>) plus page <head> metadata (title, summary, keywords).",
+      "asset_type": "Data Asset",
+      "sbvr": "dcat:Dataset",
+      "dw_system": "singine",
+      "orm_facts": [
+        "Sidebar Metadata is extracted from exactly one Silkpage Asset",
+        "Sidebar Metadata provides source for zero or more Man Pages"
+      ]
+    },
+    {
+      "code": "CNTB",
+      "label": "Content Block",
+      "description": "Silkpage XML section element (<section id=\"...\">). Each section becomes a man page .SH entry.",
+      "asset_type": "Business Term",
+      "sbvr": "skos:Concept",
+      "dw_system": "singine",
+      "orm_facts": [
+        "Content Block belongs to exactly one Sidebar Metadata",
+        "Content Block corresponds to exactly one .SH section in a Man Page"
+      ]
+    },
+    {
+      "code": "DCTZ",
+      "label": "Data Citizen",
+      "description": "Community-active data citizen with a public identity ID. Linked to man pages as author, contributor, steward, or reviewer.",
+      "asset_type": "Use Case",
+      "sbvr": "foaf:Person",
+      "dw_system": "singine",
+      "community": "sindoc",
+      "orm_facts": [
+        "Data Citizen has a unique public citizen_id",
+        "Data Citizen participates in one or more Man Pages",
+        "Data Citizen is bound by one or more FLC mandates"
+      ]
+    },
+    {
+      "code": "MIGR",
+      "label": "Migration Service",
+      "description": "Record of a Mule→SpringBoot service migration. Linked to the man page documenting the migrated service.",
+      "asset_type": "Data Contract",
+      "sbvr": "prov:Activity",
+      "dw_system": "singine",
+      "orm_facts": [
+        "Migration Service migrates from exactly one source technology",
+        "Migration Service migrates to exactly one target technology",
+        "Migration Service may reference a Collibra contract ID"
+      ]
+    },
+    {
+      "code": "GOVC",
+      "label": "Governance Contract",
+      "description": "1-year mandate contract codified in Collibra. The contract_id c.contract.man-pipeline-1yr governs all FLCs in this manifest.",
+      "asset_type": "Governance Contract",
+      "sbvr": "odrl:Agreement",
+      "dw_system": "collibra",
+      "orm_facts": [
+        "Governance Contract governs one or more FLC Codes",
+        "Governance Contract has a mandate_start and mandate_end",
+        "Governance Contract is registered in Collibra community"
+      ]
+    },
+    {
+      "code": "DIMN",
+      "label": "DW Dimension",
+      "description": "Data warehouse dimension. All FLC codes are mapped to dimensions (main/primary/secondary/n_linear/relational/boolean/temporal).",
+      "asset_type": "Data Asset",
+      "sbvr": "dcat:DataService",
+      "dw_system": "singine",
+      "orm_facts": [
+        "DW Dimension maps to exactly one FLC Code",
+        "DW Dimension has exactly one axis (time/subject/operation/data-citizen)",
+        "DW Dimension participates in the category ontology (V003)"
+      ]
+    },
+    {
+      "code": "SNGE",
+      "label": "Singine Execution",
+      "description": "Singine runtime command execution. singine man generate triggers a SNGE record in the audit log.",
+      "asset_type": "Use Case",
+      "sbvr": "prov:Activity",
+      "dw_system": "singine",
+      "orm_facts": [
+        "Singine Execution is initiated by a Data Citizen",
+        "Singine Execution produces zero or more Man Pages",
+        "Singine Execution is logged in GOV-001 audit trail"
+      ]
+    },
+    {
+      "code": "SILP",
+      "label": "Silkpage Asset",
+      "description": "Silkpage publication page. The HTML output served at singine.uk. Source for SIDM sidebar metadata.",
+      "asset_type": "Publication Asset",
+      "sbvr": "dcat:Dataset",
+      "dw_system": "silkpage",
+      "orm_facts": [
+        "Silkpage Asset contains one or more Content Blocks",
+        "Silkpage Asset has exactly one Sidebar Metadata entry in the TOC"
+      ]
+    },
+    {
+      "code": "MULE",
+      "label": "Mule Service",
+      "description": "MuleSoft ESB API/integration endpoint. Source technology in Mule→SpringBoot migration.",
+      "asset_type": "Data Asset",
+      "sbvr": "dcat:DataService",
+      "dw_system": "mule",
+      "orm_facts": [
+        "Mule Service is the source of exactly one Migration Service record",
+        "Mule Service exposes one or more HTTP endpoints"
+      ]
+    },
+    {
+      "code": "SPBT",
+      "label": "Spring Boot Service",
+      "description": "Spring Boot microservice. Target technology in Mule→SpringBoot migration.",
+      "asset_type": "Data Asset",
+      "sbvr": "dcat:DataService",
+      "dw_system": "springboot",
+      "orm_facts": [
+        "Spring Boot Service is the target of exactly one Migration Service record",
+        "Spring Boot Service replaces exactly one Mule Service"
+      ]
+    }
+  ],
+
+  "dw_dimension_mapping": {
+    "description": "Every FLC must be mapped to at least one DW dimension. Dimensions follow V003 categories ontology.",
+    "dimensions": [
+      { "flc": "MANP", "dimension": "main",      "axis": "subject"       },
+      { "flc": "MANP", "dimension": "temporal",  "axis": "time"          },
+      { "flc": "SIDM", "dimension": "primary",   "axis": "subject"       },
+      { "flc": "SIDM", "dimension": "relational","axis": "operation"     },
+      { "flc": "CNTB", "dimension": "secondary", "axis": "subject"       },
+      { "flc": "DCTZ", "dimension": "main",      "axis": "data-citizen"  },
+      { "flc": "DCTZ", "dimension": "boolean",   "axis": "operation"     },
+      { "flc": "MIGR", "dimension": "main",      "axis": "operation"     },
+      { "flc": "MIGR", "dimension": "temporal",  "axis": "time"          },
+      { "flc": "GOVC", "dimension": "main",      "axis": "operation"     },
+      { "flc": "DIMN", "dimension": "n_linear",  "axis": "subject"       },
+      { "flc": "SNGE", "dimension": "primary",   "axis": "operation"     },
+      { "flc": "SILP", "dimension": "secondary", "axis": "subject"       },
+      { "flc": "MULE", "dimension": "relational","axis": "operation"     },
+      { "flc": "SPBT", "dimension": "relational","axis": "operation"     }
+    ]
+  },
+
+  "mule_to_springboot_services": [
+    {
+      "service_name": "singine-collibra-proxy",
+      "from_tech": "mule",
+      "to_tech": "springboot",
+      "status": "pending",
+      "flc_code": "MIGR",
+      "description": "Collibra REST proxy — routes singine collibra commands to api-vlab.collibra.com"
+    },
+    {
+      "service_name": "singine-idgen-api",
+      "from_tech": "mule",
+      "to_tech": "springboot",
+      "status": "in-progress",
+      "flc_code": "MIGR",
+      "description": "ID generation HTTP server (port 7331) — currently Python; target Spring Boot REST"
+    },
+    {
+      "service_name": "singine-silkpage-cdn",
+      "from_tech": "mule",
+      "to_tech": "springboot",
+      "status": "pending",
+      "flc_code": "MIGR",
+      "description": "CDN proxy for cdn.example.org → Spring Boot static asset service"
+    }
+  ]
+}

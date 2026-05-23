@@ -13,7 +13,7 @@ FA_PROOF_FONT          ?= Amiri
 FA_PROOF_HB_FONT       ?= Noto Naskh Arabic
 FA_PROOF_FONTS         ?= Amiri Geeza\ Pro Al\ Bayan Damascus Baghdad Tahoma
 
-.PHONY: help status test test-core serve-core repl-core javac-core python-smoke py-test-xml py-test-transfer-flow py-test-multilingual-emotion py-test-photo py-test-surface py-test-domain py-test-install backlog-status install install-bash install-sh install-workstation manpath bridge-build bridge-sources xml-matrix knowyourai-list knowyourai-query auth-demo auth-uri auth-code model-catalog brew-clojure transfer-queue-demo transfer-stack-demo logseq-kernel-build logseq-kernel-sources logseq-kernel-search logseq-kernel-commit logseq-kernel-sync domain-schema domain-seed domain-event-log domain-tx-list domain-refdata-list domain-docs docs net-status net-ports presence-status panel-serve feeds-generate fa-proof-specimen fa-proof-showcase fa-proof-hb fa-proof-suite
+.PHONY: help status test test-core serve-core repl-core javac-core python-smoke py-test-xml py-test-transfer-flow py-test-multilingual-emotion py-test-photo py-test-surface py-test-domain py-test-install backlog-status install install-bash install-sh install-workstation manpath bridge-build bridge-sources xml-matrix knowyourai-list knowyourai-query auth-demo auth-uri auth-code model-catalog brew-clojure transfer-queue-demo transfer-stack-demo logseq-kernel-build logseq-kernel-sources logseq-kernel-search logseq-kernel-commit logseq-kernel-sync domain-schema domain-seed domain-event-log domain-tx-list domain-refdata-list domain-docs docs net-status net-ports presence-status panel-serve feeds-generate fa-proof-specimen fa-proof-showcase fa-proof-hb fa-proof-suite man-seed man-generate man-flc man-all
 
 help:
 	@printf "Singine commands:\n"
@@ -65,6 +65,26 @@ help:
 	@printf "  make docs                  Build all Singine + Humble IDP documentation\n"
 	@printf "  make py-test-domain        Run domain command Python tests\n"
 	@printf "  make py-test-install       Run install command Python tests\n"
+	@printf "  make man-seed              Seed silkpage sidebar metadata into SQLite (data/singine-man.db)\n"
+	@printf "  make man-generate          Generate man pages from DB (→ man/)\n"
+	@printf "  make man-flc               List FLC assets and 1-year mandate codes\n"
+	@printf "  make man-all               man-seed + man-generate\n"
+
+man-seed:
+	python3 man/generate_man.py seed \
+	  --silkpage-root ../silkpage/templates/site/default/src/xml/en \
+	  --db data/singine-man.db
+	python3 man/generate_man.py seed \
+	  --silkpage-root cleanup/silkpage/src/xml/en \
+	  --db data/singine-man.db
+
+man-generate:
+	python3 man/generate_man.py generate --page all --db data/singine-man.db --out-dir man/
+
+man-flc:
+	python3 man/generate_man.py flc list --db data/singine-man.db
+
+man-all: man-seed man-generate
 
 status:
 	git status -sb

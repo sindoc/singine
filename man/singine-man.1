@@ -121,10 +121,129 @@ File transfer and queue/stack helpers.
 .TP
 .B singine-smtp
 SMTP test and send helpers.
+.SH MAN PAGE GENERATION PIPELINE
+Man pages can be generated from silkpage sidebar metadata governed by Collibra
+Four Letter Codes (FLCs) from the 1\-year mandate contract
+.IR c.contract.man\-pipeline\-1yr .
+.PP
+The pipeline has three phases:
+.TP
+.B singine man seed [\-\-silkpage\-root DIR] [\-\-db PATH]
+Parse silkpage XML files from
+.I DIR
+(default: sibling
+.IR silkpage/templates/site/default/src/xml/en )
+and populate
+.I sidebar_entries
++
+.I flc_assets
+in the SQLite database.
+.TP
+.B singine man generate [\-\-page ID|all] [\-\-db PATH] [\-\-out\-dir DIR]
+Look up sidebar entries from the DB and produce roff
+.B .1
+man pages under
+.IR man/ .
+Each page is tagged with FLC code
+.B MANP
+and linked to DW dimensions.
+.TP
+.B singine man migrate [\-\-db PATH] [\-\-pg\-url URL]
+Emit PostgreSQL
+.B INSERT
+statements from the SQLite DB.
+Pipe to
+.B psql
+to complete the SQLite \(-> PostgreSQL migration.
+.PP
+FLC asset operations:
+.TP
+.B singine man flc \-\-flc\-cmd list [\-\-db PATH]
+List all Collibra Four Letter Code assets and their mandate dates.
+.TP
+.B singine man flc \-\-flc\-cmd show \-\-flc\-code MANP [\-\-db PATH]
+Show details and DW dimension mapping for a single FLC code.
+.PP
+Community\-active data citizen registration:
+.TP
+.B singine man citizen \-\-citizen\-id ID \-\-citizen\-label LABEL [\-\-db PATH]
+Register a public data citizen bound by the FLC mandate.
+.SH FLC CODES (1\-YEAR MANDATE)
+The following Collibra Four Letter Codes are defined in
+.I man/flc_manifest.json
+and seeded into the database at
+.B seed
+time:
+.TP
+.B MANP
+Man Page \(em generated roff publication asset
+.TP
+.B SIDM
+Sidebar Metadata \(em silkpage XML nav entry + page head
+.TP
+.B CNTB
+Content Block \(em silkpage XML section element
+.TP
+.B DCTZ
+Data Citizen \(em community\-active public identity
+.TP
+.B MIGR
+Migration Service \(em Mule \(-> Spring Boot record
+.TP
+.B GOVC
+Governance Contract \(em 1\-year mandate in Collibra
+.TP
+.B DIMN
+DW Dimension \(em data warehouse axis mapping
+.TP
+.B SNGE
+Singine Execution \(em runtime command audit entry
+.TP
+.B SILP
+Silkpage Asset \(em HTML publication page
+.TP
+.B MULE
+Mule Service \(em ESB endpoint (migration source)
+.TP
+.B SPBT
+Spring Boot Service \(em microservice (migration target)
+.SH DATABASE SCHEMA
+The SQLite schema is defined in
+.I man/db/V004__man_pages.sql
+and the PostgreSQL target in
+.IR man/db/V004__man_pages_pg.sql .
+Tables:
+.B flc_assets,
+.B dw_dimensions,
+.B sidebar_entries,
+.B man_pages,
+.B data_citizens,
+.B man_page_citizens,
+.B migration_services.
 .SH EXAMPLES
 .nf
 # Top-level index (start here).
 singine man
+
+# Generate man pages from silkpage sidebar metadata:
+singine man seed --silkpage-root ../silkpage/templates/site/default/src/xml/en
+singine man generate --page all
+singine man generate --page cleanup --out-dir man/
+
+# Seed and generate in one step:
+make -C man all
+
+# List FLC codes and mandates:
+singine man flc --flc-cmd list
+
+# Show DW dimension mapping for MANP:
+singine man flc --flc-cmd show --flc-code MANP
+
+# Register a data citizen:
+singine man citizen --citizen-id dctz-jhe-001 --citizen-label "Jay H" --community sindoc
+
+# Migrate SQLite → PostgreSQL:
+singine man migrate --pg-url postgresql://localhost:5432/singine | psql $PG_URL
 
 # AI conversation data — listing, inspection, export, centralisation.
 singine man singine-ai
@@ -165,9 +284,26 @@ singine man singine-photo
 # Get the raw filesystem path to a manpage.
 singine man singine-auth --raw
 .fi
+.SH FILES
+.TP
+.I man/generate_man.py
+Core pipeline script: seed / generate / migrate / flc / citizen
+.TP
+.I man/flc_manifest.json
+Canonical FLC definitions, DW dimension mapping, and Mule\(->SpringBoot service list
+.TP
+.I man/db/V004__man_pages.sql
+SQLite DDL (V004 migration)
+.TP
+.I man/db/V004__man_pages_pg.sql
+PostgreSQL DDL (migration target)
+.TP
+.I singine/man_gen.py
+Python module wired into singine CLI for man generate/seed/migrate commands
 .SH SEE ALSO
 .BR singine (1),
 .BR singine-photo (1),
 .BR singine-ai (1),
 .BR singine-bridge (1),
-.BR singine-policy (1)
+.BR singine-policy (1),
+.BR singine-activity (1)
