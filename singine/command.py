@@ -6371,6 +6371,43 @@ def build_parser() -> argparse.ArgumentParser:
 
     mcp_parser.set_defaults(func=lambda args: mcp_parser.print_help() or 0)
 
+    # ── graph ─────────────────────────────────────────────────────────────────
+    graph_parser = sub.add_parser("graph", help="Logseq knowledge graph → HTML/RDF publisher")
+    graph_sub    = graph_parser.add_subparsers(dest="graph_subcommand")
+
+    p = graph_sub.add_parser("publish", help="Publish Logseq graph to www/graph/")
+    p.add_argument("--graph", default=None, metavar="DIR",
+                   help="Logseq graph root (default: ~/ws/ls/kern)")
+    p.add_argument("--out", default=None, metavar="DIR",
+                   help="Output directory (default: silkpage www/graph/)")
+    p.add_argument("--name", default="kern", help="Graph name slug (default: kern)")
+    p.set_defaults(func=cmd_graph_publish)
+
+    p = graph_sub.add_parser("rdf", help="Print RDF/XML manifest of the graph")
+    p.add_argument("--graph", default=None, metavar="DIR")
+    p.add_argument("--name", default="kern")
+    p.set_defaults(func=cmd_graph_rdf)
+
+    graph_parser.set_defaults(func=lambda a: graph_parser.print_help() or 0)
+
+    # ── mime ──────────────────────────────────────────────────────────────────
+    mime_parser = sub.add_parser("mime", help="MIME-aware XML construction from file trees")
+    mime_sub    = mime_parser.add_subparsers(dest="mime_subcommand")
+
+    p = mime_sub.add_parser("html", help="Print SilkPage MIME capabilities as HTML table")
+    p.set_defaults(func=cmd_mime_html)
+
+    p = mime_sub.add_parser("xml", help="Generate XML tree from directory with MIME annotations")
+    p.add_argument("--root", default=".", metavar="DIR")
+    p.add_argument("--out", default=None, metavar="FILE")
+    p.set_defaults(func=cmd_mime_xml)
+
+    p = mime_sub.add_parser("file", help="Wrap a single file in semantic XML")
+    p.add_argument("path", help="File to wrap")
+    p.set_defaults(func=cmd_mime_file)
+
+    mime_parser.set_defaults(func=lambda a: mime_parser.print_help() or 0)
+
     # ── serve ─────────────────────────────────────────────────────────────────
     serve_parser = sub.add_parser(
         "serve", help="Serve SilkPage documents via singine's Java HTTP appserver"
@@ -6673,6 +6710,57 @@ def cmd_mcp_call(args) -> int:
         print(f"error: --params is not valid JSON: {exc}", file=sys.stderr)
         return 1
     call_tool(args.db, args.tool, params)
+    return 0
+
+
+# ── graph handlers ───────────────────────────────────────────────────────────
+
+def cmd_graph_publish(args) -> int:
+    from .graph import publish
+    publish(
+        graph_root=getattr(args, "graph", None),
+        out_dir=getattr(args, "out", None),
+        graph_name=getattr(args, "name", "kern"),
+    )
+    return 0
+
+
+def cmd_graph_rdf(args) -> int:
+    import sys
+    from .graph import _graph_rdf
+    from pathlib import Path as _P
+    src = _P(getattr(args, "graph", None) or _P.home() / "ws" / "ls" / "kern").expanduser()
+    print(_graph_rdf(src, getattr(args, "name", "kern"), []))
+    return 0
+
+
+# ── mime handlers ─────────────────────────────────────────────────────────────
+
+def cmd_mime_html(args) -> int:
+    from .mime_xml import mime_capabilities_html
+    print(mime_capabilities_html())
+    return 0
+
+
+def cmd_mime_xml(args) -> int:
+    import sys
+    from pathlib import Path as _P
+    from .mime_xml import tree_to_xml, file_to_xml
+    root = _P(getattr(args, "root", ".")).expanduser()
+    output = getattr(args, "out", None)
+    xml = tree_to_xml(root)
+    if output:
+        _P(output).write_text(xml, encoding="utf-8")
+        print(f"MIME XML tree → {output}")
+    else:
+        print(xml)
+    return 0
+
+
+def cmd_mime_file(args) -> int:
+    from pathlib import Path as _P
+    from .mime_xml import file_to_xml
+    print(file_to_xml(_P(args.path)))
     return 0
 
 

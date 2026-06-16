@@ -327,7 +327,7 @@ public class SingineServe {
         }
     }
 
-    // ── Static file handler ────────────────────────────────────────────────
+    // ── Static file handler (vhost-aware) ─────────────────────────────────
 
     static class StaticHandler implements HttpHandler {
         @Override
@@ -341,6 +341,25 @@ public class SingineServe {
             if (raw == null || raw.isEmpty()) raw = "/";
             String decoded = URI.create(raw).getPath();
             if (decoded.endsWith("/")) decoded += "index.html";
+
+            // Vhost routing: if Host header matches a www/<vhost>/ directory,
+            // check there first for the requested path before falling back to webroot.
+            String host = ex.getRequestHeaders().getFirst("Host");
+            if (host != null) {
+                host = host.replaceAll(":\\d+$", ""); // strip port
+                Path vhostDir = WEBROOT.resolve(host).normalize();
+                if (vhostDir.startsWith(WEBROOT) && Files.isDirectory(vhostDir)) {
+                    Path vhostFile = vhostDir.resolve("." + decoded).normalize();
+                    if (vhostFile.startsWith(vhostDir) && Files.isRegularFile(vhostFile)) {
+                        sendFile(ex, vhostFile); return;
+                    }
+                    // For bare '/' requests on a known vhost, serve vhost/index.html
+                    if (decoded.equals("/index.html")) {
+                        Path idx = vhostDir.resolve("index.html");
+                        if (Files.isRegularFile(idx)) { sendFile(ex, idx); return; }
+                    }
+                }
+            }
 
             Path abs = WEBROOT.resolve("." + decoded).normalize();
             if (!abs.startsWith(WEBROOT)) {
