@@ -1052,6 +1052,83 @@ def cmd_man(args: argparse.Namespace) -> int:
     return 0
 
 
+def _install_baremetal(json_output: bool = False) -> int:
+    """Full machine bootstrap: pip install -e ., ~/.singinerc, PATH, Node upgrade."""
+    import subprocess as _sp
+    results: Dict[str, Any] = {}
+
+    repo_root = REPO_ROOT  # singine repo root
+    singinerc = Path.home() / ".singinerc"
+    bash_profile = Path.home() / ".bash_profile"
+
+    # 1. pip editable install — use the interpreter that's running singine right now
+    import sys as _sys
+    python = _sys.executable
+    r = _sp.run([python, "-m", "pip", "install", "-e", str(repo_root)],
+                capture_output=True, text=True)
+    results["pip_install"] = {"ok": r.returncode == 0, "out": r.stdout.strip() or r.stderr.strip()}
+
+    # 2. Ensure ~/.singinerc exists
+    if not singinerc.exists():
+        # Write a minimal dotfile if the full one is absent
+        singinerc.write_text(
+            "# ~/.singinerc — created by singine install baremetal\n"
+            f"export SINGINE_REPO=\"{repo_root}\"\n"
+            f"_PYUSER_BIN=\"$(python3 -m site --user-base 2>/dev/null)/bin\"\n"
+            "case \":${PATH}:\" in *\":${_PYUSER_BIN}:\"*) ;; *) export PATH=\"${_PYUSER_BIN}:${PATH}\" ;; esac\n"
+            "case \":${PATH}:\" in *\":${HOME}/.local/bin:\"*) ;; *) export PATH=\"${HOME}/.local/bin:${PATH}\" ;; esac\n",
+            encoding="utf-8",
+        )
+        results["singinerc"] = {"created": True, "path": str(singinerc)}
+    else:
+        results["singinerc"] = {"created": False, "path": str(singinerc), "note": "already exists"}
+
+    # 3. Ensure ~/.bash_profile sources ~/.singinerc
+    source_line = '[ -f "$HOME/.singinerc" ] && source "$HOME/.singinerc"'
+    if bash_profile.exists():
+        text = bash_profile.read_text(encoding="utf-8")
+        if ".singinerc" not in text:
+            with bash_profile.open("a", encoding="utf-8") as f:
+                f.write(f"\n{source_line}\n")
+            results["bash_profile"] = {"updated": True}
+        else:
+            results["bash_profile"] = {"updated": False, "note": "already sources .singinerc"}
+    else:
+        bash_profile.write_text(f"{source_line}\n", encoding="utf-8")
+        results["bash_profile"] = {"created": True}
+
+    # 4. Install the launcher script at ~/.local/bin/singine
+    prefix = Path.home() / ".local"
+    launcher = install_launcher(prefix)
+    results["launcher"] = {"path": str(launcher)}
+
+    # 5. Upgrade Node.js via Homebrew (non-blocking)
+    brew = shutil.which("brew")
+    if brew:
+        try:
+            nr = _sp.run([brew, "upgrade", "node"], capture_output=True, text=True, timeout=300)
+            results["node"] = {"upgraded": nr.returncode == 0, "out": nr.stdout[-200:].strip()}
+        except _sp.TimeoutExpired:
+            results["node"] = {"upgraded": False, "note": "brew upgrade node timed out; run manually"}
+    else:
+        results["node"] = {"upgraded": False, "note": "brew not found"}
+
+    if json_output:
+        print_json(results)
+    else:
+        print("singine install baremetal")
+        print(f"  pip install   {'ok' if results['pip_install']['ok'] else 'FAILED'}")
+        print(f"  ~/.singinerc  {results['singinerc']['path']}")
+        print(f"  ~/.bash_profile  updated={results['bash_profile'].get('updated', results['bash_profile'].get('created', False))}")
+        print(f"  launcher      {results['launcher']['path']}")
+        print(f"  node          {results['node']}")
+        print()
+        print("Apply now (no new shell needed):")
+        print("  source ~/.singinerc")
+        print("  singine --help")
+    return 0 if results["pip_install"]["ok"] else 1
+
+
 def cmd_install(args: argparse.Namespace) -> int:
     if getattr(args, "subject", "singine") == "ant":
         return install_ant_tool(json_output=getattr(args, "json", False))
@@ -1059,6 +1136,8 @@ def cmd_install(args: argparse.Namespace) -> int:
         return install_xmldoclet_tool(json_output=getattr(args, "json", False))
     if getattr(args, "subject", "singine") == "git-filter-repo":
         return install_git_filter_repo_tool(json_output=getattr(args, "json", False))
+    if getattr(args, "subject", "singine") == "baremetal":
+        return _install_baremetal(json_output=getattr(args, "json", False))
 
     prefix = Path(args.prefix).expanduser()
     launcher = install_launcher(prefix)
@@ -4902,7 +4981,7 @@ def build_parser() -> argparse.ArgumentParser:
     man_parser.set_defaults(func=cmd_man)
 
     install_parser = sub.add_parser("install", help="Install singine or selected local tool dependencies")
-    install_parser.add_argument("subject", nargs="?", choices=["singine", "ant", "xmldoclet", "git-filter-repo"], default="singine")
+    install_parser.add_argument("subject", nargs="?", choices=["singine", "ant", "xmldoclet", "git-filter-repo", "baremetal"], default="singine")
     install_parser.add_argument("--prefix", default=str(DEFAULT_PREFIX))
     install_parser.add_argument("--shell", choices=["bash", "sh", "all"], default="all")
     install_parser.add_argument("--mode", choices=["base", "workstation"], default="base")
