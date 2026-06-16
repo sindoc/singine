@@ -265,6 +265,124 @@ public function knowyouraiVocabUrl() returns string {
     return PANEL_BASE_URL + "/vocab/knowyourai.ttl";
 }
 
+// ── Photo classification bridge ───────────────────────────────────────────────
+// Calls the singine-photo and singine-silkpage-photo MCP servers via the panel.
+// Requires Ollama running locally with gemma3:4b pulled.
+// Face DB: ~/.singine/faces/<name>/<ref>.jpg
+
+public type PhotoDecision record {|
+    string image;
+    string category;
+    string action;
+    string reason;
+    float topConfidence;
+    string[] recognizedPeople;
+    string xmlPath?;
+|};
+
+public function enrollPerson(string name, string[] referencePaths) returns boolean|error {
+    log:printInfo("Enrolling person: " + name + " with " + referencePaths.length().toString() + " reference photos");
+    CommandResult result = check invoke([
+        "singine", "photo", "enroll",
+        "--name", name,
+        "--refs", strings:'join(",", ...referencePaths),
+        "--json"
+    ]);
+    return result.ok;
+}
+
+public function classifyPhoto(string imagePath) returns PhotoDecision|error {
+    CommandResult result = check invoke([
+        "singine", "photo", "classify",
+        "--image", imagePath,
+        "--json"
+    ]);
+    if (!result.ok) {
+        return error("classify_photo failed: " + result.stderr);
+    }
+    json body = check result.stdout.fromJsonString();
+    json decision = check body.decision;
+    json facesJson = check body.faces;
+    json[] facesArr = check facesJson.ensureType();
+
+    string[] people = [];
+    float topConf = 0.0;
+    foreach json f in facesArr {
+        string n = check f.name;
+        float c = check f.confidence;
+        people.push(n);
+        if (c > topConf) { topConf = c; }
+    }
+
+    return {
+        image:            imagePath,
+        category:         check decision.category,
+        action:           check decision.action,
+        reason:           check decision.reason,
+        topConfidence:    topConf,
+        recognizedPeople: people
+    };
+}
+
+public function batchClassify(string[] imagePaths) returns PhotoDecision[]|error {
+    log:printInfo("Classifying " + imagePaths.length().toString() + " photos…");
+    PhotoDecision[] results = [];
+    foreach string path in imagePaths {
+        PhotoDecision|error d = classifyPhoto(path);
+        if d is error {
+            log:printWarn("classify failed for " + path + ": " + d.message());
+        } else {
+            results.push(d);
+        }
+    }
+    return results;
+}
+
+public function classifyAndGenerateXml(string imagePath) returns PhotoDecision|error {
+    // Classify then generate silkpage XML in one call
+    CommandResult classifyResult = check invoke([
+        "singine", "photo", "classify-and-xml",
+        "--image", imagePath,
+        "--json"
+    ]);
+    if (!classifyResult.ok) {
+        return error("classify-and-xml failed: " + classifyResult.stderr);
+    }
+    json body = check classifyResult.stdout.fromJsonString();
+    json decision = check body.decision;
+    json facesJson = check body.faces;
+    json[] facesArr = check facesJson.ensureType();
+
+    string[] people = [];
+    float topConf = 0.0;
+    foreach json f in facesArr {
+        string n = check f.name;
+        float c = check f.confidence;
+        people.push(n);
+        if (c > topConf) { topConf = c; }
+    }
+
+    string xmlPath = "";
+    json|error xmlPathJson = body.xml_path;
+    if xmlPathJson is json {
+        xmlPath = check xmlPathJson;
+    }
+
+    return {
+        image:            imagePath,
+        category:         check decision.category,
+        action:           check decision.action,
+        reason:           check decision.reason,
+        topConfidence:    topConf,
+        recognizedPeople: people,
+        xmlPath:          xmlPath
+    };
+}
+
+public function photoArchiveStatus() returns CommandResult|error {
+    return invoke(["singine", "photo", "status", "--json"]);
+}
+
 // ── Demo: a complete daily workflow that reads like poetry ────────────────────
 
 public function morningWorkflow() returns error? {

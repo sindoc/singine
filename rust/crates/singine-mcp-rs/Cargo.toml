@@ -1,0 +1,19 @@
+[package]
+name = "singine-mcp-rs"
+description = "Rust MCP server foundation — JSON-RPC 2.0 over stdio; home for performance-critical singine tools"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "singine_mcp_rs"
+path = "src/lib.rs"
+
+[[bin]]
+name = "singine-mcp-scan"
+path = "src/bin/scan_server.rs"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+singine-photo-scan = { path = "../singine-photo-scan" }

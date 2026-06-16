@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "singine-mcp-photo"
+version = "0.1.0"
+description = "MCP server for photo classification: Gemma 3 vision analysis + DeepFace recognition"
+readme = "README.md"
+license = { text = "GPL-3.0-or-later" }
+requires-python = ">=3.11"
+dependencies = [
+    "mcp>=1.0",
+    "deepface>=0.0.93",
+    "ollama>=0.3.0",
+    "Pillow>=10.0",
+    "tf-keras>=2.16",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+]
+
+[project.scripts]
+singine-mcp-photo = "server:main"
+
+[tool.pytest.ini_options]
+testpaths = ["../../../py/tests"]
+python_files = ["test_photo*.py", "test_mcp_photo*.py"]

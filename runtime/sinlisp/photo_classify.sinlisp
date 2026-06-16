@@ -1,0 +1,113 @@
+; SinLisp workflow for personal photo archive classification.
+; Orchestrates: face enrollment, Gemma 3 vision analysis, silkpage XML generation,
+; and archival decision routing.
+;
+; MCP dependencies:
+;   singine-photo        (io.lutino.mcp/mcp-photo)
+;   singine-silkpage-photo (io.lutino.mcp/mcp-silkpage-photo)
+;
+; Usage (once singine runtime is wired):
+;   singine photo enroll
+;   singine photo classify-batch ~/Pictures/icloud
+;   singine photo review
+;   singine photo status --json
+
+(workflow "singine-photo-classify"
+  (topic "photo-archive"
+    (repo-root "~/ws/singine/main/singine")
+
+    ; ── Enrollment phase ──────────────────────────────────────────────────────
+    ; Register reference photos for each person before running classify-batch.
+    ; Run once per person; add more reference photos at any time to improve accuracy.
+
+    (command "enroll"
+      (argv "singine" "photo" "enroll" "--interactive")
+      (reads "~/.singine/faces")
+      (writes "~/.singine/faces")
+      (requires "reference-photos-on-disk"))
+
+    ; ── Classification phase ──────────────────────────────────────────────────
+    ; Walks a directory of photos. For each image:
+    ;   1. recognize_faces   → DeepFace against ~/.singine/faces
+    ;   2. analyze_scene     → Gemma 3 4B via Ollama (local, no cloud)
+    ;   3. classify_photo    → decision: KEEP / ARCH_SEP / ARCH_SEC / REVIEW
+    ;   4. photo_to_silkpage_xml → DocBook + SKOS sidebar XML
+    ;   5. register_in_layout   → layout.xml entry
+
+    (command "classify-batch"
+      (argv "singine" "photo" "classify-batch" "--dir" "$PHOTO_DIR" "--json")
+      (reads "$PHOTO_DIR")
+      (writes
+        "~/ws/silkpage/main/silkpage/www/silkpage.markupware.com/src/xml/en/photos"
+        "~/ws/silkpage/main/silkpage/www/silkpage.markupware.com/src/xml/en/layout.xml"))
+
+    ; ── Review phase ─────────────────────────────────────────────────────────
+    ; Shows photos marked FlagForReview. Opens each in the system viewer.
+    ; Accepts a manual override decision (keep / sep / sec / skip).
+
+    (command "review"
+      (argv "singine" "photo" "review" "--json")
+      (reads
+        "~/ws/silkpage/main/silkpage/www/silkpage.markupware.com/src/xml/en/photos")
+      (writes
+        "~/ws/silkpage/main/silkpage/www/silkpage.markupware.com/src/xml/en/photos"))
+
+    ; ── Archive move phase ────────────────────────────────────────────────────
+    ; Reads all generated XML decisions and moves source photos accordingly:
+    ;   KeepPrimary     → $ARCHIVE_PRIMARY
+    ;   ArchiveSeparate → $ARCHIVE_SEPARATE   (private, not in primary library)
+    ;   ArchiveSecondary → $ARCHIVE_SECONDARY (cold local disk)
+    ;   FlagForReview   → skipped (must review first)
+
+    (command "archive"
+      (argv "singine" "photo" "archive"
+            "--primary"   "$ARCHIVE_PRIMARY"
+            "--separate"  "$ARCHIVE_SEPARATE"
+            "--secondary" "$ARCHIVE_SECONDARY"
+            "--json")
+      (reads
+        "~/ws/silkpage/main/silkpage/www/silkpage.markupware.com/src/xml/en/photos"
+        "$PHOTO_DIR")
+      (writes
+        "$ARCHIVE_PRIMARY"
+        "$ARCHIVE_SEPARATE"
+        "$ARCHIVE_SECONDARY")
+      (requires "review-complete"))
+
+    ; ── Status ────────────────────────────────────────────────────────────────
+
+    (command "status"
+      (argv "singine" "photo" "status" "--json")
+      (reads
+        "~/.singine/faces"
+        "~/ws/silkpage/main/silkpage/www/silkpage.markupware.com/src/xml/en/photos")
+      (writes))
+
+    ; ── Test case ─────────────────────────────────────────────────────────────
+
+    (command "test-case"
+      (argv "singine" "photo" "test-case" "--json")
+      (reads "py/tests/test_photo.py")
+      (writes))))
+
+; ── Test suite ───────────────────────────────────────────────────────────────
+
+(test-suite "photo-classify"
+  (test "status-reports-enrolled-people"
+    (invoke "status")
+    (expect-field "ok" true)
+    (expect-key "enrolled_people"))
+
+  (test "classify-produces-xml-with-skos-sidebar"
+    (invoke "classify-batch")
+    (expect-path "~/ws/silkpage/main/silkpage/www/silkpage.markupware.com/src/xml/en/photos")
+    (expect-xml-contains "skos:Concept"))
+
+  (test "decision-field-is-present"
+    (invoke "classify-batch")
+    (expect-field "ok" true)
+    (expect-key "summary"))
+
+  (test "test-case-passes"
+    (invoke "test-case")
+    (expect-field "ok" true)))

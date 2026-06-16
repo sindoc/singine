@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "singine-mcp-silkpage-photo"
+version = "0.1.0"
+description = "MCP server: generates silkpage XML (DocBook + SKOS) from photo classification data"
+readme = "README.md"
+license = { text = "GPL-3.0-or-later" }
+requires-python = ">=3.11"
+dependencies = [
+    "mcp>=1.0",
+    "lxml>=5.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+]
+
+[project.scripts]
+singine-mcp-silkpage-photo = "server:main"
+
+[tool.pytest.ini_options]
+testpaths = ["../../../py/tests"]
+python_files = ["test_silkpage_photo*.py"]

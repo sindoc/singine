@@ -1,0 +1,19 @@
+[package]
+name = "singine-photo-scan"
+description = "Walk a photo directory, compute SHA-256 hashes, extract EXIF metadata, emit NDJSON manifest"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "singine-photo-scan"
+path = "src/main.rs"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+walkdir = "2"
+sha2 = "0.10"
+kamadak-exif = "0.5"
+clap = { version = "4", features = ["derive"] }
+rayon = "1"
