@@ -440,6 +440,67 @@ def describe_table(table_name: str) -> list[dict]:
         conn.close()
 
 
+# ── tools: cv & serve ────────────────────────────────────────────────────────
+
+@mcp.tool()
+def singine_cv_html(output: str = "") -> str:
+    """Return the absolute path to the Singine CV HTML file, optionally copying it.
+
+    Args:
+        output: If provided, copy the CV HTML to this path and return the destination.
+    """
+    from singine.cv import html
+    return html(output=output or None)
+
+
+@mcp.tool()
+def singine_cv_md(output: str = "") -> str:
+    """Return the absolute path to the Singine CV Markdown file, optionally copying it.
+
+    Args:
+        output: If provided, copy the CV Markdown to this path and return the destination.
+    """
+    from singine.cv import md
+    return md(output=output or None)
+
+
+@mcp.tool()
+def singine_cv_rtf(output: str = "") -> str:
+    """Generate an RTF version of the Singine CV and return the output path.
+
+    Args:
+        output: Destination path (default: ~/Downloads/cv-sina-heshmati.rtf).
+    """
+    from singine.cv import rtf
+    return rtf(output=output or None)
+
+
+@mcp.tool()
+def singine_cv_pdf(output: str = "") -> str:
+    """Generate a PDF version of the Singine CV via Chrome headless and return the output path.
+
+    Requires Google Chrome or wkhtmltopdf to be installed.
+
+    Args:
+        output: Destination path (default: ~/Downloads/cv-sina-heshmati.pdf).
+    """
+    from singine.cv import pdf
+    return pdf(output=output or None)
+
+
+@mcp.tool()
+def singine_serve(port: int = 4242, webroot: str = "") -> str:
+    """Start the singine SilkPage HTTP appserver (SingineServe.java) and block.
+
+    Args:
+        port: TCP port to listen on (default: 4242).
+        webroot: Path to the webroot directory (default: silkpage www/).
+    """
+    from singine.cv import serve
+    serve(port=port, webroot=webroot or None)
+    return f"server stopped (port {port})"
+
+
 # ── resources ─────────────────────────────────────────────────────────────────
 
 @mcp.resource("singine://domain/schema")

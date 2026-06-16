@@ -6292,6 +6292,51 @@ def build_parser() -> argparse.ArgumentParser:
 
     mcp_parser.set_defaults(func=lambda args: mcp_parser.print_help() or 0)
 
+    # ── serve ─────────────────────────────────────────────────────────────────
+    serve_parser = sub.add_parser(
+        "serve", help="Serve SilkPage documents via singine's Java HTTP appserver"
+    )
+    serve_parser.add_argument(
+        "--port", type=int, default=4242, help="HTTP port (default: 4242)"
+    )
+    serve_parser.add_argument(
+        "--webroot", default=None,
+        help="Webroot directory (default: silkpage www/)"
+    )
+    serve_parser.set_defaults(func=cmd_serve)
+
+    # ── cv ────────────────────────────────────────────────────────────────────
+    cv_parser = sub.add_parser("cv", help="Generate or serve the Singine CV")
+    cv_sub    = cv_parser.add_subparsers(dest="cv_subcommand")
+
+    p = cv_sub.add_parser("serve", help="Serve CV via HTTP appserver")
+    p.add_argument("--port", type=int, default=4242)
+    p.add_argument("--webroot", default=None)
+    p.set_defaults(func=cmd_cv_serve)
+
+    p = cv_sub.add_parser("html", help="Print path to CV HTML or copy to --output")
+    p.add_argument("--output", "-o", default=None, metavar="FILE")
+    p.set_defaults(func=cmd_cv_html)
+
+    p = cv_sub.add_parser("md", help="Print path to CV Markdown or copy to --output")
+    p.add_argument("--output", "-o", default=None, metavar="FILE")
+    p.set_defaults(func=cmd_cv_md)
+
+    p = cv_sub.add_parser(
+        "rtf", help="Generate RTF CV (default: ~/Downloads/cv-sina-heshmati.rtf)"
+    )
+    p.add_argument("--output", "-o", default=None, metavar="FILE")
+    p.set_defaults(func=cmd_cv_rtf)
+
+    p = cv_sub.add_parser(
+        "pdf",
+        help="Generate PDF CV via Chrome headless (default: ~/Downloads/cv-sina-heshmati.pdf)",
+    )
+    p.add_argument("--output", "-o", default=None, metavar="FILE")
+    p.set_defaults(func=cmd_cv_pdf)
+
+    cv_parser.set_defaults(func=lambda args: cv_parser.print_help() or 0)
+
     # ── Lutino commands ───────────────────────────────────────────────────────
     try:
         from .lutino import add_lutino_parser
@@ -6549,6 +6594,46 @@ def cmd_mcp_call(args) -> int:
         print(f"error: --params is not valid JSON: {exc}", file=sys.stderr)
         return 1
     call_tool(args.db, args.tool, params)
+    return 0
+
+
+# ── serve handlers ───────────────────────────────────────────────────────────
+
+def cmd_serve(args) -> int:
+    from .cv import serve
+    serve(port=getattr(args, "port", 4242), webroot=getattr(args, "webroot", None))
+    return 0
+
+
+# ── cv handlers ──────────────────────────────────────────────────────────────
+
+def cmd_cv_serve(args) -> int:
+    from .cv import serve
+    serve(port=getattr(args, "port", 4242), webroot=getattr(args, "webroot", None))
+    return 0
+
+
+def cmd_cv_html(args) -> int:
+    from .cv import html
+    html(output=getattr(args, "output", None))
+    return 0
+
+
+def cmd_cv_md(args) -> int:
+    from .cv import md
+    md(output=getattr(args, "output", None))
+    return 0
+
+
+def cmd_cv_rtf(args) -> int:
+    from .cv import rtf
+    rtf(output=getattr(args, "output", None))
+    return 0
+
+
+def cmd_cv_pdf(args) -> int:
+    from .cv import pdf
+    pdf(output=getattr(args, "output", None))
     return 0
 
 
